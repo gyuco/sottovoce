@@ -14,9 +14,9 @@
       {
         "label": "main",
         "title": "Sottovoce",
-        "width": 900,
-        "height": 720,
-        "minWidth": 560,
+        "width": 1180,
+        "height": 780,
+        "minWidth": 640,
         "minHeight": 520
       }
     ],

@@ -14,10 +14,12 @@ interface LevelMeterProps {
   holdDb: number;
   active: boolean;
   label: string;
+  /** Barra sottile senza scala in dB. */
+  compact?: boolean;
 }
 
 /** Barra orizzontale RMS + marcatore del picco mantenuto, scala in dBFS. */
-export function LevelMeter({ rmsDb, holdDb, active, label }: LevelMeterProps) {
+export function LevelMeter({ rmsDb, holdDb, active, label, compact = false }: LevelMeterProps) {
   const rms = active ? toPct(rmsDb) : 0;
   const hold = active ? toPct(holdDb) : 0;
   const clipping = active && holdDb > -1;
@@ -30,7 +32,7 @@ export function LevelMeter({ rmsDb, holdDb, active, label }: LevelMeterProps) {
         aria-valuemin={MIN_DB}
         aria-valuemax={0}
         aria-valuenow={Math.round(Math.max(rmsDb, MIN_DB))}
-        className="relative h-4 overflow-hidden rounded-sm bg-muted"
+        className={cn("relative overflow-hidden bg-muted", compact ? "h-1.5 rounded-full" : "h-4 rounded-sm")}
       >
         {/* Gradiente a tutta larghezza, rivelato fino al livello RMS. */}
         <div
@@ -51,17 +53,19 @@ export function LevelMeter({ rmsDb, holdDb, active, label }: LevelMeterProps) {
           />
         )}
       </div>
-      <div className="relative h-3 text-[10px] tabular-nums text-muted-foreground">
-        {TICKS.map((db) => (
-          <span
-            key={db}
-            className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full"
-            style={{ left: `${toPct(db)}%` }}
-          >
-            {db}
-          </span>
-        ))}
-      </div>
+      {!compact && (
+        <div className="relative h-3 text-[10px] tabular-nums text-muted-foreground">
+          {TICKS.map((db) => (
+            <span
+              key={db}
+              className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full"
+              style={{ left: `${toPct(db)}%` }}
+            >
+              {db}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

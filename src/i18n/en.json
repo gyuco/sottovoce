@@ -34,7 +34,10 @@
     "title": "Transcript",
     "empty": "The transcript will appear here once you start a session.",
     "toBottom": "Jump to latest",
-    "showTranslations": "Show translations"
+    "showTranslations": "Show translations",
+    "copy": "Copy",
+    "copyAll": "Copy the whole transcript",
+    "copyLine": "Copy sentence"
   },
   "meeting": {
     "title": "Meeting context",
@@ -47,12 +50,17 @@
     "hint": "Editable during the session too: applies from the next request."
   },
   "assist": {
-    "title": "Suggestions",
+    "title": "Live assist",
     "empty": "Every 20 seconds, while the conversation goes on, what you could say or ask shows up here. Pick the model in Settings.",
     "say": "Say",
     "ask": "Ask",
     "copy": "Copy",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "sayTitle": "Say this",
+    "askTitle": "Ask this",
+    "none": "Nothing yet.",
+    "markUsed": "Mark as used",
+    "markUnused": "Mark as unused"
   },
   "settings": {
     "title": "Settings",
@@ -139,5 +147,27 @@
   "errors": {
     "devices": "Could not read devices: {{message}}",
     "start": "Could not start the session: {{message}}"
+  },
+  "common": {
+    "copied": "Copied"
+  },
+  "nav": {
+    "label": "Navigation",
+    "live": "Live session",
+    "settings": "Settings"
+  },
+  "header": {
+    "untitled": "New meeting",
+    "startedAt": "Started at {{time}}",
+    "ready": "Ready: start when the call begins",
+    "elapsed": "Session duration"
+  },
+  "audio": {
+    "title": "Audio"
+  },
+  "talk": {
+    "title": "Talk time",
+    "label": "Me {{me}}% · Them {{them}}%",
+    "empty": "Talk time appears with the transcript"
   }
 }

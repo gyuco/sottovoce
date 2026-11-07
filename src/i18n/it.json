@@ -34,7 +34,10 @@
     "title": "Trascrizione",
     "empty": "La trascrizione apparirà qui quando avvii la sessione.",
     "toBottom": "Torna in fondo",
-    "showTranslations": "Mostra traduzioni"
+    "showTranslations": "Mostra traduzioni",
+    "copy": "Copia",
+    "copyAll": "Copia tutta la trascrizione",
+    "copyLine": "Copia frase"
   },
   "meeting": {
     "title": "Contesto meeting",
@@ -47,12 +50,17 @@
     "hint": "Modificabile anche durante la sessione: vale dalla richiesta successiva."
   },
   "assist": {
-    "title": "Suggerimenti",
+    "title": "Live assist",
     "empty": "Ogni 20 secondi, se la conversazione va avanti, qui compare cosa potresti dire o chiedere. Scegli il modello in Impostazioni.",
     "say": "Dì",
     "ask": "Chiedi",
     "copy": "Copia",
-    "dismiss": "Chiudi"
+    "dismiss": "Chiudi",
+    "sayTitle": "Dì questo",
+    "askTitle": "Chiedi",
+    "none": "Ancora nessuno.",
+    "markUsed": "Segna come usato",
+    "markUnused": "Segna come non usato"
   },
   "settings": {
     "title": "Impostazioni",
@@ -139,5 +147,27 @@
   "errors": {
     "devices": "Impossibile leggere i dispositivi: {{message}}",
     "start": "Impossibile avviare la sessione: {{message}}"
+  },
+  "common": {
+    "copied": "Copiato"
+  },
+  "nav": {
+    "label": "Navigazione",
+    "live": "Sessione live",
+    "settings": "Impostazioni"
+  },
+  "header": {
+    "untitled": "Nuovo meeting",
+    "startedAt": "Iniziato alle {{time}}",
+    "ready": "Pronto: avvia quando parte la call",
+    "elapsed": "Durata della sessione"
+  },
+  "audio": {
+    "title": "Audio"
+  },
+  "talk": {
+    "title": "Tempo di parola",
+    "label": "Io {{me}}% · Loro {{them}}%",
+    "empty": "Il tempo di parola apparirà con la trascrizione"
   }
 }

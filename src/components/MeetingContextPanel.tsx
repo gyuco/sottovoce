@@ -15,16 +15,16 @@ export function MeetingContextPanel() {
   const summary = [context.name, context.goal].filter((s) => s.trim() !== "").join(" · ");
 
   return (
-    <section className="rounded-md border">
+    <section className="rounded-2xl border bg-card shadow-xs">
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
+        className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         aria-expanded={open}
         aria-controls="meeting-context"
         onClick={() => setOpen((o) => !o)}
       >
-        <NotebookPen className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="font-medium">{t("meeting.title")}</span>
+        <NotebookPen className="size-4 shrink-0 text-primary" aria-hidden />
+        <span className="font-semibold">{t("meeting.title")}</span>
         <span className="min-w-0 flex-1 truncate text-muted-foreground">
           {summary || t("meeting.empty")}
         </span>
@@ -35,7 +35,7 @@ export function MeetingContextPanel() {
       </button>
 
       {open && (
-        <div id="meeting-context" className="flex flex-col gap-2 border-t px-3 py-3">
+        <div id="meeting-context" className="flex flex-col gap-2 border-t px-4 py-3">
           <Input
             aria-label={t("meeting.name")}
             placeholder={t("meeting.name")}

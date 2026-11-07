@@ -37,6 +37,8 @@ interface AudioState {
   systemSupported: boolean;
   status: Status;
   startedAt: number;
+  /** Ora di inizio (epoch ms) per mostrarla all'utente. */
+  startedWall: number;
   error: { key: string; message: string } | null;
   levels: Record<ChannelId, ChannelLevel>;
   init: () => Promise<void>;
@@ -74,6 +76,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   systemSupported: false,
   status: "idle",
   startedAt: 0,
+  startedWall: 0,
   error: null,
   levels: { me: silent(), them: silent() },
 
@@ -116,7 +119,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         assist.add,
         useMeetingStore.getState().context,
       );
-      set({ status: "running", startedAt: performance.now() });
+      set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });
     } catch (e) {
       set({ status: "idle", error: { key: "errors.start", message: errorMessage(e) } });
     }
@@ -131,3 +134,14 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     }
   },
 }));
+
+/** Microfono scelto: quello salvato se presente, altrimenti il predefinito. */
+export function useSelectedMicId() {
+  const devices = useAudioStore((s) => s.devices);
+  const saved = useSettingsStore((s) => s.settings?.micDeviceId);
+  return (
+    devices.find((d) => d.id === saved)?.id ??
+    devices.find((d) => d.isDefault)?.id ??
+    devices[0]?.id
+  );
+}
