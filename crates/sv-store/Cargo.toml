@@ -1,0 +1,18 @@
+[package]
+name = "sv-store"
+description = "Persistenza SQLite dei meeting di Sottovoce: frasi, traduzioni, parlanti e assist"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

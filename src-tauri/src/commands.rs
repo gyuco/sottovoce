@@ -4,6 +4,7 @@ use tauri::ipc::Channel;
 use serde::Serialize;
 use sv_audio::{InputDevice, LevelEvent};
 use sv_llm::{ChatRequest, Message, ModelInfo};
+use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
@@ -14,7 +15,7 @@ use crate::secrets;
 use crate::session::Session;
 use crate::session::{LlmTasks, Outputs};
 use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
-use crate::state::AppState;
+use crate::state::{AppState, Db};
 use crate::stt;
 use crate::translate::{TranslationEvent, TranslatorConfig};
 
@@ -43,6 +44,7 @@ pub async fn start_session(
     state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
     models: State<'_, Models>,
+    db: State<'_, Db>,
     on_level: Channel<LevelEvent>,
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
@@ -64,6 +66,30 @@ pub async fn start_session(
     };
     let spec = stt::resolve(&settings, models.store(), api_key).map_err(|e| format!("{e:#}"))?;
     let engine = spec.build().map_err(|e| format!("{e:#}"))?;
+    let context = context.unwrap_or_default().normalized();
+    let draft = MeetingDraft {
+        name: context.name.clone(),
+        goal: context.goal.clone(),
+        notes: context.notes.clone(),
+        stt_engine: engine.name().into(),
+        stt_model: match stt::engine_kind(&settings) {
+            SttEngineKind::Deepgram => settings.stt_model.clone(),
+            SttEngineKind::Local => settings.local_stt_model.clone(),
+        },
+        my_language: settings.my_language.code().into(),
+        their_language: settings.their_language.code().into(),
+        speakers: context.speakers.clone(),
+    };
+    // Il DB può essere su disco lento: mai sul thread async.
+    let db_path = db.path.clone();
+    let store =
+        match blocking(move || Writer::start(&db_path, draft).map_err(anyhow::Error::from)).await {
+            Ok(writer) => Some(writer),
+            Err(e) => {
+                tracing::warn!("salvataggio del meeting disattivato: {e}");
+                None
+            }
+        };
     let diarization = stt::diarization(&settings, models.store());
     let llm = llm_tasks(&settings).await;
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
@@ -81,15 +107,8 @@ pub async fn start_session(
             let _ = on_assist.send(e);
         }),
     };
-    let session = Session::start(
-        &settings,
-        engine,
-        context.unwrap_or_default(),
-        llm,
-        diarization,
-        out,
-    )
-    .map_err(|e| format!("{e:#}"))?;
+    let session = Session::start(&settings, engine, context, llm, diarization, store, out)
+        .map_err(|e| format!("{e:#}"))?;
     *slot = Some(session);
     Ok(())
 }
@@ -102,7 +121,7 @@ pub async fn update_meeting_context(
     context: MeetingContext,
 ) -> CmdResult<()> {
     if let Some(session) = state.session.lock().await.as_ref() {
-        session.context().set(context);
+        session.set_context(context);
     }
     Ok(())
 }

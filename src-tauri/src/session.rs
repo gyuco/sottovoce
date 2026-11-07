@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use sv_audio::{AudioFrame, Capture, CaptureConfig, Channel, LevelEvent};
+use sv_store::{NewSegment, StoreHandle, Writer};
 use sv_stt::{SpeakerUpdate, SttEngine, SttEvent, SttEventKind, SttStream};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -48,6 +49,11 @@ pub struct Session {
     capture: Capture,
     tasks: Vec<JoinHandle<()>>,
     context: SharedContext,
+    /// Scrittura su SQLite del meeting; `None` se il DB non è disponibile
+    /// (la trascrizione funziona comunque).
+    store: Option<Writer>,
+    /// Origine dei timestamp della sessione (durata salvata alla chiusura).
+    started: Instant,
 }
 
 impl Session {
@@ -58,6 +64,7 @@ impl Session {
         context: MeetingContext,
         llm: LlmTasks,
         diarization: Option<DiarConfig>,
+        store: Option<Writer>,
         out: Outputs,
     ) -> Result<Self> {
         let Outputs {
@@ -76,6 +83,39 @@ impl Session {
         let mut tasks = Vec::new();
         // ≈ origine dei timestamp dei frame (la cattura parte subito dopo).
         let started = Instant::now();
+        let store_sink = store.as_ref().map(Writer::handle);
+
+        // Il salvataggio si aggancia qui, una volta sola: i task della sessione
+        // non sanno che esiste un database. Se il DB è lento la coda scarta.
+        let transcript_store = store_sink.clone();
+        let transcript_sink = on_transcript;
+        let on_transcript: Arc<dyn Fn(SttEvent) + Send + Sync> = Arc::new(move |event| {
+            if let Some(store) = &transcript_store {
+                record_event(store, &event);
+            }
+            transcript_sink(event);
+        });
+        let target_language = settings.effective_target_language().code();
+        let translation_store = store_sink.clone();
+        let on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync> = Box::new(move |event| {
+            if let Some(store) = &translation_store {
+                store.translation(
+                    event.segment_id,
+                    &event.text,
+                    target_language,
+                    event.latency_ms,
+                );
+            }
+            on_translation(event);
+        });
+        let assist_store = store_sink;
+        let on_assist: Box<dyn Fn(AssistEvent) + Send + Sync> = Box::new(move |event| {
+            if let Some(store) = &assist_store {
+                store.assist(event.kind.code(), &event.text, event.at);
+            }
+            on_assist(event);
+        });
+
         let translating = llm.translation.is_some() && system_audio;
         // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
         let translator = llm.translation.filter(|_| system_audio).map(|cfg| {
@@ -153,6 +193,8 @@ impl Session {
                     capture,
                     tasks,
                     context,
+                    store,
+                    started,
                 })
             }
             Err(e) => {
@@ -166,13 +208,26 @@ impl Session {
         }
     }
 
-    /// Contesto del meeting, letto dai prompt a ogni chiamata.
-    pub fn context(&self) -> &SharedContext {
-        &self.context
+    /// Contesto del meeting aggiornato: vale subito per i prompt e viene
+    /// salvato (nome, obiettivo, note e nomi dei parlanti) se il meeting è
+    /// registrato.
+    pub fn set_context(&self, context: MeetingContext) {
+        let context = context.normalized();
+        self.context.set(context.clone());
+        if let Some(store) = self.store.as_ref().map(Writer::handle) {
+            store.context(&context.name, &context.goal, &context.notes);
+            store.speaker_names(&context.speakers);
+        }
     }
 
     pub async fn stop(self) {
-        let Self { capture, tasks, .. } = self;
+        let Self {
+            capture,
+            tasks,
+            store,
+            started,
+            ..
+        } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
         let aborts: Vec<_> = tasks.iter().map(JoinHandle::abort_handle).collect();
@@ -187,8 +242,51 @@ impl Session {
                 a.abort();
             }
         }
+        // Dopo i task (traduzioni e assist compresi): niente più eventi.
+        if let Some(store) = store {
+            let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            match store.finish(elapsed) {
+                Ok(id) => tracing::info!(meeting = id, elapsed_ms = elapsed, "meeting salvato"),
+                Err(e) => tracing::warn!("meeting non chiuso correttamente: {e}"),
+            }
+        }
         tracing::info!("sessione fermata");
     }
+}
+
+/// Copia nel database gli eventi che riguardano il meeting: frasi finali e
+/// rietichettature dei parlanti. Parziali e stato connessione non servono.
+fn record_event(store: &StoreHandle, event: &SttEvent) {
+    match &event.kind {
+        SttEventKind::Final(segment) => store.segment(NewSegment {
+            session_id: segment.id,
+            channel: channel_code(event.channel).to_owned(),
+            speaker: segment.speaker,
+            text: segment.text.clone(),
+            start_ms: millis(segment.start),
+            end_ms: millis(segment.end),
+            language: segment.language.clone(),
+            confidence: segment.confidence,
+        }),
+        SttEventKind::Speakers { updates } => store.relabel(
+            updates
+                .iter()
+                .map(|update| (update.segment_id, update.speaker))
+                .collect(),
+        ),
+        _ => {}
+    }
+}
+
+fn channel_code(channel: Channel) -> &'static str {
+    match channel {
+        Channel::Me => "me",
+        Channel::Them => "them",
+    }
+}
+
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
 /// Task che ricevono le frasi finali di un canale.

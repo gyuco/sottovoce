@@ -23,6 +23,7 @@ sv-models.workspace = true
 sv-stt-local.workspace = true
 sv-vad.workspace = true
 sv-diar.workspace = true
+sv-store.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

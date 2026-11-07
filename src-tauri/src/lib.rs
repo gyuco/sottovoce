@@ -32,6 +32,23 @@ pub fn run() {
             app.manage(settings::SettingsStore::load(path));
             let models_dir = app.path().app_data_dir()?.join("models");
             app.manage(models::Models::new(models_dir));
+            let db_path = app.path().app_data_dir()?.join("sottovoce.db");
+            // Migra e chiude i meeting rimasti aperti dopo un crash.
+            match sv_store::Store::open(&db_path) {
+                Ok(store) => {
+                    tracing::info!(path = %db_path.display(), "database dei meeting pronto");
+                    match store.recover_open_meetings() {
+                        Ok(0) => {}
+                        Ok(n) => tracing::info!(meetings = n, "meeting rimasti aperti chiusi"),
+                        Err(e) => tracing::warn!("recupero dei meeting non riuscito: {e}"),
+                    }
+                }
+                Err(e) => tracing::warn!(
+                    path = %db_path.display(),
+                    "database dei meeting non disponibile, le call non verranno salvate: {e}"
+                ),
+            }
+            app.manage(state::Db { path: db_path });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

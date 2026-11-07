@@ -73,6 +73,16 @@ pub enum AssistKind {
     Ask,
 }
 
+impl AssistKind {
+    /// Etichetta salvata nel database (`say`/`ask`).
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Say => "say",
+            Self::Ask => "ask",
+        }
+    }
+}
+
 /// Suggerimento inviato alla UI. `at` = ms dall'avvio della sessione.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
