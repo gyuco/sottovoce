@@ -10,6 +10,7 @@ import {
   stopSession,
   systemAudioSupported,
 } from "@/lib/ipc";
+import { useAssistStore } from "@/stores/assist";
 import { useMeetingStore } from "@/stores/meeting";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
@@ -98,6 +99,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     set({ status: "starting", error: null, levels: { me: silent(), them: silent() } });
     const transcript = useTranscriptStore.getState();
     transcript.reset();
+    const assist = useAssistStore.getState();
+    assist.reset();
     try {
       await startSession(
         (e) => {
@@ -110,6 +113,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         },
         transcript.apply,
         transcript.applyTranslation,
+        assist.add,
         useMeetingStore.getState().context,
       );
       set({ status: "running", startedAt: performance.now() });

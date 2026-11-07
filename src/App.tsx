@@ -2,6 +2,7 @@ import { ArrowLeft, KeyRound, Loader2, Play, Settings, Square } from "lucide-rea
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { AssistPanel } from "@/components/AssistPanel";
 import { ChannelCard } from "@/components/ChannelCard";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -118,6 +119,8 @@ export default function App() {
           </section>
 
           <MeetingContextPanel />
+
+          <AssistPanel />
 
           <Transcript />
 

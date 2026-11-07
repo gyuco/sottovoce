@@ -66,6 +66,16 @@ export interface Segment {
   language: string | null;
 }
 
+export type AssistKind = "say" | "ask";
+
+/** Suggerimento del live assist; `at` = ms dall'avvio della sessione. */
+export interface AssistEvent {
+  id: number;
+  kind: AssistKind;
+  text: string;
+  at: number;
+}
+
 export interface TranslationEvent {
   segmentId: number;
   text: string;
@@ -96,6 +106,7 @@ export function startSession(
   onLevel: (e: LevelEvent) => void,
   onTranscript: (e: SttEvent) => void,
   onTranslation: (e: TranslationEvent) => void,
+  onAssist: (e: AssistEvent) => void,
   context: MeetingContext,
 ) {
   const level = new Channel<LevelEvent>();
@@ -104,10 +115,13 @@ export function startSession(
   transcript.onmessage = onTranscript;
   const translation = new Channel<TranslationEvent>();
   translation.onmessage = onTranslation;
+  const assist = new Channel<AssistEvent>();
+  assist.onmessage = onAssist;
   return invoke<void>("start_session", {
     onLevel: level,
     onTranscript: transcript,
     onTranslation: translation,
+    onAssist: assist,
     context,
   });
 }

@@ -46,6 +46,14 @@
     "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
     "hint": "Modificabile anche durante la sessione: vale dalla richiesta successiva."
   },
+  "assist": {
+    "title": "Suggerimenti",
+    "empty": "Ogni 20 secondi, se la conversazione va avanti, qui compare cosa potresti dire o chiedere. Scegli il modello in Impostazioni.",
+    "say": "Dì",
+    "ask": "Chiedi",
+    "copy": "Copia",
+    "dismiss": "Chiudi"
+  },
   "settings": {
     "title": "Impostazioni",
     "back": "Indietro",

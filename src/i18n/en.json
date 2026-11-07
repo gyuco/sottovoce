@@ -46,6 +46,14 @@
     "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
     "hint": "Editable during the session too: applies from the next request."
   },
+  "assist": {
+    "title": "Suggestions",
+    "empty": "Every 20 seconds, while the conversation goes on, what you could say or ask shows up here. Pick the model in Settings.",
+    "say": "Say",
+    "ask": "Ask",
+    "copy": "Copy",
+    "dismiss": "Dismiss"
+  },
   "settings": {
     "title": "Settings",
     "back": "Back",

@@ -1,3 +1,4 @@
+mod assist;
 mod commands;
 mod llm;
 mod meeting;

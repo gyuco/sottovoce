@@ -6,10 +6,12 @@ use sv_audio::{InputDevice, LevelEvent};
 use sv_llm::{ChatRequest, LlmProvider as _, Message, ModelInfo};
 use sv_stt::{Language, SttEvent};
 
+use crate::assist::{AssistConfig, AssistEvent};
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::secrets;
 use crate::session::Session;
+use crate::session::{LlmTasks, Outputs};
 use crate::settings::{Settings, SettingsStore};
 use crate::state::AppState;
 use crate::translate::{TranslationEvent, TranslatorConfig};
@@ -40,6 +42,7 @@ pub async fn start_session(
     on_level: Channel<LevelEvent>,
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
+    on_assist: Channel<AssistEvent>,
     context: Option<MeetingContext>,
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
@@ -51,24 +54,24 @@ pub async fn start_session(
     let api_key = blocking(move || secrets::get_api_key(provider))
         .await?
         .ok_or_else(|| format!("API key mancante per {provider}: impostala nelle Impostazioni"))?;
-    let translation = translator_config(&settings).await;
-    let session = Session::start(
-        &settings,
-        api_key,
-        context.unwrap_or_default(),
-        translation,
-        // Errore = finestra chiusa o canale rilasciato: niente da fare.
-        move |e| {
+    let llm = llm_tasks(&settings).await;
+    // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
+    let out = Outputs {
+        on_level: Box::new(move |e| {
             let _ = on_level.send(e);
-        },
-        move |e| {
+        }),
+        on_transcript: std::sync::Arc::new(move |e| {
             let _ = on_transcript.send(e);
-        },
-        move |e| {
+        }),
+        on_translation: Box::new(move |e| {
             let _ = on_translation.send(e);
-        },
-    )
-    .map_err(|e| format!("{e:#}"))?;
+        }),
+        on_assist: Box::new(move |e| {
+            let _ = on_assist.send(e);
+        }),
+    };
+    let session = Session::start(&settings, api_key, context.unwrap_or_default(), llm, out)
+        .map_err(|e| format!("{e:#}"))?;
     *slot = Some(session);
     Ok(())
 }
@@ -86,26 +89,37 @@ pub async fn update_meeting_context(
     Ok(())
 }
 
-/// Traduttore dalle impostazioni; `None` (con log) se il modello non è scelto
-/// o il provider non è configurabile: la sessione parte comunque.
-async fn translator_config(settings: &Settings) -> Option<TranslatorConfig> {
-    let model = settings.translation_model.trim().to_owned();
-    if model.is_empty() {
-        tracing::info!("traduzione disattivata: nessun modello scelto");
-        return None;
+/// Traduzione e live assist dalle impostazioni. Un compito senza modello, o
+/// un LLM non configurabile, resta spento (con log): la sessione parte comunque.
+async fn llm_tasks(settings: &Settings) -> LlmTasks {
+    let translation_model = settings.translation_model.trim().to_owned();
+    let assist_model = settings.assist_model.trim().to_owned();
+    if translation_model.is_empty() && assist_model.is_empty() {
+        tracing::info!("traduzione e live assist disattivati: nessun modello scelto");
+        return LlmTasks::default();
     }
     let for_client = settings.clone();
-    match blocking(move || llm::client(&for_client, true)).await {
-        Ok(client) => Some(TranslatorConfig {
-            llm: std::sync::Arc::new(client),
-            model,
+    // Un solo client per sessione (per OpenCode Go: un id di sessione).
+    let client: std::sync::Arc<dyn sv_llm::LlmProvider> =
+        match blocking(move || llm::client(&for_client, true)).await {
+            Ok(c) => std::sync::Arc::new(c),
+            Err(e) => {
+                tracing::warn!("traduzione e live assist disattivati: {e}");
+                return LlmTasks::default();
+            }
+        };
+    LlmTasks {
+        translation: (!translation_model.is_empty()).then(|| TranslatorConfig {
+            llm: client.clone(),
+            model: translation_model,
             target: settings.effective_target_language(),
             source_hint: Some(settings.their_language).filter(|l| *l != Language::Multi),
         }),
-        Err(e) => {
-            tracing::warn!("traduzione disattivata: {e}");
-            None
-        }
+        assist: (!assist_model.is_empty()).then(|| AssistConfig {
+            llm: client.clone(),
+            model: assist_model,
+            user_language: settings.effective_target_language(),
+        }),
     }
 }
 

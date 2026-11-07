@@ -16,6 +16,7 @@ use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
+use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::{Settings, SttProvider};
 use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
@@ -25,6 +26,22 @@ const FRAME_BUS_CAPACITY: usize = 512;
 /// Tempo massimo per chiudere gli stream STT allo stop.
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Compiti LLM della sessione; `None` = disattivato (modello non scelto o
+/// LLM non configurabile): la trascrizione funziona comunque.
+#[derive(Default)]
+pub struct LlmTasks {
+    pub translation: Option<TranslatorConfig>,
+    pub assist: Option<AssistConfig>,
+}
+
+/// Dove la sessione invia i propri eventi (canali IPC verso la UI).
+pub struct Outputs {
+    pub on_level: Box<dyn Fn(LevelEvent) + Send + Sync>,
+    pub on_transcript: Arc<dyn Fn(SttEvent) + Send + Sync>,
+    pub on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync>,
+    pub on_assist: Box<dyn Fn(AssistEvent) + Send + Sync>,
+}
+
 pub struct Session {
     capture: Capture,
     tasks: Vec<JoinHandle<()>>,
@@ -33,17 +50,19 @@ pub struct Session {
 
 impl Session {
     /// `api_key` già letta dal Keychain dal chiamante.
-    /// `translation`: `None` = niente traduzione (modello non scelto o LLM
-    /// non configurabile); la trascrizione funziona comunque.
     pub fn start(
         settings: &Settings,
         api_key: String,
         context: MeetingContext,
-        translation: Option<TranslatorConfig>,
-        on_level: impl Fn(LevelEvent) + Send + Sync + 'static,
-        on_transcript: impl Fn(SttEvent) + Send + Sync + Clone + 'static,
-        on_translation: impl Fn(TranslationEvent) + Send + Sync + 'static,
+        llm: LlmTasks,
+        out: Outputs,
     ) -> Result<Self> {
+        let Outputs {
+            on_level,
+            on_transcript,
+            on_translation,
+            on_assist,
+        } = out;
         let engine: Box<dyn SttEngine> = match settings.stt_provider {
             SttProvider::Deepgram => Box::new(Deepgram::new(DeepgramConfig {
                 api_key,
@@ -60,17 +79,23 @@ impl Session {
 
         let context = SharedContext::new(context);
         let mut tasks = Vec::new();
-        let translating = translation.is_some() && system_audio;
+        // ≈ origine dei timestamp dei frame (la cattura parte subito dopo).
+        let started = Instant::now();
+        let translating = llm.translation.is_some() && system_audio;
         // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
-        let translator = translation.filter(|_| system_audio).map(|cfg| {
+        let translator = llm.translation.filter(|_| system_audio).map(|cfg| {
             let (tx, task) = translate::spawn(cfg, context.clone(), on_translation);
+            tasks.push(task);
+            tx
+        });
+        let assisting = llm.assist.is_some();
+        let assistant = llm.assist.map(|cfg| {
+            let (tx, task) = assist::spawn(cfg, context.clone(), started, on_assist);
             tasks.push(task);
             tx
         });
 
         let (frames, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
-        // ≈ origine dei timestamp dei frame (la cattura parte subito dopo).
-        let started = Instant::now();
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
@@ -84,16 +109,20 @@ impl Session {
                 Channel::Them => translator.clone(),
                 Channel::Me => None,
             };
+            let sink = on_transcript.clone();
             tasks.extend(spawn_channel(
                 stream,
                 bus,
                 started,
                 ids.clone(),
-                translate,
-                on_transcript.clone(),
+                Followers {
+                    translate,
+                    assist: assistant.clone(),
+                },
+                move |e| sink(e),
             ));
         }
-        drop(translator);
+        drop((translator, assistant));
 
         let capture = Capture::start(
             CaptureConfig {
@@ -112,6 +141,7 @@ impl Session {
                     system_audio,
                     with_context = context.prompt_block().is_some(),
                     translating,
+                    assisting,
                     "sessione avviata"
                 );
                 Ok(Self {
@@ -156,17 +186,25 @@ impl Session {
     }
 }
 
-/// Due task per canale: bus audio → motore, eventi motore → UI (e, se
-/// `translate` c'è, frasi finali → traduttore). `ids` numera i `Final` della
-/// sessione, su tutti i canali.
+/// Task che ricevono le frasi finali di un canale.
+#[derive(Default)]
+struct Followers {
+    translate: Option<mpsc::Sender<Job>>,
+    assist: Option<mpsc::Sender<AssistLine>>,
+}
+
+/// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
+/// finali → traduttore e live assist, se attivi). `ids` numera i `Final`
+/// della sessione, su tutti i canali.
 fn spawn_channel(
     stream: SttStream,
     mut bus: broadcast::Receiver<AudioFrame>,
     started: Instant,
     ids: Arc<AtomicU64>,
-    translate: Option<mpsc::Sender<Job>>,
+    followers: Followers,
     on_transcript: impl Fn(SttEvent) + Send + 'static,
 ) -> [JoinHandle<()>; 2] {
+    let Followers { translate, assist } = followers;
     let SttStream {
         channel,
         audio,
@@ -207,6 +245,14 @@ fn spawn_channel(
             let job = match &mut event.kind {
                 SttEventKind::Final(seg) => {
                     seg.id = ids.fetch_add(1, Ordering::Relaxed);
+                    if let Some(tx) = &assist
+                        && let Err(TrySendError::Full(_)) = tx.try_send(AssistLine {
+                            channel,
+                            text: seg.text.clone(),
+                        })
+                    {
+                        tracing::warn!(?channel, "coda live assist piena: frase scartata");
+                    }
                     translate.as_ref().map(|_| Job {
                         segment_id: seg.id,
                         text: seg.text.clone(),
@@ -227,8 +273,9 @@ fn spawn_channel(
                 );
             }
         }
-        // Drop di `translate`: il traduttore chiude dopo le richieste in corso.
-        drop(translate);
+        // Drop dei sender: traduttore e assist chiudono (dopo le richieste
+        // in corso) quando tutti i canali hanno finito.
+        drop((translate, assist));
         stats.report(channel);
         let _ = engine.await;
     });
@@ -331,7 +378,7 @@ mod tests {
             bus.subscribe(),
             Instant::now(),
             Arc::new(AtomicU64::new(1)),
-            None,
+            Followers::default(),
             move |e| sink.lock().unwrap().push(e),
         );
         for i in 0..3 {
@@ -373,7 +420,10 @@ mod tests {
             bus.subscribe(),
             Instant::now(),
             Arc::new(AtomicU64::new(5)),
-            Some(tx),
+            Followers {
+                translate: Some(tx),
+                assist: None,
+            },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {
                     sink.lock().unwrap().push(s.id);
