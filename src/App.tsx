@@ -9,12 +9,15 @@ import { InsightsPanel } from "@/components/InsightsPanel";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { SummaryNotice } from "@/components/SummaryNotice";
 import { Sidebar, type View } from "@/components/Sidebar";
 import { TalkRatio } from "@/components/TalkRatio";
 import { Transcript } from "@/components/Transcript";
 import { Button } from "@/components/ui/button";
+import { onSummaryStatus } from "@/lib/ipc";
 import { useSttBlocker } from "@/lib/readiness";
 import { useAudioStore } from "@/stores/audio";
+import { useInsightsStore } from "@/stores/insights";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -25,6 +28,8 @@ export default function App() {
   const loadModels = useModelsStore((s) => s.load);
   const blocker = useSttBlocker();
   const [view, setView] = useState<View>("live");
+  /** Meeting da aprire nello Storico (dall'avviso del riepilogo). */
+  const [historyFocus, setHistoryFocus] = useState<number | null>(null);
 
   useEffect(() => {
     void load();
@@ -32,9 +37,31 @@ export default function App() {
     void loadModels();
   }, [load, init, loadModels]);
 
+  // Riepiloghi finali generati in background dopo lo stop.
+  useEffect(() => {
+    const unlisten = onSummaryStatus(useInsightsStore.getState().applyStatus);
+    return () => void unlisten.then((stop) => stop());
+  }, []);
+
+  const openSummary = (meetingId: number) => {
+    // Ancora mostrato in Live (nessuna nuova sessione): basta tornarci.
+    if (useInsightsStore.getState().summary?.meetingId === meetingId) {
+      setView("live");
+    } else {
+      setHistoryFocus(meetingId);
+      setView("history");
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar view={view} onChange={setView} />
+      <Sidebar
+        view={view}
+        onChange={(v) => {
+          setHistoryFocus(null);
+          setView(v);
+        }}
+      />
 
       {view === "settings" ? (
         <main className="min-w-0 flex-1 overflow-y-auto">
@@ -45,7 +72,7 @@ export default function App() {
         </main>
       ) : view === "history" ? (
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <History />
+          <History key={historyFocus ?? "list"} focusId={historyFocus} />
         </main>
       ) : (
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
@@ -91,6 +118,8 @@ export default function App() {
           </div>
         </main>
       )}
+
+      <SummaryNotice onOpen={openSummary} />
     </div>
   );
 }

@@ -37,7 +37,9 @@
     "showTranslations": "Mostrar traducciones",
     "copy": "Copiar",
     "copyAll": "Copiar toda la transcripción",
-    "copyLine": "Copiar frase"
+    "copyLine": "Copiar frase",
+    "translate": "Traducir",
+    "translateRetry": "Reintentar"
   },
   "meeting": {
     "title": "Contexto de la reunión",
@@ -147,7 +149,9 @@
       "modelsHidden": "{{count}} modelos compatibles ({{hidden}} no compatibles ocultos)",
       "reload": "Recargar modelos",
       "translationModel": "Modelo para la traducción",
-      "translationHint": "Pequeño y rápido: traduce cada frase.",
+      "translationHint": "Pequeño y rápido: traduce las frases de los demás.",
+      "autoTranslate": "Traducción automática",
+      "autoTranslateHint": "Traduce sola cada frase de los demás. Desactivada: usa el botón «Traducir» junto a la frase.",
       "assistModel": "Modelo para las sugerencias",
       "assistHint": "Mediano, con salida JSON: cada 20 segundos.",
       "chooseModel": "Elige un modelo",
@@ -159,7 +163,8 @@
       "test": "Probar conexión",
       "testOk": "ok en {{ms}} ms · {{model}}",
       "autoSummary": "Resumen final automático",
-      "autoSummaryHint": "Al detener, genera resumen, puntos clave y acciones."
+      "autoSummaryHint": "Al detener, genera resumen, puntos clave y acciones.",
+      "sameProvider": "Igual que arriba ({{name}})"
     },
     "localOnly": {
       "title": "Solo local",
@@ -179,7 +184,8 @@
   },
   "errors": {
     "devices": "No se pudieron leer los dispositivos: {{message}}",
-    "start": "No se pudo iniciar la sesión: {{message}}"
+    "start": "No se pudo iniciar la sesión: {{message}}",
+    "stop": "Error al detener la sesión: {{message}}"
   },
   "common": {
     "copied": "Copiado",
@@ -284,6 +290,12 @@
     "regenerate": "Regenerar",
     "language": "Idioma del resumen",
     "missing": "Aún no hay resumen para esta reunión.",
-    "generate": "Generar resumen"
+    "generate": "Generar resumen",
+    "generating": "Preparando el resumen final…",
+    "generatingHint": "La reunión ya está guardada. Puedes seguir usando la app o iniciar una nueva sesión: te avisaré cuando esté listo.",
+    "ready": "Resumen final listo",
+    "failed": "Resumen no generado: {{message}}. Puedes reintentarlo desde el Historial.",
+    "open": "Abrir resumen",
+    "dismiss": "Cerrar aviso"
   }
 }

@@ -134,8 +134,11 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   stop: async () => {
     set({ status: "stopping" });
     try {
-      const summary = await stopSession();
-      useInsightsStore.getState().setSummary(summary);
+      const result = await stopSession();
+      // Il riepilogo si genera in background: la UI torna subito utilizzabile.
+      if (result.summaryPending) useInsightsStore.getState().setPending(result.meetingId);
+    } catch (e) {
+      set({ error: { key: "errors.stop", message: errorMessage(e) } });
     } finally {
       set({ status: "idle", levels: { me: silent(), them: silent() } });
     }

@@ -1,4 +1,5 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export type ChannelId = "me" | "them";
 
@@ -53,7 +54,13 @@ export interface Settings {
   llmProvider: LlmProvider;
   llmBaseUrl: string;
   translationModel: string;
+  /** `null` = stesso provider di `llmProvider`. */
+  translationProvider: LlmProvider | null;
+  /** Traduce da sola ogni frase di "Loro"; spento = pulsante "Traduci". */
+  autoTranslate: boolean;
   assistModel: string;
+  /** `null` = stesso provider di `llmProvider` (vale anche per compressione e riepilogo). */
+  assistProvider: LlmProvider | null;
   /** Riepilogo finale automatico allo stop. */
   autoSummary: boolean;
   /** `null` = la lingua dell'utente. */
@@ -198,7 +205,21 @@ export function startSession(
   });
 }
 
-export const stopSession = () => invoke<Summary | null>("stop_session");
+/** Esito dello stop: il riepilogo, se previsto, arriva dopo con `onSummaryStatus`. */
+export interface StopResult {
+  meetingId: number | null;
+  summaryPending: boolean;
+}
+
+export const stopSession = () => invoke<StopResult>("stop_session");
+
+/** Esito del riepilogo finale generato in background dopo lo stop. */
+export type SummaryStatus =
+  | { state: "ready"; meetingId: number; summary: Summary }
+  | { state: "failed"; meetingId: number; message: string };
+
+export const onSummaryStatus = (handler: (status: SummaryStatus) => void) =>
+  listen<SummaryStatus>("summary-status", (e) => handler(e.payload));
 
 // --- Storico meeting ---------------------------------------------------------
 
@@ -301,9 +322,16 @@ export const hasApiKey = (provider: KeyProvider) => invoke<boolean>("has_api_key
 export const deleteApiKey = (provider: KeyProvider) =>
   invoke<void>("delete_api_key", { provider });
 
-export const listLlmModels = () => invoke<ModelInfo[]>("list_llm_models");
+/** Modelli di `provider` (default: il provider principale). */
+export const listLlmModels = (provider?: LlmProvider) =>
+  invoke<ModelInfo[]>("list_llm_models", { provider });
 
-export const testLlm = (model?: string) => invoke<LlmTestResult>("test_llm", { model });
+export const testLlm = (model?: string, provider?: LlmProvider) =>
+  invoke<LlmTestResult>("test_llm", { model, provider });
+
+/** Traduce su richiesta una frase finale; `previous` = frasi precedenti (contesto). */
+export const translateSegment = (segmentId: number, text: string, previous: string[]) =>
+  invoke<TranslationEvent>("translate_segment", { segmentId, text, previous });
 
 export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);

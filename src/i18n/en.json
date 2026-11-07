@@ -37,7 +37,9 @@
     "showTranslations": "Show translations",
     "copy": "Copy",
     "copyAll": "Copy the whole transcript",
-    "copyLine": "Copy sentence"
+    "copyLine": "Copy sentence",
+    "translate": "Translate",
+    "translateRetry": "Retry"
   },
   "meeting": {
     "title": "Meeting context",
@@ -147,7 +149,9 @@
       "modelsHidden": "{{count}} compatible models ({{hidden}} incompatible hidden)",
       "reload": "Reload models",
       "translationModel": "Translation model",
-      "translationHint": "Small and fast: translates every sentence.",
+      "translationHint": "Small and fast: translates the others' sentences.",
+      "autoTranslate": "Automatic translation",
+      "autoTranslateHint": "Translates every sentence from the others. Off: use the “Translate” button next to the sentence.",
       "assistModel": "Suggestions model",
       "assistHint": "Medium, JSON output: every 20 seconds.",
       "chooseModel": "Choose a model",
@@ -159,7 +163,8 @@
       "test": "Test connection",
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Automatic final summary",
-      "autoSummaryHint": "On stop, generate overview, key points and action items."
+      "autoSummaryHint": "On stop, generate overview, key points and action items.",
+      "sameProvider": "Same as above ({{name}})"
     },
     "localOnly": {
       "title": "Local only",
@@ -179,7 +184,8 @@
   },
   "errors": {
     "devices": "Could not read devices: {{message}}",
-    "start": "Could not start the session: {{message}}"
+    "start": "Could not start the session: {{message}}",
+    "stop": "Error while stopping the session: {{message}}"
   },
   "common": {
     "copied": "Copied",
@@ -284,6 +290,12 @@
     "regenerate": "Regenerate",
     "language": "Summary language",
     "missing": "No summary for this meeting yet.",
-    "generate": "Generate summary"
+    "generate": "Generate summary",
+    "generating": "Preparing the final summary…",
+    "generatingHint": "The meeting is already saved. Keep using the app or start a new session: you'll be notified when it's ready.",
+    "ready": "Final summary ready",
+    "failed": "Summary not generated: {{message}}. You can retry from History.",
+    "open": "Open summary",
+    "dismiss": "Dismiss"
   }
 }

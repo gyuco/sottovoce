@@ -52,29 +52,27 @@ type Test =
 /** Risultato legato all'endpoint che l'ha prodotto: cambiato l'endpoint, è scaduto. */
 type Keyed<T> = { endpoint: string; value: T };
 
-export function LlmSettings() {
-  const { t } = useTranslation();
+/** Modelli di un provider, ricaricati a ogni cambio di endpoint, chiave o richiesta. */
+function useModels(provider: LlmProvider, reloads: number, enabled = true): Models {
   const settings = useSettingsStore((s) => s.settings);
-  const update = useSettingsStore((s) => s.update);
-  const refreshKey = useSettingsStore((s) => s.refreshKey);
   const keys = useSettingsStore((s) => s.keys);
+  const refreshKey = useSettingsStore((s) => s.refreshKey);
   const [loaded, setLoaded] = useState<Keyed<Models> | null>(null);
-  const [tested, setTested] = useState<Keyed<Test> | null>(null);
-  const [reloads, setReloads] = useState(0);
-  const [baseUrl, setBaseUrl] = useState(settings?.llmBaseUrl ?? "");
 
-  const provider = settings?.llmProvider ?? "ollama";
   const savedBaseUrl = settings?.llmBaseUrl ?? "";
   const account = llmKeyAccount(provider);
   const hasKey = account ? (keys[account] ?? false) : false;
   const noEndpoint = provider === "custom" && savedBaseUrl.trim() === "";
   const endpoint = `${provider}|${savedBaseUrl}|${hasKey}|${reloads}`;
 
-  // Ricarica a ogni cambio di endpoint o di chiave (e su richiesta).
   useEffect(() => {
-    if (noEndpoint) return;
+    if (account && enabled) void refreshKey(account);
+  }, [account, enabled, refreshKey]);
+
+  useEffect(() => {
+    if (noEndpoint || !enabled) return;
     let live = true;
-    listLlmModels().then(
+    listLlmModels(provider).then(
       (models) => live && setLoaded({ endpoint, value: { state: "ok", models } }),
       (e: unknown) =>
         live && setLoaded({ endpoint, value: { state: "error", message: errorMessage(e) } }),
@@ -82,29 +80,54 @@ export function LlmSettings() {
     return () => {
       live = false;
     };
-  }, [endpoint, noEndpoint]);
+  }, [endpoint, noEndpoint, enabled, provider]);
 
-  const models: Models = noEndpoint
-    ? { state: "ok", models: [] }
-    : loaded?.endpoint === endpoint
-      ? loaded.value
-      : { state: "loading" };
+  if (noEndpoint) return { state: "ok", models: [] };
+  return loaded?.endpoint === endpoint ? loaded.value : { state: "loading" };
+}
+
+function usableModels(models: Models): ModelInfo[] | null {
+  return models.state === "ok" ? models.models.filter((m) => m.usable) : null;
+}
+
+export function LlmSettings() {
+  const { t } = useTranslation();
+  const settings = useSettingsStore((s) => s.settings);
+  const update = useSettingsStore((s) => s.update);
+  const keys = useSettingsStore((s) => s.keys);
+  const [tested, setTested] = useState<Keyed<Test> | null>(null);
+  const [reloads, setReloads] = useState(0);
+  const [baseUrl, setBaseUrl] = useState(settings?.llmBaseUrl ?? "");
+
+  const provider = settings?.llmProvider ?? "ollama";
+  const translationProvider = settings?.translationProvider ?? provider;
+  const assistProvider = settings?.assistProvider ?? provider;
+  const savedBaseUrl = settings?.llmBaseUrl ?? "";
+  const account = llmKeyAccount(provider);
+  const hasKey = account ? (keys[account] ?? false) : false;
+  const models = useModels(provider, reloads);
+  const translationModels = useModels(
+    translationProvider,
+    reloads,
+    translationProvider !== provider,
+  );
+  const assistModels = useModels(assistProvider, reloads, assistProvider !== provider);
+  const modelsFor = (p: LlmProvider) =>
+    p === provider ? models : p === translationProvider ? translationModels : assistModels;
+  const endpoint = `${translationProvider}|${savedBaseUrl}|${JSON.stringify(keys)}|${reloads}`;
   const test: Test = tested?.endpoint === endpoint ? tested.value : { state: "idle" };
-
-  useEffect(() => {
-    if (account) void refreshKey(account);
-  }, [account, refreshKey]);
 
   if (!settings) return null;
 
-  const usable = models.state === "ok" ? models.models.filter((m) => m.usable) : [];
+  const usable = usableModels(models) ?? [];
   const hidden = models.state === "ok" ? models.models.length - usable.length : 0;
+  const usesCustom = [provider, translationProvider, assistProvider].includes("custom");
 
   const runTest = async () => {
     const setTest = (value: Test) => setTested({ endpoint, value });
     setTest({ state: "running" });
     try {
-      setTest({ state: "ok", result: await testLlm(settings.translationModel) });
+      setTest({ state: "ok", result: await testLlm() });
     } catch (e) {
       setTest({ state: "error", message: errorMessage(e) });
     }
@@ -126,24 +149,13 @@ export function LlmSettings() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Row label={t("settings.llm.provider")}>
-          <Select
+          <ProviderSelect
             value={provider}
-            onValueChange={(v) => void update({ llmProvider: v as LlmProvider })}
-          >
-            <SelectTrigger className="w-56">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROVIDERS.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {t(`settings.llm.providers.${p}.name`)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(v) => v && void update({ llmProvider: v })}
+          />
         </Row>
 
-        {provider === "custom" && (
+        {usesCustom && (
           <Row label={t("settings.llm.baseUrl")} hint={t("settings.llm.baseUrlHint")}>
             <Input
               className="w-56"
@@ -183,18 +195,33 @@ export function LlmSettings() {
           </Button>
         </div>
 
-        <ModelField
+        <TaskField
           label={t("settings.llm.translationModel")}
           hint={t("settings.llm.translationHint")}
+          mainProvider={provider}
+          provider={settings.translationProvider}
+          onProviderChange={(translationProvider) =>
+            void update({ translationProvider, translationModel: "" })
+          }
           value={settings.translationModel}
-          models={models.state === "ok" ? usable : null}
+          models={modelsFor(translationProvider)}
           onChange={(translationModel) => void update({ translationModel })}
         />
-        <ModelField
+        <Row label={t("settings.llm.autoTranslate")} hint={t("settings.llm.autoTranslateHint")}>
+          <Switch
+            checked={settings.autoTranslate}
+            onCheckedChange={(autoTranslate) => void update({ autoTranslate })}
+            aria-label={t("settings.llm.autoTranslate")}
+          />
+        </Row>
+        <TaskField
           label={t("settings.llm.assistModel")}
           hint={t("settings.llm.assistHint")}
+          mainProvider={provider}
+          provider={settings.assistProvider}
+          onProviderChange={(assistProvider) => void update({ assistProvider, assistModel: "" })}
           value={settings.assistModel}
-          models={models.state === "ok" ? usable : null}
+          models={modelsFor(assistProvider)}
           onChange={(assistModel) => void update({ assistModel })}
         />
 
@@ -229,7 +256,10 @@ export function LlmSettings() {
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            disabled={test.state === "running" || settings.translationModel === ""}
+            disabled={
+              test.state === "running" ||
+              (settings.translationModel === "" && settings.assistModel === "")
+            }
             onClick={() => void runTest()}
           >
             {test.state === "running" && <Loader2 className="animate-spin" />}
@@ -239,6 +269,80 @@ export function LlmSettings() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/** "main" = segue il provider principale (`null` nelle impostazioni). */
+const MAIN = "main";
+
+function ProviderSelect(props: {
+  value: LlmProvider | null;
+  onChange: (p: LlmProvider | null) => void;
+  /** Se presente, prima voce "come il principale" (valore `null`). */
+  mainProvider?: LlmProvider;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Select
+      value={props.value ?? MAIN}
+      onValueChange={(v) => props.onChange(v === MAIN ? null : (v as LlmProvider))}
+    >
+      <SelectTrigger className="w-56" aria-label={t("settings.llm.provider")}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {props.mainProvider && (
+          <SelectItem value={MAIN}>
+            {t("settings.llm.sameProvider", {
+              name: t(`settings.llm.providers.${props.mainProvider}.name`),
+            })}
+          </SelectItem>
+        )}
+        {PROVIDERS.map((p) => (
+          <SelectItem key={p} value={p}>
+            {t(`settings.llm.providers.${p}.name`)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** Compito LLM: provider (o quello principale) e modello; chiave se manca. */
+function TaskField(props: {
+  label: string;
+  hint: string;
+  mainProvider: LlmProvider;
+  provider: LlmProvider | null;
+  onProviderChange: (p: LlmProvider | null) => void;
+  value: string;
+  models: Models;
+  onChange: (model: string) => void;
+}) {
+  const { t } = useTranslation();
+  const own = props.provider !== null && props.provider !== props.mainProvider;
+  const account = own && props.provider ? llmKeyAccount(props.provider) : null;
+  const hasKey = useSettingsStore((s) => (account ? (s.keys[account] ?? false) : true));
+
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <span>
+        {props.label}
+        <span className="block text-xs text-muted-foreground">{props.hint}</span>
+      </span>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <ProviderSelect
+          value={props.provider}
+          mainProvider={props.mainProvider}
+          onChange={props.onProviderChange}
+        />
+        <ModelField value={props.value} models={usableModels(props.models)} onChange={props.onChange} />
+      </div>
+      {own && props.models.state === "error" && (
+        <span className="text-right text-xs text-destructive">{props.models.message}</span>
+      )}
+      {account && !hasKey && <KeyForm provider={account} label={t("settings.llm.keyLabel")} />}
+    </div>
   );
 }
 
@@ -265,8 +369,6 @@ function TestResult({ test }: { test: Test }) {
 
 /** Select dei modelli; se l'elenco non è disponibile, campo di testo libero. */
 function ModelField(props: {
-  label: string;
-  hint: string;
   value: string;
   models: ModelInfo[] | null;
   onChange: (model: string) => void;
@@ -274,43 +376,37 @@ function ModelField(props: {
   const { t } = useTranslation();
 
   const list = props.models;
-  const field =
-    list && list.length > 0 ? (
-      <Select value={props.value || undefined} onValueChange={props.onChange}>
-        <SelectTrigger className="w-56">
-          <SelectValue placeholder={t("settings.llm.chooseModel")} />
-        </SelectTrigger>
-        <SelectContent>
-          {props.value && !list.some((m) => m.id === props.value) && (
-            <SelectItem value={props.value}>
-              {props.value} ({t("settings.llm.unavailable")})
-            </SelectItem>
-          )}
-          {list.map((m) => (
-            <SelectItem key={m.id} value={m.id}>
-              {m.id}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    ) : (
-      <Input
-        key={props.value}
-        className="w-56"
-        spellCheck={false}
-        placeholder={t("settings.llm.modelPlaceholder")}
-        defaultValue={props.value}
-        onBlur={(e) => {
-          const v = e.target.value.trim();
-          if (v !== props.value) props.onChange(v);
-        }}
-      />
-    );
-
-  return (
-    <Row label={props.label} hint={props.hint}>
-      {field}
-    </Row>
+  return list && list.length > 0 ? (
+    <Select value={props.value || undefined} onValueChange={props.onChange}>
+      <SelectTrigger className="w-56" aria-label={t("settings.llm.chooseModel")}>
+        <SelectValue placeholder={t("settings.llm.chooseModel")} />
+      </SelectTrigger>
+      <SelectContent>
+        {props.value && !list.some((m) => m.id === props.value) && (
+          <SelectItem value={props.value}>
+            {props.value} ({t("settings.llm.unavailable")})
+          </SelectItem>
+        )}
+        {list.map((m) => (
+          <SelectItem key={m.id} value={m.id}>
+            {m.id}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  ) : (
+    <Input
+      key={props.value}
+      className="w-56"
+      spellCheck={false}
+      aria-label={t("settings.llm.chooseModel")}
+      placeholder={t("settings.llm.modelPlaceholder")}
+      defaultValue={props.value}
+      onBlur={(e) => {
+        const v = e.target.value.trim();
+        if (v !== props.value) props.onChange(v);
+      }}
+    />
   );
 }
 

@@ -2,6 +2,7 @@ mod assist;
 mod commands;
 mod compress;
 mod diarize;
+mod echo;
 mod llm;
 mod meeting;
 mod models;
@@ -56,8 +57,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::system_audio_supported,
+            commands::js_error,
             commands::start_session,
             commands::stop_session,
+            commands::translate_segment,
             commands::list_meetings,
             commands::get_meeting,
             commands::delete_meeting,

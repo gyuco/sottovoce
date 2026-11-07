@@ -19,17 +19,19 @@ import {
 } from "@/lib/ipc";
 import { speakerColor } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
+import { useInsightsStore } from "@/stores/insights";
 
 const PER_PAGE = 20;
 
 /** Storico: elenco dei meeting salvati e dettaglio in sola lettura. */
-export function History() {
+export function History(props: { focusId?: number | null }) {
   const { t, i18n } = useTranslation();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [data, setData] = useState<{ meetings: MeetingSummary[]; total: number } | null>(null);
-  const [selected, setSelected] = useState<number | null>(null);
+  // Aperto da un avviso: parte da quel meeting (il componente si rimonta).
+  const [selected, setSelected] = useState<number | null>(props.focusId ?? null);
   const [details, setDetails] = useState<MeetingDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,8 @@ export function History() {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const lastReady = useInsightsStore((s) => s.lastReady);
+  const pendingId = useInsightsStore((s) => s.pendingMeetingId);
 
   // Ricerca con debounce: niente richiesta a ogni tasto.
   useEffect(() => {
@@ -86,6 +90,9 @@ export function History() {
   }, [selected, reload]);
 
   const meeting = selected === null ? null : (details?.meeting ?? null);
+  // Riepilogo arrivato in background mentre il meeting era già aperto.
+  const summary =
+    details?.summary ?? (lastReady && lastReady.meetingId === meeting?.id ? lastReady : null);
   const detailLoading = selected !== null && details?.meeting.id !== selected;
   const translations = useMemo(
     () => new Map((details?.translations ?? []).map((tr) => [tr.sessionId, tr])),
@@ -328,26 +335,35 @@ export function History() {
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-              {details.summary ? (
+              {summary ? (
                 <div className="p-2">
                   <SummaryPanel
-                    summary={details.summary}
+                    summary={summary}
                     onChange={(summary) => setDetails((d) => (d ? { ...d, summary } : d))}
                     onRegenerate={(language) => generateSummary(meeting.id, language)}
                   />
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-3 px-2 py-2 text-xs text-muted-foreground">
-                  <span>{t("summary.missing")}</span>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={generatingSummary}
-                    onClick={() => void createSummary()}
-                  >
-                    {generatingSummary && <Loader2 className="animate-spin" />}
-                    {t("summary.generate")}
-                  </Button>
+                  {pendingId === meeting.id ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                      {t("summary.generating")}
+                    </span>
+                  ) : (
+                    <>
+                      <span>{t("summary.missing")}</span>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={generatingSummary}
+                        onClick={() => void createSummary()}
+                      >
+                        {generatingSummary && <Loader2 className="animate-spin" />}
+                        {t("summary.generate")}
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
               {details.segments.length === 0 ? (

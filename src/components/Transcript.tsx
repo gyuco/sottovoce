@@ -1,4 +1,4 @@
-import { ArrowDown, Check, Copy, ScrollText } from "lucide-react";
+import { AlertCircle, ArrowDown, Check, Copy, Languages, Loader2, ScrollText } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { formatDuration, useCopy } from "@/lib/hooks";
 import { MOMENT_COLORS } from "@/lib/moments";
-import type { TranslationEvent } from "@/lib/ipc";
+import { type TranslationEvent, errorMessage, translateSegment } from "@/lib/ipc";
 import { useSpeakerName } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 import { useInsightsStore } from "@/stores/insights";
@@ -15,6 +15,8 @@ import { type Line, useTranscriptStore } from "@/stores/transcript";
 
 /** Distanza dal fondo (px) entro cui l'autoscroll resta agganciato. */
 const STICK_PX = 48;
+/** Frasi precedenti di "Loro" passate come contesto alla traduzione su richiesta. */
+const TRANSLATE_HISTORY = 3;
 
 export function Transcript() {
   const { t } = useTranslation();
@@ -23,9 +25,12 @@ export function Transcript() {
   const translations = useTranscriptStore((s) => s.translations);
   const showTranslations = useTranscriptStore((s) => s.showTranslations);
   const setShowTranslations = useTranscriptStore((s) => s.setShowTranslations);
+  const applyTranslation = useTranscriptStore((s) => s.applyTranslation);
   const { copied, copy } = useCopy();
   const speakerName = useSpeakerName();
-  const moments = useInsightsStore((s) => s.blocks.flatMap((b) => b.moments));
+  // Il selettore deve restituire un riferimento stabile: derivare fuori dallo store.
+  const blocks = useInsightsStore((s) => s.blocks);
+  const moments = useMemo(() => blocks.flatMap((b) => b.moments), [blocks]);
 
   const rows = useMemo(() => {
     const live = [partial.me, partial.them].filter((p): p is Line => p !== null);
@@ -48,6 +53,16 @@ export function Transcript() {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [rows, translations, showTranslations]);
+
+  /** Traduce su richiesta; lancia l'errore al chiamante (mostrato sulla riga). */
+  const translate = async (line: Line) => {
+    const previous = lines
+      .filter((l) => l.channel === "them" && l.start < line.start)
+      .slice(-TRANSLATE_HISTORY)
+      .map((l) => l.text);
+    applyTranslation(await translateSegment(line.id, line.text, previous));
+    setShowTranslations(true);
+  };
 
   const toBottom = () => {
     const el = box.current;
@@ -105,6 +120,11 @@ export function Transcript() {
                 key={r.id === 0 ? `partial-${r.channel}` : r.id}
                 line={r}
                 translation={showTranslations && r.id !== 0 ? translations[r.id] : undefined}
+                onTranslate={
+                  r.id !== 0 && r.channel === "them" && !translations[r.id]
+                    ? () => translate(r)
+                    : undefined
+                }
               />
             ))}
           </ol>
@@ -152,13 +172,19 @@ function MomentBar(props: {
   );
 }
 
-function TranscriptRow({ line, translation }: { line: Line; translation: TranslationEvent | undefined }) {
+function TranscriptRow(props: {
+  line: Line;
+  translation: TranslationEvent | undefined;
+  /** Presente se la frase si può tradurre su richiesta. */
+  onTranslate?: () => Promise<void>;
+}) {
+  const { line, translation } = props;
   const { t } = useTranslation();
   const { copied, copy } = useCopy();
   const partial = line.id === 0;
 
   return (
-    <li className="group grid grid-cols-[2.75rem_6rem_1fr_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
+    <li className="group grid grid-cols-[2.75rem_6rem_1fr_auto_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatDuration(line.start)}</span>
       <SpeakerLabel channel={line.channel} speaker={line.speaker} editable={!partial} />
       <span className={cn("leading-relaxed select-text", partial && "text-muted-foreground italic")}>
@@ -167,6 +193,7 @@ function TranscriptRow({ line, translation }: { line: Line; translation: Transla
           <span className="mt-0.5 block text-muted-foreground">{translation.text}</span>
         )}
       </span>
+      {props.onTranslate ? <TranslateButton onTranslate={props.onTranslate} /> : <span />}
       {!partial && (
         <Button
           variant="ghost"
@@ -180,5 +207,40 @@ function TranscriptRow({ line, translation }: { line: Line; translation: Transla
         </Button>
       )}
     </li>
+  );
+}
+
+/** Pulsante "Traduci" della singola frase, con attesa ed errore. */
+function TranslateButton({ onTranslate }: { onTranslate: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<{ busy: boolean; error: string | null }>({
+    busy: false,
+    error: null,
+  });
+
+  const run = async () => {
+    setState({ busy: true, error: null });
+    try {
+      await onTranslate();
+    } catch (e) {
+      setState({ busy: false, error: errorMessage(e) });
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className={cn(
+        "self-start text-muted-foreground hover:text-foreground",
+        state.error && "text-destructive hover:text-destructive",
+      )}
+      disabled={state.busy}
+      title={state.error ?? t("transcript.translate")}
+      onClick={() => void run()}
+    >
+      {state.busy ? <Loader2 className="animate-spin" /> : state.error ? <AlertCircle /> : <Languages />}
+      {state.error ? t("transcript.translateRetry") : t("transcript.translate")}
+    </Button>
   );
 }

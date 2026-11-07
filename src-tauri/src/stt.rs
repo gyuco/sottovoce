@@ -150,9 +150,11 @@ pub fn check_local_only(settings: &Settings) -> Result<()> {
     if !settings.local_only {
         return Ok(());
     }
-    let llm_used =
-        !settings.translation_model.trim().is_empty() || !settings.assist_model.trim().is_empty();
-    if !llm_used || is_local_llm(settings) {
+    let all_local = [settings.translation_llm(), settings.assist_llm()]
+        .into_iter()
+        .flatten()
+        .all(|task| is_local_llm(settings, task.provider));
+    if all_local {
         return Ok(());
     }
     bail!(
@@ -162,8 +164,8 @@ pub fn check_local_only(settings: &Settings) -> Result<()> {
     )
 }
 
-pub fn is_local_llm(settings: &Settings) -> bool {
-    match settings.llm_provider {
+pub fn is_local_llm(settings: &Settings, provider: LlmProvider) -> bool {
+    match provider {
         LlmProvider::Ollama => true,
         LlmProvider::Custom => is_loopback_url(&settings.llm_base_url),
         _ => false,
@@ -315,6 +317,19 @@ mod tests {
         };
         assert!(check_local_only(&custom("http://localhost:1234/v1")).is_ok());
         assert!(check_local_only(&custom("https://api.groq.com/openai/v1")).is_err());
+        // Ogni compito col proprio provider: basta uno esterno per bloccare.
+        let mixed = Settings {
+            assist_model: "m".into(),
+            assist_provider: Some(LlmProvider::Anthropic),
+            ..base.clone()
+        };
+        assert!(check_local_only(&mixed).is_err());
+        let main_cloud_task_local = Settings {
+            llm_provider: LlmProvider::Openai,
+            translation_provider: Some(LlmProvider::Ollama),
+            ..base.clone()
+        };
+        assert!(check_local_only(&main_cloud_task_local).is_ok());
     }
 
     #[test]

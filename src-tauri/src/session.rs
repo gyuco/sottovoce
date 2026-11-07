@@ -19,6 +19,7 @@ use tokio::task::JoinHandle;
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
 use crate::compress::{self, CompressConfig, CompressLine, CompressionEvent, CompressionLog};
 use crate::diarize::{self, DiarConfig, DiarJob};
+use crate::echo::EchoGuard;
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
 use crate::summary::{self, SummaryConfig};
@@ -36,6 +37,8 @@ const DIAR_TIMEOUT: Duration = Duration::from_secs(2);
 #[derive(Default)]
 pub struct LlmTasks {
     pub translation: Option<TranslatorConfig>,
+    /// Traduzione automatica di ogni frase; spenta = solo su richiesta.
+    pub auto_translate: bool,
     pub assist: Option<AssistConfig>,
     /// Compressione rolling dei 5 minuti.
     pub compression: Option<CompressConfig>,
@@ -67,6 +70,15 @@ pub struct Session {
     log: Option<CompressionLog>,
     summary: Option<SummaryConfig>,
     auto_summary: bool,
+    /// Traduzione su richiesta (pulsante "Traduci").
+    translation: Option<TranslatorConfig>,
+}
+
+/// Cosa serve per tradurre una frase su richiesta durante la sessione.
+pub struct OnDemandTranslation {
+    pub cfg: TranslatorConfig,
+    pub context: Option<String>,
+    pub store: Option<StoreHandle>,
 }
 
 impl Session {
@@ -145,9 +157,10 @@ impl Session {
             tx
         });
 
-        let translating = llm.translation.is_some() && system_audio;
+        let on_demand = llm.translation.clone();
+        let translating = llm.translation.is_some() && llm.auto_translate && system_audio;
         // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
-        let translator = llm.translation.filter(|_| system_audio).map(|cfg| {
+        let translator = llm.translation.filter(|_| translating).map(|cfg| {
             let (tx, task) = translate::spawn(cfg, context.clone(), on_translation);
             tasks.push(task);
             tx
@@ -173,6 +186,8 @@ impl Session {
             tasks.push(task);
             tx
         });
+        // Anti-eco: serve solo se c'è "Loro" da confrontare.
+        let echo = system_audio.then(|| Arc::new(EchoGuard::default()));
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
@@ -197,6 +212,7 @@ impl Session {
                     assist: assistant.clone(),
                     diarize,
                     compress: compressor.clone(),
+                    echo: echo.clone(),
                 },
                 move |e| sink(e),
             ));
@@ -235,6 +251,7 @@ impl Session {
                     log: compression_log,
                     summary: llm.summary,
                     auto_summary: llm.auto_summary,
+                    translation: on_demand,
                 })
             }
             Err(e) => {
@@ -260,7 +277,19 @@ impl Session {
         }
     }
 
-    pub async fn stop(self) -> Option<sv_store::Summary> {
+    /// Traduzione su richiesta; `None` se manca il modello di traduzione.
+    pub fn on_demand_translation(&self) -> Option<OnDemandTranslation> {
+        Some(OnDemandTranslation {
+            cfg: self.translation.clone()?,
+            context: self.context.prompt_block(),
+            store: self.store.as_ref().map(Writer::handle),
+        })
+    }
+
+    /// Ferma cattura e STT e chiude il meeting. Il riepilogo finale (lento:
+    /// tre chiamate LLM) non viene generato qui: torna come [`SummaryJob`]
+    /// da eseguire in background, così lo stop è immediato.
+    pub async fn stop(self) -> Stopped {
         let Self {
             capture,
             tasks,
@@ -270,6 +299,7 @@ impl Session {
             log,
             summary,
             auto_summary,
+            translation: _,
         } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
@@ -285,12 +315,31 @@ impl Session {
                 a.abort();
             }
         }
-        // Durata reale della call: il riepilogo che segue non la allunga.
         let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
 
-        // Riepilogo automatico dopo lo stop: compressione + coda finale.
-        let mut generated = None;
-        if auto_summary && let (Some(cfg), Some(log), Some(writer)) = (&summary, &log, &store) {
+        // Dopo i task (traduzioni, assist e compressione compresi).
+        let meeting_id = match store {
+            Some(store) => match tokio::task::spawn_blocking(move || store.finish(elapsed)).await {
+                Ok(Ok(id)) => {
+                    tracing::info!(meeting = id, elapsed_ms = elapsed, "meeting salvato");
+                    Some(id)
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!("meeting non chiuso correttamente: {e}");
+                    None
+                }
+                Err(e) => {
+                    tracing::warn!("chiusura del meeting interrotta: {e}");
+                    None
+                }
+            },
+            None => None,
+        };
+
+        // Riepilogo automatico: solo se il meeting è salvato e c'è materiale.
+        let mut job = None;
+        if auto_summary && let (Some(cfg), Some(log), Some(meeting_id)) = (summary, log, meeting_id)
+        {
             let input = summary::SummaryInput {
                 context: context.get(),
                 blocks: log.blocks(),
@@ -298,38 +347,52 @@ impl Session {
             };
             if input.blocks.is_empty() && input.lines.is_empty() {
                 tracing::info!("riepilogo finale saltato: nessuna trascrizione");
-            } else if let Some(draft) = summary::generate(cfg, &input).await {
-                let meeting_id = writer.meeting_id();
-                writer.handle().summary(draft.clone());
-                generated = Some(sv_store::Summary {
+            } else {
+                job = Some(SummaryJob {
                     meeting_id,
-                    language: draft.language,
-                    overview: draft.overview,
-                    key_points: draft.key_points,
-                    action_items: draft.action_items,
-                    created_at_ms: unix_ms(),
+                    cfg,
+                    input,
                 });
-                tracing::info!(meeting = meeting_id, "riepilogo finale generato");
-            }
-        }
-
-        // Dopo i task (traduzioni, assist e compressione compresi).
-        if let Some(store) = store {
-            match store.finish(elapsed) {
-                Ok(id) => tracing::info!(meeting = id, elapsed_ms = elapsed, "meeting salvato"),
-                Err(e) => tracing::warn!("meeting non chiuso correttamente: {e}"),
             }
         }
         tracing::info!("sessione fermata");
-        generated
+        Stopped {
+            meeting_id,
+            summary: job,
+        }
     }
 }
 
-fn unix_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
-        .unwrap_or(0)
+/// Esito dello stop di una sessione.
+pub struct Stopped {
+    /// Meeting salvato; `None` se il DB non era disponibile.
+    pub meeting_id: Option<i64>,
+    /// Riepilogo finale da generare in background.
+    pub summary: Option<SummaryJob>,
+}
+
+/// Riepilogo finale di un meeting già chiuso, da generare fuori dallo stop.
+pub struct SummaryJob {
+    pub meeting_id: i64,
+    cfg: SummaryConfig,
+    input: summary::SummaryInput,
+}
+
+impl SummaryJob {
+    /// Genera il riepilogo e lo salva nel DB del meeting.
+    pub async fn run(self, db_path: std::path::PathBuf) -> Result<sv_store::Summary> {
+        let draft = summary::generate(&self.cfg, &self.input)
+            .await
+            .context("riepilogo non generato")?;
+        let id = self.meeting_id;
+        let saved = tokio::task::spawn_blocking(move || {
+            sv_store::Store::open(db_path)?.save_summary(id, &draft)
+        })
+        .await
+        .context("salvataggio del riepilogo interrotto")??;
+        tracing::info!(meeting = id, "riepilogo finale generato");
+        Ok(saved)
+    }
 }
 
 /// Copia nel database gli eventi che riguardano il meeting: frasi finali e
@@ -376,6 +439,8 @@ struct Followers {
     diarize: Option<mpsc::Sender<DiarJob>>,
     /// Compressione rolling dei 5 minuti.
     compress: Option<mpsc::Sender<CompressLine>>,
+    /// Anti-eco: "Loro" registra le frasi, "Io" scarta quelle ripetute.
+    echo: Option<Arc<EchoGuard>>,
 }
 
 /// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
@@ -394,6 +459,7 @@ fn spawn_channel(
         assist,
         diarize,
         compress,
+        echo,
     } = followers;
     let SttStream {
         channel,
@@ -432,6 +498,29 @@ fn spawn_channel(
         let mut dropped = 0u64;
         while let Some(mut event) = events.recv().await {
             stats.observe(&event, started);
+            if let SttEventKind::Final(seg) = &event.kind {
+                tracing::debug!(?channel, start = ?seg.start, end = ?seg.end, text = %seg.text, "frase finale");
+            }
+            if let Some(guard) = &echo {
+                match (&event.kind, channel) {
+                    (SttEventKind::Partial(_), Channel::Them) => guard.them_activity(),
+                    (SttEventKind::Final(seg), Channel::Them) => guard.them_final(&seg.text),
+                    (SttEventKind::Final(seg), Channel::Me) if guard.is_echo(&seg.text).await => {
+                        tracing::debug!(text = %seg.text, "eco di \"Loro\" sul microfono: frase scartata");
+                        // Toglie il parziale rimasto in UI.
+                        on_transcript(SttEvent {
+                            channel,
+                            kind: SttEventKind::Partial(sv_stt::Segment {
+                                start: seg.end,
+                                end: seg.end,
+                                ..sv_stt::Segment::default()
+                            }),
+                        });
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
             let mut relabels = Vec::new();
             let job = match &mut event.kind {
                 SttEventKind::Final(seg) => {
@@ -677,6 +766,7 @@ mod tests {
                 assist: None,
                 diarize: None,
                 compress: None,
+                echo: None,
             },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {

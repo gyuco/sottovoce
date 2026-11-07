@@ -37,7 +37,9 @@
     "showTranslations": "Mostra traduzioni",
     "copy": "Copia",
     "copyAll": "Copia tutta la trascrizione",
-    "copyLine": "Copia frase"
+    "copyLine": "Copia frase",
+    "translate": "Traduci",
+    "translateRetry": "Riprova"
   },
   "meeting": {
     "title": "Contesto meeting",
@@ -147,7 +149,9 @@
       "modelsHidden": "{{count}} modelli compatibili ({{hidden}} non compatibili nascosti)",
       "reload": "Ricarica modelli",
       "translationModel": "Modello per la traduzione",
-      "translationHint": "Piccolo e veloce: traduce ogni frase.",
+      "translationHint": "Piccolo e veloce: traduce le frasi degli altri.",
+      "autoTranslate": "Traduzione automatica",
+      "autoTranslateHint": "Traduce da sola ogni frase degli altri. Spenta: usa il pulsante «Traduci» accanto alla frase.",
       "assistModel": "Modello per i suggerimenti",
       "assistHint": "Medio, con output JSON: ogni 20 secondi.",
       "chooseModel": "Scegli un modello",
@@ -159,7 +163,8 @@
       "test": "Prova connessione",
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Riepilogo finale automatico",
-      "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni."
+      "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni.",
+      "sameProvider": "Come sopra ({{name}})"
     },
     "localOnly": {
       "title": "Solo locale",
@@ -179,7 +184,8 @@
   },
   "errors": {
     "devices": "Impossibile leggere i dispositivi: {{message}}",
-    "start": "Impossibile avviare la sessione: {{message}}"
+    "start": "Impossibile avviare la sessione: {{message}}",
+    "stop": "Errore durante lo stop della sessione: {{message}}"
   },
   "common": {
     "copied": "Copiato",
@@ -284,6 +290,12 @@
     "regenerate": "Rigenera",
     "language": "Lingua del riepilogo",
     "missing": "Nessun riepilogo per questo meeting.",
-    "generate": "Genera riepilogo"
+    "generate": "Genera riepilogo",
+    "generating": "Sto preparando il riepilogo finale…",
+    "generatingHint": "Il meeting è già salvato. Puoi continuare a usare l'app o avviare una nuova sessione: ti avviso quando è pronto.",
+    "ready": "Riepilogo finale pronto",
+    "failed": "Riepilogo non generato: {{message}}. Puoi riprovare dallo Storico.",
+    "open": "Apri riepilogo",
+    "dismiss": "Chiudi avviso"
   }
 }

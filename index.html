@@ -5,6 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>Sottovoce</title>
+    <script>
+      // TEMPORANEO: diagnostica errori di caricamento.
+      (function () {
+        function report(msg) {
+          try {
+            window.__TAURI_INTERNALS__.invoke("js_error", { message: String(msg) });
+          } catch (e) {
+            document.title = "JSERR " + msg;
+          }
+        }
+        window.addEventListener("error", function (e) {
+          report(
+            (e.message || "errore risorsa") +
+              " @ " +
+              (e.filename || (e.target && e.target.src) || "?") +
+              ":" +
+              (e.lineno || 0) +
+              "\n" +
+              (e.error && e.error.stack ? e.error.stack : ""),
+          );
+        });
+        window.addEventListener("unhandledrejection", function (e) {
+          report(
+            "unhandledrejection: " +
+              (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)),
+          );
+        });
+      })();
+    </script>
   </head>
 
   <body>

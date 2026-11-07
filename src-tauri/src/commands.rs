@@ -1,5 +1,7 @@
-use tauri::State;
+use std::path::PathBuf;
+
 use tauri::ipc::Channel;
+use tauri::{AppHandle, Emitter, State};
 
 use serde::Serialize;
 use sv_audio::{InputDevice, LevelEvent};
@@ -13,8 +15,8 @@ use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
 use crate::secrets;
-use crate::session::Session;
 use crate::session::{LlmTasks, Outputs};
+use crate::session::{Session, SummaryJob};
 use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
 use crate::state::{AppState, Db};
 use crate::stt;
@@ -38,11 +40,18 @@ pub fn system_audio_supported() -> bool {
     sv_audio::system::is_supported()
 }
 
+/// TEMPORANEO: log degli errori JS del webview.
+#[tauri::command]
+pub fn js_error(message: String) {
+    eprintln!("JS-ERROR: {message}");
+}
+
 /// Avvia una sessione (ferma quella eventualmente attiva) con le impostazioni
 /// correnti. Livelli su `on_level`, trascrizione su `on_transcript`.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // stato Tauri + un canale IPC per flusso
 pub async fn start_session(
+    app: AppHandle,
     state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
     models: State<'_, Models>,
@@ -56,7 +65,11 @@ pub async fn start_session(
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
     if let Some(old) = slot.take() {
-        old.stop().await;
+        // Riavvio a sessione attiva (es. cambio microfono): il riepilogo
+        // del meeting appena chiuso non va perso.
+        if let Some(job) = old.stop().await.summary {
+            spawn_summary(app.clone(), db.path.clone(), job);
+        }
     }
     let settings = settings.get();
     // Prima di qualsiasi connessione: "solo locale" non ammette LLM esterni.
@@ -134,65 +147,193 @@ pub async fn update_meeting_context(
 
 /// Traduzione e live assist dalle impostazioni. Un compito senza modello, o
 /// un LLM non configurabile, resta spento (con log): la sessione parte comunque.
+/// Ogni compito usa il proprio provider; un client per provider (per OpenCode
+/// Go: un id di sessione).
 async fn llm_tasks(settings: &Settings) -> LlmTasks {
-    let translation_model = settings.translation_model.trim().to_owned();
-    let assist_model = settings.assist_model.trim().to_owned();
-    if translation_model.is_empty() && assist_model.is_empty() {
+    let translation = settings.translation_llm();
+    let assist = settings.assist_llm();
+    let insight = settings.insight_llm();
+    if translation.is_none() && assist.is_none() {
         tracing::info!("traduzione e live assist disattivati: nessun modello scelto");
         return LlmTasks::default();
     }
-    let for_client = settings.clone();
-    // Un solo client per sessione (per OpenCode Go: un id di sessione).
-    let client: std::sync::Arc<dyn sv_llm::LlmProvider> =
-        match blocking(move || llm::client(&for_client, true)).await {
-            Ok(c) => c,
+    let mut clients: Vec<(
+        settings::LlmProvider,
+        Option<std::sync::Arc<dyn sv_llm::LlmProvider>>,
+    )> = Vec::new();
+    for task in [&translation, &assist].into_iter().flatten() {
+        if clients.iter().any(|(p, _)| *p == task.provider) {
+            continue;
+        }
+        let (for_client, provider) = (settings.clone(), task.provider);
+        let client = match blocking(move || llm::client(&for_client, provider, true)).await {
+            Ok(c) => Some(c),
             Err(e) => {
-                tracing::warn!("traduzione e live assist disattivati: {e}");
-                return LlmTasks::default();
+                tracing::warn!(?provider, "modello linguistico non disponibile: {e}");
+                None
             }
         };
-    // Compressione e riepilogo usano il modello dell'assist; se non c'è,
-    // ripiegano su quello della traduzione.
-    let insight_model = if assist_model.is_empty() {
-        translation_model.clone()
-    } else {
-        assist_model.clone()
+        clients.push((task.provider, client));
+    }
+    let client_for = |task: &Option<settings::TaskModel>| {
+        let task = task.as_ref()?;
+        let client = clients
+            .iter()
+            .find(|(p, _)| *p == task.provider)
+            .and_then(|(_, c)| c.clone())?;
+        Some((client, task.model.clone()))
     };
     let language = settings.effective_target_language();
     let insight_language = settings.summary_language();
     LlmTasks {
-        translation: (!translation_model.is_empty()).then(|| TranslatorConfig {
-            llm: client.clone(),
-            model: translation_model,
+        translation: client_for(&translation).map(|(llm, model)| TranslatorConfig {
+            llm,
+            model,
             target: language,
             source_hint: Some(settings.their_language).filter(|l| *l != Language::Multi),
         }),
-        assist: (!assist_model.is_empty()).then(|| AssistConfig {
-            llm: client.clone(),
-            model: assist_model,
+        auto_translate: settings.auto_translate,
+        assist: client_for(&assist).map(|(llm, model)| AssistConfig {
+            llm,
+            model,
             user_language: language,
         }),
-        compression: (!insight_model.is_empty()).then(|| CompressConfig {
-            llm: client.clone(),
-            model: insight_model.clone(),
+        compression: client_for(&insight).map(|(llm, model)| CompressConfig {
+            llm,
+            model,
             language: insight_language,
         }),
-        summary: (!insight_model.is_empty()).then(|| SummaryConfig {
-            llm: client,
-            model: insight_model,
+        summary: client_for(&insight).map(|(llm, model)| SummaryConfig {
+            llm,
+            model,
             language: insight_language,
         }),
         auto_summary: settings.auto_summary,
     }
 }
 
+/// Traduce su richiesta una frase della sessione attiva (pulsante
+/// "Traduci") e la salva. `previous` = frasi precedenti, solo contesto.
 #[tauri::command]
-pub async fn stop_session(state: State<'_, AppState>) -> CmdResult<Option<sv_store::Summary>> {
-    let session = state.session.lock().await.take();
-    Ok(match session {
-        Some(s) => s.stop().await,
-        None => None,
+pub async fn translate_segment(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsStore>,
+    segment_id: u64,
+    text: String,
+    previous: Vec<String>,
+) -> CmdResult<TranslationEvent> {
+    let active = state
+        .session
+        .lock()
+        .await
+        .as_ref()
+        .map(Session::on_demand_translation);
+    let job = match active {
+        Some(Some(job)) => job,
+        Some(None) => return Err("scegli un modello di traduzione nelle Impostazioni".into()),
+        // Sessione finita: si traduce comunque, senza salvare.
+        None => {
+            let settings = settings.get();
+            stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+            let task = settings
+                .translation_llm()
+                .ok_or_else(|| "scegli un modello di traduzione nelle Impostazioni".to_owned())?;
+            let (for_client, provider) = (settings.clone(), task.provider);
+            let llm = blocking(move || llm::client(&for_client, provider, true)).await?;
+            crate::session::OnDemandTranslation {
+                cfg: TranslatorConfig {
+                    llm,
+                    model: task.model,
+                    target: settings.effective_target_language(),
+                    source_hint: None,
+                },
+                context: None,
+                store: None,
+            }
+        }
+    };
+    let (translated, latency_ms) =
+        crate::translate::translate_one(&job.cfg, job.context.as_deref(), &previous, &text).await?;
+    if let Some(store) = &job.store {
+        store.translation(segment_id, &translated, job.cfg.target.code(), latency_ms);
+    }
+    Ok(TranslationEvent {
+        segment_id,
+        text: translated,
+        latency_ms,
     })
+}
+
+/// Esito dello stop per la UI: il riepilogo, se previsto, arriva dopo con
+/// l'evento [`SUMMARY_EVENT`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StopResult {
+    pub meeting_id: Option<i64>,
+    pub summary_pending: bool,
+}
+
+/// Evento con l'esito del riepilogo finale generato in background.
+pub const SUMMARY_EVENT: &str = "summary-status";
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+enum SummaryStatus {
+    #[serde(rename_all = "camelCase")]
+    Ready {
+        meeting_id: i64,
+        summary: sv_store::Summary,
+    },
+    #[serde(rename_all = "camelCase")]
+    Failed { meeting_id: i64, message: String },
+}
+
+#[tauri::command]
+pub async fn stop_session(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    db: State<'_, Db>,
+) -> CmdResult<StopResult> {
+    let session = state.session.lock().await.take();
+    let Some(session) = session else {
+        return Ok(StopResult {
+            meeting_id: None,
+            summary_pending: false,
+        });
+    };
+    let stopped = session.stop().await;
+    let summary_pending = stopped.summary.is_some();
+    if let Some(job) = stopped.summary {
+        spawn_summary(app, db.path.clone(), job);
+    }
+    Ok(StopResult {
+        meeting_id: stopped.meeting_id,
+        summary_pending,
+    })
+}
+
+/// Genera il riepilogo finale senza bloccare la UI; l'esito va all'evento
+/// [`SUMMARY_EVENT`]. Si può intanto avviare un'altra sessione.
+fn spawn_summary(app: AppHandle, db_path: PathBuf, job: SummaryJob) {
+    tauri::async_runtime::spawn(async move {
+        let meeting_id = job.meeting_id;
+        let status = match job.run(db_path).await {
+            Ok(summary) => SummaryStatus::Ready {
+                meeting_id,
+                summary,
+            },
+            Err(e) => {
+                tracing::warn!(meeting = meeting_id, "riepilogo finale non riuscito: {e:#}");
+                SummaryStatus::Failed {
+                    meeting_id,
+                    message: format!("{e:#}"),
+                }
+            }
+        };
+        if let Err(e) = app.emit(SUMMARY_EVENT, status) {
+            tracing::warn!("evento riepilogo non inviato: {e}");
+        }
+    });
 }
 
 // --- Storico meeting ---------------------------------------------------------
@@ -249,14 +390,9 @@ pub async fn generate_summary(
 ) -> CmdResult<sv_store::Summary> {
     let settings = settings.get();
     stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
-    let model = if settings.assist_model.trim().is_empty() {
-        settings.translation_model.clone()
-    } else {
-        settings.assist_model.clone()
-    };
-    if model.trim().is_empty() {
-        return Err("scegli un modello per il live assist o la traduzione".into());
-    }
+    let task = settings
+        .insight_llm()
+        .ok_or_else(|| "scegli un modello per il live assist o la traduzione".to_owned())?;
     let language = match language.unwrap_or(settings.summary_language()) {
         Language::En => Language::En,
         _ => Language::It,
@@ -308,11 +444,11 @@ pub async fn generate_summary(
             end_ms: s.end_ms,
         })
         .collect();
-    let for_client = settings;
-    let client = blocking(move || llm::client(&for_client, true)).await?;
+    let provider = task.provider;
+    let client = blocking(move || llm::client(&settings, provider, true)).await?;
     let cfg = SummaryConfig {
         llm: client,
-        model,
+        model: task.model,
         language,
     };
     let input = crate::summary::SummaryInput {
@@ -380,12 +516,16 @@ pub fn update_settings(
 
 // --- LLM ---------------------------------------------------------------------
 
-/// Modelli del provider LLM configurato (con il flag di compatibilità).
+/// Modelli di `provider` (default: quello principale), con il flag di
+/// compatibilità.
 #[tauri::command]
-pub async fn list_llm_models(settings: State<'_, SettingsStore>) -> CmdResult<Vec<ModelInfo>> {
+pub async fn list_llm_models(
+    settings: State<'_, SettingsStore>,
+    provider: Option<settings::LlmProvider>,
+) -> CmdResult<Vec<ModelInfo>> {
     let settings = settings.get();
-    let provider = settings.llm_provider;
-    let client = blocking(move || llm::client(&settings, false)).await?;
+    let provider = provider.unwrap_or(settings.llm_provider);
+    let client = blocking(move || llm::client(&settings, provider, false)).await?;
     let mut models = client
         .list_models()
         .await
@@ -402,22 +542,28 @@ pub struct LlmTestResult {
     pub reply: String,
 }
 
-/// Chiamata minima al modello `model` (o a quello di traduzione) per
+/// Chiamata minima a `model` su `provider` (default: il modello di
+/// traduzione, poi quello dei suggerimenti, col loro provider) per
 /// verificare endpoint, chiave e modello.
 #[tauri::command]
 pub async fn test_llm(
     settings: State<'_, SettingsStore>,
     model: Option<String>,
+    provider: Option<settings::LlmProvider>,
 ) -> CmdResult<LlmTestResult> {
     let settings = settings.get();
-    let provider = settings.llm_provider;
-    let model = model
-        .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| settings.translation_model.clone());
-    if model.trim().is_empty() {
-        return Err("scegli prima un modello".into());
-    }
-    let client = blocking(move || llm::client(&settings, true)).await?;
+    let task = match model.filter(|m| !m.trim().is_empty()) {
+        Some(model) => settings::TaskModel {
+            provider: provider.unwrap_or(settings.llm_provider),
+            model,
+        },
+        None => settings
+            .translation_llm()
+            .or_else(|| settings.assist_llm())
+            .ok_or_else(|| "scegli prima un modello".to_owned())?,
+    };
+    let (provider, model) = (task.provider, task.model);
+    let client = blocking(move || llm::client(&settings, provider, true)).await?;
     let req = ChatRequest::new(
         model.clone(),
         vec![Message::user("Rispondi solo con la parola: ok")],
