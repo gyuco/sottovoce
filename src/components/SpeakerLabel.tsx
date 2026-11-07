@@ -2,21 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChannelId } from "@/lib/ipc";
-import { useSpeakerName } from "@/lib/speakers";
+import { speakerColor, useSpeakerName } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 import { MEETING_LIMITS, useMeetingStore } from "@/stores/meeting";
-
-/** Colori dei parlanti di "Loro", per indice (si ripetono oltre l'ottavo). */
-const SPEAKER_COLORS = [
-  "bg-them/12 text-them",
-  "bg-amber-500/14 text-amber-700 dark:text-amber-400",
-  "bg-violet-500/12 text-violet-700 dark:text-violet-400",
-  "bg-rose-500/12 text-rose-700 dark:text-rose-400",
-  "bg-teal-500/12 text-teal-700 dark:text-teal-400",
-  "bg-lime-500/14 text-lime-700 dark:text-lime-400",
-  "bg-fuchsia-500/12 text-fuchsia-700 dark:text-fuchsia-400",
-  "bg-orange-500/14 text-orange-700 dark:text-orange-400",
-];
 
 /** Etichetta del parlante; per "Loro" con parlante noto si rinomina con un clic. */
 export function SpeakerLabel(props: { channel: ChannelId; speaker: number | null; editable?: boolean }) {
@@ -26,12 +14,7 @@ export function SpeakerLabel(props: { channel: ChannelId; speaker: number | null
   const [editing, setEditing] = useState(false);
   const { channel, speaker } = props;
   const label = name(channel, speaker);
-  const color =
-    channel === "me"
-      ? "bg-me/12 text-me"
-      : speaker === null
-        ? "bg-them/12 text-them"
-        : SPEAKER_COLORS[speaker % SPEAKER_COLORS.length];
+  const color = speakerColor(channel, speaker);
   const base = "justify-self-start truncate rounded-md px-1.5 py-px text-xs font-medium max-w-full";
 
   if (channel === "me" || speaker === null || !props.editable) {

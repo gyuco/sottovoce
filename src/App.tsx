@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { AssistPanel } from "@/components/AssistPanel";
 import { AudioPanel } from "@/components/AudioPanel";
+import { History } from "@/components/History";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -40,6 +41,10 @@ export default function App() {
             <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
             <SettingsPanel />
           </div>
+        </main>
+      ) : view === "history" ? (
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <History />
         </main>
       ) : (
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">

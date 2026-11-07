@@ -10,6 +10,8 @@ pub enum StoreError {
     SchemaTooNew { found: i64, supported: i64 },
     #[error("meeting {0} non trovato")]
     MeetingNotFound(i64),
+    #[error("il nome del meeting non può essere vuoto")]
+    EmptyName,
     #[error("il task di salvataggio non è più attivo")]
     WriterClosed,
     #[error("il task di salvataggio non ha risposto in tempo: {0}")]

@@ -509,6 +509,47 @@ mod tests {
     }
 
     #[test]
+    fn history_search_rename_and_delete() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sottovoce.db");
+        let writer = Writer::start(&path, draft()).unwrap();
+        let meeting_id = writer.meeting_id();
+        writer.handle().segment(NewSegment {
+            text: "La città chiude il budget".into(),
+            ..segment(1, Some(0))
+        });
+        writer.handle().segment(NewSegment {
+            text: "Gamma delta".into(),
+            ..segment(2, Some(1))
+        });
+        writer.finish(5_000).unwrap();
+
+        let store = Store::open(&path).unwrap();
+        let page = store.list_meetings(0, 20, None).unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(page.meetings[0].meeting.id, meeting_id);
+        assert_eq!(page.meetings[0].segment_count, 2);
+        // FTS5, prefisso e senza accenti.
+        assert_eq!(store.list_meetings(0, 20, Some("citta")).unwrap().total, 1);
+        assert_eq!(store.list_meetings(0, 20, Some("bud")).unwrap().total, 1);
+        assert_eq!(store.list_meetings(0, 20, Some("zeta")).unwrap().total, 0);
+        assert_eq!(store.list_meetings(0, 20, Some("\" !")).unwrap().total, 0);
+
+        let renamed = store.rename_meeting(meeting_id, "  Nuovo nome  ").unwrap();
+        assert_eq!(renamed.name, "Nuovo nome");
+        assert!(store.rename_meeting(meeting_id, "   ").is_err());
+
+        store.delete_meeting(meeting_id).unwrap();
+        assert_eq!(store.list_meetings(0, 20, None).unwrap().total, 0);
+        assert!(matches!(
+            store.meeting(meeting_id),
+            Err(StoreError::MeetingNotFound(_))
+        ));
+        // L'indice non conserva righe orfane.
+        assert_eq!(store.list_meetings(0, 20, Some("citta")).unwrap().total, 0);
+    }
+
+    #[test]
     fn drop_closes_the_meeting_at_the_last_event() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("sottovoce.db");

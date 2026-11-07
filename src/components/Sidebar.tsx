@@ -1,13 +1,14 @@
-import { AudioWaveform, type LucideIcon, Radio, Settings } from "lucide-react";
+import { AudioWaveform, History, type LucideIcon, Radio, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
 
-export type View = "live" | "settings";
+export type View = "live" | "history" | "settings";
 
 const NAV: { view: View; icon: LucideIcon; label: string }[] = [
   { view: "live", icon: Radio, label: "nav.live" },
+  { view: "history", icon: History, label: "nav.history" },
   { view: "settings", icon: Settings, label: "nav.settings" },
 ];
 

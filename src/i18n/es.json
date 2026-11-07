@@ -180,12 +180,15 @@
     "start": "No se pudo iniciar la sesión: {{message}}"
   },
   "common": {
-    "copied": "Copiado"
+    "copied": "Copiado",
+    "save": "Guardar",
+    "cancel": "Cancelar"
   },
   "nav": {
     "label": "Navegación",
     "live": "Sesión en vivo",
-    "settings": "Ajustes"
+    "settings": "Ajustes",
+    "history": "Historial"
   },
   "header": {
     "untitled": "Nueva reunión",
@@ -232,5 +235,24 @@
     "label": "Speaker {{n}}",
     "rename": "Renombrar a {{name}}",
     "renameHint": "Haz clic para poner nombre a este hablante"
+  },
+  "history": {
+    "title": "Historial",
+    "searchPlaceholder": "Buscar en las frases…",
+    "loading": "Cargando…",
+    "empty": "Las reuniones transcritas aparecerán aquí.",
+    "noResults": "No se encontraron reuniones.",
+    "untitled": "Reunión sin nombre",
+    "segments": "{{count}} frases",
+    "range": "{{from}}–{{to}} de {{total}}",
+    "previous": "Anteriores",
+    "next": "Siguientes",
+    "select": "Elige una reunión de la lista.",
+    "noSegments": "No hay frases guardadas.",
+    "duration": "Duración {{duration}}",
+    "delete": "Eliminar reunión",
+    "deleteConfirm": "¿Eliminar esta reunión? Se perderán frases y traducciones.",
+    "rename": "Renombrar reunión",
+    "assists": "Sugerencias"
   }
 }

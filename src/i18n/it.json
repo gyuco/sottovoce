@@ -180,12 +180,15 @@
     "start": "Impossibile avviare la sessione: {{message}}"
   },
   "common": {
-    "copied": "Copiato"
+    "copied": "Copiato",
+    "save": "Salva",
+    "cancel": "Annulla"
   },
   "nav": {
     "label": "Navigazione",
     "live": "Sessione live",
-    "settings": "Impostazioni"
+    "settings": "Impostazioni",
+    "history": "Storico"
   },
   "header": {
     "untitled": "Nuovo meeting",
@@ -232,5 +235,24 @@
     "label": "Speaker {{n}}",
     "rename": "Rinomina {{name}}",
     "renameHint": "Clic per dare un nome a questo parlante"
+  },
+  "history": {
+    "title": "Storico",
+    "searchPlaceholder": "Cerca nelle frasi…",
+    "loading": "Caricamento…",
+    "empty": "I meeting trascritti compariranno qui.",
+    "noResults": "Nessun meeting trovato.",
+    "untitled": "Meeting senza nome",
+    "segments": "{{count}} frasi",
+    "range": "{{from}}–{{to}} di {{total}}",
+    "previous": "Precedenti",
+    "next": "Successivi",
+    "select": "Scegli un meeting dall’elenco.",
+    "noSegments": "Nessuna frase salvata.",
+    "duration": "Durata {{duration}}",
+    "delete": "Elimina meeting",
+    "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
+    "rename": "Rinomina meeting",
+    "assists": "Suggerimenti"
   }
 }

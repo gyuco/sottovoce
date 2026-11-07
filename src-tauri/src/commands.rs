@@ -169,6 +169,50 @@ pub async fn stop_session(state: State<'_, AppState>) -> CmdResult<()> {
     Ok(())
 }
 
+// --- Storico meeting ---------------------------------------------------------
+
+/// Pagina dello storico, più recenti prima. `search` filtra con FTS5 sulle frasi.
+#[tauri::command]
+pub async fn list_meetings(
+    db: State<'_, Db>,
+    page: Option<u32>,
+    per_page: Option<u32>,
+    search: Option<String>,
+) -> CmdResult<sv_store::MeetingPage> {
+    let path = db.path.clone();
+    let per_page = per_page.unwrap_or(20).clamp(1, 100);
+    let offset = page.unwrap_or(0).saturating_mul(per_page);
+    let limit = per_page;
+    blocking(move || {
+        let store = sv_store::Store::open(path)?;
+        Ok(store.list_meetings(offset, limit, search.as_deref())?)
+    })
+    .await
+}
+
+/// Meeting completo: frasi, traduzioni, parlanti e suggerimenti.
+#[tauri::command]
+pub async fn get_meeting(db: State<'_, Db>, id: i64) -> CmdResult<sv_store::MeetingDetails> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await
+}
+
+#[tauri::command]
+pub async fn delete_meeting(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_meeting(id)?)).await
+}
+
+#[tauri::command]
+pub async fn rename_meeting(
+    db: State<'_, Db>,
+    id: i64,
+    name: String,
+) -> CmdResult<sv_store::Meeting> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await
+}
+
 // --- API key (Keychain) ---------------------------------------------------
 // Il Keychain può bloccare (prompt di accesso): mai sul thread principale.
 
@@ -202,7 +246,6 @@ pub async fn delete_api_key(provider: String) -> CmdResult<()> {
 pub fn get_settings(settings: State<'_, SettingsStore>) -> Settings {
     settings.get()
 }
-
 #[tauri::command]
 pub fn update_settings(
     settings: State<'_, SettingsStore>,

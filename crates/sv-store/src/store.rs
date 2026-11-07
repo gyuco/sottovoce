@@ -11,7 +11,9 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::StoreError;
 use crate::schema;
-use crate::types::{Assist, Meeting, MeetingDetails, Segment, SpeakerName, Translation};
+use crate::types::{
+    Assist, Meeting, MeetingDetails, MeetingPage, MeetingSummary, Segment, SpeakerName, Translation,
+};
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -51,6 +53,105 @@ impl Store {
         )?;
         let rows = stmt.query_map([], meeting_from_row)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// Pagina dello storico. Con `search` filtra i meeting che contengono
+    /// almeno una frase che soddisfa la ricerca full-text (FTS5).
+    pub fn list_meetings(
+        &self,
+        offset: u32,
+        limit: u32,
+        search: Option<&str>,
+    ) -> Result<MeetingPage, StoreError> {
+        let query = search.map(str::trim).filter(|q| !q.is_empty());
+        let Some(query) = query else {
+            return self.all_meetings(offset, limit);
+        };
+        let Some(fts) = fts_query(query) else {
+            return Ok(MeetingPage {
+                meetings: Vec::new(),
+                total: 0,
+            });
+        };
+        let conn = self.conn();
+        let total: i64 = conn.query_row(
+            "SELECT COUNT(DISTINCT s.meeting_id)
+             FROM segments_fts JOIN segments s ON s.id = segments_fts.rowid
+             WHERE segments_fts MATCH ?1",
+            params![fts],
+            |row| row.get(0),
+        )?;
+        let mut stmt = conn.prepare(
+            "SELECT m.id, m.name, m.goal, m.notes, m.started_at_ms, m.ended_at_ms,
+                    m.stt_engine, m.stt_model, m.my_language, m.their_language,
+                    (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id)
+             FROM meetings m
+             WHERE m.id IN (
+                 SELECT s.meeting_id
+                 FROM segments_fts JOIN segments s ON s.id = segments_fts.rowid
+                 WHERE segments_fts MATCH ?1
+             )
+             ORDER BY m.started_at_ms DESC, m.id DESC
+             LIMIT ?2 OFFSET ?3",
+        )?;
+        let rows = stmt.query_map(
+            params![fts, i64::from(limit), i64::from(offset)],
+            meeting_summary_from_row,
+        )?;
+        Ok(MeetingPage {
+            meetings: rows.collect::<Result<Vec<_>, _>>()?,
+            total: u32::try_from(total).unwrap_or(u32::MAX),
+        })
+    }
+
+    fn all_meetings(&self, offset: u32, limit: u32) -> Result<MeetingPage, StoreError> {
+        let conn = self.conn();
+        let total: i64 = conn.query_row("SELECT COUNT(*) FROM meetings", [], |row| row.get(0))?;
+        let mut stmt = conn.prepare(
+            "SELECT m.id, m.name, m.goal, m.notes, m.started_at_ms, m.ended_at_ms,
+                    m.stt_engine, m.stt_model, m.my_language, m.their_language,
+                    (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id)
+             FROM meetings m
+             ORDER BY m.started_at_ms DESC, m.id DESC
+             LIMIT ?1 OFFSET ?2",
+        )?;
+        let rows = stmt.query_map(
+            params![i64::from(limit), i64::from(offset)],
+            meeting_summary_from_row,
+        )?;
+        Ok(MeetingPage {
+            meetings: rows.collect::<Result<Vec<_>, _>>()?,
+            total: u32::try_from(total).unwrap_or(u32::MAX),
+        })
+    }
+
+    /// Elimina meeting, frasi (e indice di ricerca), traduzioni, parlanti e
+    /// assist in cascata.
+    pub fn delete_meeting(&self, id: i64) -> Result<(), StoreError> {
+        let conn = self.conn();
+        let deleted = conn.execute("DELETE FROM meetings WHERE id = ?1", params![id])?;
+        if deleted == 0 {
+            return Err(StoreError::MeetingNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Cambia il nome mostrato nello storico.
+    pub fn rename_meeting(&self, id: i64, name: &str) -> Result<Meeting, StoreError> {
+        let name: String = name.trim().chars().take(200).collect();
+        if name.is_empty() {
+            return Err(StoreError::EmptyName);
+        }
+        let conn = self.conn();
+        let updated = conn.execute(
+            "UPDATE meetings SET name = ?1 WHERE id = ?2",
+            params![name, id],
+        )?;
+        if updated == 0 {
+            return Err(StoreError::MeetingNotFound(id));
+        }
+        drop(conn);
+        self.meeting(id)
     }
 
     pub fn meeting(&self, id: i64) -> Result<Meeting, StoreError> {
@@ -168,6 +269,25 @@ fn meeting_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Meeting> {
         my_language: row.get(8)?,
         their_language: row.get(9)?,
     })
+}
+
+fn meeting_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MeetingSummary> {
+    Ok(MeetingSummary {
+        meeting: meeting_from_row(row)?,
+        segment_count: u32::try_from(row.get::<_, i64>(10)?).unwrap_or(u32::MAX),
+    })
+}
+
+/// Query FTS5 tollerante all'input dell'utente: ogni parola diventa un
+/// prefisso tra virgolette (`"parola"*`), così punteggiatura e apostrofi non
+/// fanno fallire la sintassi di MATCH.
+fn fts_query(input: &str) -> Option<String> {
+    let terms: Vec<String> = input
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| format!("\"{}\"*", t.to_lowercase()))
+        .collect();
+    (!terms.is_empty()).then(|| terms.join(" AND "))
 }
 
 #[cfg(test)]

@@ -180,12 +180,15 @@
     "start": "Could not start the session: {{message}}"
   },
   "common": {
-    "copied": "Copied"
+    "copied": "Copied",
+    "save": "Save",
+    "cancel": "Cancel"
   },
   "nav": {
     "label": "Navigation",
     "live": "Live session",
-    "settings": "Settings"
+    "settings": "Settings",
+    "history": "History"
   },
   "header": {
     "untitled": "New meeting",
@@ -232,5 +235,24 @@
     "label": "Speaker {{n}}",
     "rename": "Rename {{name}}",
     "renameHint": "Click to name this speaker"
+  },
+  "history": {
+    "title": "History",
+    "searchPlaceholder": "Search transcripts…",
+    "loading": "Loading…",
+    "empty": "Transcribed meetings will appear here.",
+    "noResults": "No meetings found.",
+    "untitled": "Untitled meeting",
+    "segments": "{{count}} sentences",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next",
+    "select": "Pick a meeting from the list.",
+    "noSegments": "No saved sentences.",
+    "duration": "Duration {{duration}}",
+    "delete": "Delete meeting",
+    "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
+    "rename": "Rename meeting",
+    "assists": "Suggestions"
   }
 }

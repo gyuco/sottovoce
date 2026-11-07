@@ -155,6 +155,83 @@ export function startSession(
 
 export const stopSession = () => invoke<void>("stop_session");
 
+// --- Storico meeting ---------------------------------------------------------
+
+/** Meeting salvato; le date sono ms Unix, i tempi delle frasi ms dalla sessione. */
+export interface Meeting {
+  id: number;
+  name: string;
+  goal: string;
+  notes: string;
+  startedAtMs: number;
+  endedAtMs: number | null;
+  sttEngine: SttEngine;
+  sttModel: string;
+  myLanguage: Language;
+  theirLanguage: Language;
+}
+
+export interface MeetingSummary extends Meeting {
+  segmentCount: number;
+}
+
+export interface MeetingPage {
+  meetings: MeetingSummary[];
+  total: number;
+}
+
+export interface SavedSegment {
+  id: number;
+  meetingId: number;
+  sessionId: number;
+  channel: ChannelId;
+  speaker: number | null;
+  text: string;
+  startMs: number;
+  endMs: number;
+  language: string | null;
+  confidence: number | null;
+}
+
+export interface SavedTranslation {
+  id: number;
+  segmentId: number;
+  sessionId: number;
+  text: string;
+  language: string;
+  latencyMs: number;
+}
+
+export interface SavedSpeaker {
+  speaker: number;
+  name: string;
+}
+
+export interface SavedAssist {
+  id: number;
+  kind: AssistKind;
+  text: string;
+  atMs: number;
+}
+
+export interface MeetingDetails {
+  meeting: Meeting;
+  segments: SavedSegment[];
+  translations: SavedTranslation[];
+  speakers: SavedSpeaker[];
+  assists: SavedAssist[];
+}
+
+export const listMeetings = (page: number, perPage: number, search?: string) =>
+  invoke<MeetingPage>("list_meetings", { page, perPage, search: search?.trim() || null });
+
+export const getMeeting = (id: number) => invoke<MeetingDetails>("get_meeting", { id });
+
+export const deleteMeeting = (id: number) => invoke<void>("delete_meeting", { id });
+
+export const renameMeeting = (id: number, name: string) =>
+  invoke<Meeting>("rename_meeting", { id, name });
+
 export const updateMeetingContext = (context: MeetingContext) =>
   invoke<void>("update_meeting_context", { context });
 
