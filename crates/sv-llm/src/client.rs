@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -6,30 +6,18 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::http::{DEFAULT_TIMEOUT, RetryPolicy, http_client, send_with_retry, status_error};
 use crate::types::{ChatRequest, ChatResponse, ModelInfo, Usage};
 use crate::{BoxFuture, LlmError, LlmProvider};
 
-/// Timeout di default per richiesta (retry inclusi).
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
-/// Attesa massima fra due tentativi, anche se `Retry-After` chiede di più.
-const MAX_RETRY_DELAY: Duration = Duration::from_secs(5);
-/// Caratteri del corpo di errore conservati in [`LlmError::Http`].
-const ERROR_BODY_MAX: usize = 500;
-
-/// Retry su 429 e 5xx con backoff esponenziale. Mai su altri 4xx.
-#[derive(Debug, Clone, Copy)]
-pub struct RetryPolicy {
-    pub max_retries: u32,
-    pub base_delay: Duration,
-}
-
-impl Default for RetryPolicy {
-    fn default() -> Self {
-        Self {
-            max_retries: 2,
-            base_delay: Duration::from_millis(500),
-        }
-    }
+/// Parametri che un modello ha rifiutato con un 400: per lui non si mandano
+/// più (scoperto alla prima chiamata, valido per la vita del client).
+#[derive(Debug, Clone, Copy, Default)]
+struct Quirks {
+    /// `response_format` non supportato: JSON solo via prompt.
+    no_json_mode: bool,
+    /// `temperature` non supportata (es. modelli di ragionamento OpenAI).
+    no_temperature: bool,
 }
 
 /// Client per endpoint OpenAI-compatible (`{base_url}/chat/completions`).
@@ -41,9 +29,7 @@ pub struct OpenAiCompatible {
     headers: reqwest::header::HeaderMap,
     timeout: Duration,
     retry: RetryPolicy,
-    /// Modelli che hanno rifiutato `response_format`: per loro si salta
-    /// subito al JSON via prompt.
-    no_json_mode: Mutex<HashSet<String>>,
+    quirks: Mutex<HashMap<String, Quirks>>,
 }
 
 impl OpenAiCompatible {
@@ -51,16 +37,13 @@ impl OpenAiCompatible {
     pub fn new(base_url: impl Into<String>) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
         Self {
-            http: reqwest::Client::builder()
-                .user_agent(concat!("sottovoce/", env!("CARGO_PKG_VERSION")))
-                .build()
-                .unwrap_or_default(),
+            http: http_client(),
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             api_key: None,
             headers: reqwest::header::HeaderMap::new(),
             timeout: DEFAULT_TIMEOUT,
             retry: RetryPolicy::default(),
-            no_json_mode: Mutex::default(),
+            quirks: Mutex::default(),
         }
     }
 
@@ -102,36 +85,45 @@ impl OpenAiCompatible {
 
     async fn chat_inner(&self, req: ChatRequest) -> Result<ChatResponse, LlmError> {
         let started = Instant::now();
-        let mut json_mode = req.json && !self.json_mode_disabled(&req.model);
         let mut attempts = 0;
 
         loop {
-            let body = request_body(&req, json_mode);
-            let (status, text, n) = self
-                .send_with_retry(|| {
-                    self.authed(self.http.post(self.url("chat/completions")))
-                        .json(&body)
-                })
-                .await?;
+            let quirks = self.quirks(&req.model);
+            let json_mode = req.json && !quirks.no_json_mode;
+            let temperature = req.temperature.filter(|_| !quirks.no_temperature);
+            let body = request_body(&req, json_mode, temperature);
+            let (status, text, n) = send_with_retry(self.retry, || {
+                self.authed(self.http.post(self.url("chat/completions")))
+                    .json(&body)
+            })
+            .await?;
             attempts += n;
 
             if status.is_success() {
                 return parse_chat(&text, started.elapsed(), attempts);
             }
-            if json_mode && status == StatusCode::BAD_REQUEST {
-                tracing::info!(model = %req.model, "response_format rifiutato, ripiego su JSON via prompt");
-                self.disable_json_mode(&req.model);
-                json_mode = false;
-                continue;
+            if status == StatusCode::BAD_REQUEST {
+                // Un parametro rifiutato: lo si toglie e si ritenta subito.
+                if temperature.is_some() && text.to_lowercase().contains("temperature") {
+                    tracing::info!(model = %req.model, "temperature rifiutata, la ometto");
+                    self.update_quirks(&req.model, |q| q.no_temperature = true);
+                    continue;
+                }
+                if json_mode {
+                    tracing::info!(model = %req.model, "response_format rifiutato, ripiego su JSON via prompt");
+                    self.update_quirks(&req.model, |q| q.no_json_mode = true);
+                    continue;
+                }
             }
             return Err(status_error(status, text));
         }
     }
 
     async fn list_models_inner(&self) -> Result<Vec<ModelInfo>, LlmError> {
-        let (status, text, _) = self
-            .send_with_retry(|| self.authed(self.http.get(self.url("models"))))
-            .await?;
+        let (status, text, _) = send_with_retry(self.retry, || {
+            self.authed(self.http.get(self.url("models")))
+        })
+        .await?;
         if !status.is_success() {
             return Err(status_error(status, text));
         }
@@ -143,7 +135,7 @@ impl OpenAiCompatible {
             .map(|m| ModelInfo {
                 // Il catalogo OpenCode dichiara le API di ogni modello; gli
                 // altri provider non lo fanno: si assume chat completions.
-                chat_completions: m
+                usable: m
                     .api
                     .as_ref()
                     .and_then(Value::as_object)
@@ -154,34 +146,6 @@ impl OpenAiCompatible {
             .collect();
         models.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(models)
-    }
-
-    /// Invia la richiesta ritentando su 429/5xx. Ritorna l'ultimo stato
-    /// ricevuto (non necessariamente di successo), il corpo e i tentativi.
-    async fn send_with_retry(
-        &self,
-        build: impl Fn() -> reqwest::RequestBuilder,
-    ) -> Result<(StatusCode, String, u32), LlmError> {
-        let mut attempt = 0;
-        loop {
-            attempt += 1;
-            let resp = build().send().await.map_err(LlmError::from_reqwest)?;
-            let status = resp.status();
-            let retry_after = retry_after(&resp);
-            let text = resp.text().await.map_err(LlmError::from_reqwest)?;
-
-            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
-            if !retryable || attempt > self.retry.max_retries {
-                return Ok((status, text, attempt));
-            }
-            let backoff = self.retry.base_delay * 2u32.pow(attempt - 1);
-            let delay = retry_after
-                .unwrap_or_default()
-                .max(backoff)
-                .min(MAX_RETRY_DELAY);
-            tracing::debug!(%status, attempt, ?delay, "richiesta LLM ritentata");
-            tokio::time::sleep(delay).await;
-        }
     }
 
     fn url(&self, path: &str) -> String {
@@ -196,13 +160,16 @@ impl OpenAiCompatible {
         }
     }
 
-    fn json_mode_disabled(&self, model: &str) -> bool {
-        self.no_json_mode.lock().is_ok_and(|s| s.contains(model))
+    fn quirks(&self, model: &str) -> Quirks {
+        self.quirks
+            .lock()
+            .map(|q| q.get(model).copied().unwrap_or_default())
+            .unwrap_or_default()
     }
 
-    fn disable_json_mode(&self, model: &str) {
-        if let Ok(mut s) = self.no_json_mode.lock() {
-            s.insert(model.to_owned());
+    fn update_quirks(&self, model: &str, f: impl FnOnce(&mut Quirks)) {
+        if let Ok(mut q) = self.quirks.lock() {
+            f(q.entry(model.to_owned()).or_default());
         }
     }
 }
@@ -226,13 +193,13 @@ impl LlmProvider for OpenAiCompatible {
     }
 }
 
-fn request_body(req: &ChatRequest, json_mode: bool) -> Value {
+fn request_body(req: &ChatRequest, json_mode: bool, temperature: Option<f32>) -> Value {
     let mut body = json!({
         "model": req.model,
         "messages": req.messages,
         "stream": false,
     });
-    if let Some(t) = req.temperature {
+    if let Some(t) = temperature {
         body["temperature"] = json!(t);
     }
     if let Some(n) = req.max_tokens {
@@ -260,36 +227,6 @@ fn parse_chat(text: &str, latency: Duration, attempts: u32) -> Result<ChatRespon
         latency,
         attempts,
     })
-}
-
-fn status_error(status: StatusCode, body: String) -> LlmError {
-    match status {
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => LlmError::Unauthorized,
-        StatusCode::TOO_MANY_REQUESTS => LlmError::RateLimited,
-        _ => LlmError::Http {
-            status: status.as_u16(),
-            body: truncate(body),
-        },
-    }
-}
-
-fn truncate(mut s: String) -> String {
-    if let Some((i, _)) = s.char_indices().nth(ERROR_BODY_MAX) {
-        s.truncate(i);
-        s.push('…');
-    }
-    s
-}
-
-fn retry_after(resp: &reqwest::Response) -> Option<Duration> {
-    let secs: u64 = resp
-        .headers()
-        .get(reqwest::header::RETRY_AFTER)?
-        .to_str()
-        .ok()?
-        .parse()
-        .ok()?;
-    Some(Duration::from_secs(secs))
 }
 
 #[derive(Deserialize)]

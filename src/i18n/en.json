@@ -93,11 +93,19 @@
         },
         "opencode": {
           "name": "OpenCode Zen",
-          "hint": "Pay-per-use cloud (Zen credits). The API key stays in the macOS Keychain: create it in the opencode.ai console under Settings → Service accounts. Only compatible models (chat completions) are listed."
+          "hint": "Pay-per-use cloud (Zen credits). The API key stays in the macOS Keychain: create it in the opencode.ai console under Account → Personal API keys. Only compatible models (chat completions) are listed."
         },
         "opencode-go": {
           "name": "OpenCode Go",
-          "hint": "OpenCode Go subscription, same console API key (Settings → Service accounts). Go is meant for coding agents and traffic is monitored: meeting use may get the account limited. Only compatible models are listed."
+          "hint": "OpenCode Go subscription, same console API key (Account → Personal API keys). Go is meant for coding agents and traffic is monitored: meeting use may get the account limited. Only compatible models are listed."
+        },
+        "openai": {
+          "name": "OpenAI",
+          "hint": "Pay-per-use cloud. The API key stays in the macOS Keychain: create it on platform.openai.com → API keys. Only chat models are listed (e.g. gpt-5.4-mini for translation)."
+        },
+        "anthropic": {
+          "name": "Anthropic (Claude)",
+          "hint": "Pay-per-use cloud, Claude's native API. The API key stays in the macOS Keychain: create it on platform.claude.com → API keys. claude-haiku-5-5 is enough for translation."
         },
         "custom": {
           "name": "Custom",

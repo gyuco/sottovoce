@@ -26,7 +26,14 @@ import {
 } from "@/lib/ipc";
 import { useSettingsStore } from "@/stores/settings";
 
-const PROVIDERS: LlmProvider[] = ["ollama", "opencode", "opencode-go", "custom"];
+const PROVIDERS: LlmProvider[] = [
+  "ollama",
+  "opencode",
+  "opencode-go",
+  "openai",
+  "anthropic",
+  "custom",
+];
 /** "mine" = segue la lingua dell'utente (`targetLanguage: null`). */
 const TARGETS = ["mine", "it", "en"] as const;
 
@@ -89,7 +96,7 @@ export function LlmSettings() {
 
   if (!settings) return null;
 
-  const usable = models.state === "ok" ? models.models.filter((m) => m.chatCompletions) : [];
+  const usable = models.state === "ok" ? models.models.filter((m) => m.usable) : [];
   const hidden = models.state === "ok" ? models.models.length - usable.length : 0;
 
   const runTest = async () => {

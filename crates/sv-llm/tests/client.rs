@@ -149,6 +149,36 @@ async fn json_mode_falls_back_on_400_and_remembers() {
 }
 
 #[tokio::test]
+async fn temperature_rejected_is_dropped_and_remembered() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(|req: &Request| {
+            serde_json::from_slice::<Value>(&req.body).is_ok_and(|v| v.get("temperature").is_some())
+        })
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            r#"{"error":{"message":"Unsupported value: 'temperature' does not support 0.5 with this model.","param":"temperature"}}"#,
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(|req: &Request| {
+            serde_json::from_slice::<Value>(&req.body).is_ok_and(|v| v.get("temperature").is_none())
+        })
+        .respond_with(ResponseTemplate::new(200).set_body_json(completion("ok")))
+        .expect(2)
+        .mount(&server)
+        .await;
+
+    let llm = client(&server);
+    let resp = llm.chat(request().temperature(0.5).json()).await.unwrap();
+    // Il 400 riguarda la temperatura: il JSON mode resta attivo.
+    assert_eq!(resp.attempts, 2);
+    let resp = llm.chat(request().temperature(0.5)).await.unwrap();
+    assert_eq!(resp.attempts, 1);
+}
+
+#[tokio::test]
 async fn bad_request_without_json_mode_is_not_retried() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
@@ -275,7 +305,7 @@ async fn list_models_sorted() {
     let models = client(&server).list_models().await.unwrap();
     let ids: Vec<&str> = models.iter().map(|m| m.id.as_str()).collect();
     assert_eq!(ids, ["gemma3:4b", "qwen3:8b"]);
-    assert!(models.iter().all(|m| m.chat_completions));
+    assert!(models.iter().all(|m| m.usable));
 }
 
 #[tokio::test]
@@ -295,7 +325,7 @@ async fn list_models_flags_opencode_api() {
     let models = client(&server).list_models().await.unwrap();
     let chat: Vec<&str> = models
         .iter()
-        .filter(|m| m.chat_completions)
+        .filter(|m| m.usable)
         .map(|m| m.id.as_str())
         .collect();
     assert_eq!(chat, ["glm-5.3"]);

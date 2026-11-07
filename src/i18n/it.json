@@ -93,11 +93,19 @@
         },
         "opencode": {
           "name": "OpenCode Zen",
-          "hint": "Cloud a consumo (credito Zen). La API key resta nel Portachiavi di macOS: creala nella console di opencode.ai in Settings → Service accounts. Elencati solo i modelli compatibili (chat completions)."
+          "hint": "Cloud a consumo (credito Zen). La API key resta nel Portachiavi di macOS: creala nella console di opencode.ai in Account → Personal API keys (workspace con credito). Elencati solo i modelli compatibili (chat completions)."
         },
         "opencode-go": {
           "name": "OpenCode Go",
-          "hint": "Abbonamento OpenCode Go, stessa API key della console (Settings → Service accounts). Go è pensato per i coding agent e il traffico è monitorato: l'uso per i meeting può portare a limitazioni dell'account. Elencati solo i modelli compatibili."
+          "hint": "Abbonamento OpenCode Go, stessa API key della console (Account → Personal API keys). Go è pensato per i coding agent e il traffico è monitorato: l'uso per i meeting può portare a limitazioni dell'account. Elencati solo i modelli compatibili."
+        },
+        "openai": {
+          "name": "OpenAI",
+          "hint": "Cloud a consumo. La API key resta nel Portachiavi di macOS: creala su platform.openai.com → API keys. Elencati solo i modelli di chat (es. gpt-5.4-mini per la traduzione)."
+        },
+        "anthropic": {
+          "name": "Anthropic (Claude)",
+          "hint": "Cloud a consumo, API nativa di Claude. La API key resta nel Portachiavi di macOS: creala su platform.claude.com → API keys. Per la traduzione basta claude-haiku-5-5."
         },
         "custom": {
           "name": "Personalizzato",

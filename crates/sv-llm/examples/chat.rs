@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let models = llm.list_models().await?;
     let usable: Vec<&str> = models
         .iter()
-        .filter(|m| m.chat_completions)
+        .filter(|m| m.usable)
         .map(|m| m.id.as_str())
         .collect();
     println!(

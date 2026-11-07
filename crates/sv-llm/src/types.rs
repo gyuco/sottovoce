@@ -91,8 +91,9 @@ pub struct ModelInfo {
     pub id: String,
     /// Nome leggibile, se il provider lo fornisce.
     pub name: Option<String>,
-    /// Servito su `/chat/completions`, quindi usabile da questo client.
-    pub chat_completions: bool,
+    /// Usabile da questo client (per OpenAI-compatible: servito su
+    /// `/chat/completions`).
+    pub usable: bool,
 }
 
 /// Token consumati, se il provider li riporta.

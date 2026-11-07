@@ -1,17 +1,22 @@
 //! LLM per Sottovoce.
 //!
-//! Il trait [`LlmProvider`] astrae il modello linguistico. L'unica
-//! implementazione, [`OpenAiCompatible`], parla il protocollo
-//! `/chat/completions` di OpenAI e copre Ollama, OpenCode Zen (solo i modelli
-//! serviti come chat completions) e qualunque endpoint compatibile.
+//! Il trait [`LlmProvider`] astrae il modello linguistico. Implementazioni:
+//! - [`OpenAiCompatible`]: protocollo `/chat/completions`; copre Ollama,
+//!   OpenCode Zen/Go (solo i modelli chat completions), OpenAI e qualunque
+//!   endpoint compatibile;
+//! - [`Anthropic`]: Messages API nativa di Anthropic.
 
+mod anthropic;
 mod client;
 mod error;
+mod http;
 mod json;
 mod types;
 
-pub use client::{OpenAiCompatible, RetryPolicy};
+pub use anthropic::{ANTHROPIC_BASE_URL, Anthropic};
+pub use client::OpenAiCompatible;
 pub use error::LlmError;
+pub use http::RetryPolicy;
 pub use json::parse_json;
 pub use types::{ChatRequest, ChatResponse, Message, ModelInfo, Role, Usage};
 

@@ -12,6 +12,8 @@ pub enum LlmError {
     Http { status: u16, body: String },
     #[error("risposta non valida: {0}")]
     InvalidJson(String),
+    #[error("il modello ha rifiutato la richiesta")]
+    Refused,
 }
 
 impl LlmError {

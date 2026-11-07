@@ -3,7 +3,7 @@ use tauri::ipc::Channel;
 
 use serde::Serialize;
 use sv_audio::{InputDevice, LevelEvent};
-use sv_llm::{ChatRequest, LlmProvider as _, Message, ModelInfo};
+use sv_llm::{ChatRequest, Message, ModelInfo};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
@@ -102,7 +102,7 @@ async fn llm_tasks(settings: &Settings) -> LlmTasks {
     // Un solo client per sessione (per OpenCode Go: un id di sessione).
     let client: std::sync::Arc<dyn sv_llm::LlmProvider> =
         match blocking(move || llm::client(&for_client, true)).await {
-            Ok(c) => std::sync::Arc::new(c),
+            Ok(c) => c,
             Err(e) => {
                 tracing::warn!("traduzione e live assist disattivati: {e}");
                 return LlmTasks::default();
@@ -182,10 +182,12 @@ pub async fn list_llm_models(settings: State<'_, SettingsStore>) -> CmdResult<Ve
     let settings = settings.get();
     let provider = settings.llm_provider;
     let client = blocking(move || llm::client(&settings, false)).await?;
-    client
+    let mut models = client
         .list_models()
         .await
-        .map_err(|e| llm::describe(provider, &e))
+        .map_err(|e| llm::describe(provider, &e))?;
+    llm::mark_usable(provider, &mut models);
+    Ok(models)
 }
 
 #[derive(Serialize)]

@@ -25,7 +25,7 @@ impl SttProvider {
     }
 }
 
-/// Provider LLM (endpoint OpenAI-compatible).
+/// Provider LLM. Tutti OpenAI-compatible tranne `Anthropic` (Messages API).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LlmProvider {
@@ -38,6 +38,10 @@ pub enum LlmProvider {
     /// per i coding agent: richiede `x-opencode-session` per conversazione.
     #[serde(rename = "opencode-go")]
     OpencodeGo,
+    /// OpenAI, chat completions. Solo i modelli di chat (filtro per nome).
+    Openai,
+    /// Anthropic, Messages API nativa.
+    Anthropic,
     /// Endpoint OpenAI-compatible qualsiasi (`llm_base_url`), chiave opzionale.
     Custom,
 }
@@ -48,6 +52,8 @@ impl LlmProvider {
         match self {
             Self::Ollama => None,
             Self::Opencode | Self::OpencodeGo => Some("opencode"),
+            Self::Openai => Some("openai"),
+            Self::Anthropic => Some("anthropic"),
             Self::Custom => Some("custom"),
         }
     }
@@ -58,6 +64,8 @@ impl LlmProvider {
             Self::Ollama => "http://localhost:11434/v1".into(),
             Self::Opencode => "https://opencode.ai/inference/openai/v1".into(),
             Self::OpencodeGo => "https://opencode.ai/inference/go/openai/v1".into(),
+            Self::Openai => "https://api.openai.com/v1".into(),
+            Self::Anthropic => sv_llm::ANTHROPIC_BASE_URL.into(),
             Self::Custom => {
                 let url = custom.trim();
                 if !(url.starts_with("http://") || url.starts_with("https://")) {
@@ -257,10 +265,14 @@ mod tests {
             .update(json!({"targetLanguage": null, "myLanguage": "multi"}))
             .unwrap();
         assert_eq!(s.effective_target_language(), Language::It);
-        assert!(store.update(json!({"llmProvider": "openai"})).is_err());
+        assert!(store.update(json!({"llmProvider": "gemini"})).is_err());
         let s = store.update(json!({"llmProvider": "opencode-go"})).unwrap();
         assert_eq!(s.llm_provider, LlmProvider::OpencodeGo);
         assert_eq!(s.llm_provider.key_account(), Some("opencode"));
+        let s = store.update(json!({"llmProvider": "anthropic"})).unwrap();
+        assert_eq!(s.llm_provider.key_account(), Some("anthropic"));
+        let s = store.update(json!({"llmProvider": "openai"})).unwrap();
+        assert_eq!(s.llm_provider, LlmProvider::Openai);
         let _ = std::fs::remove_dir_all(temp_path("llm").parent().unwrap());
     }
 

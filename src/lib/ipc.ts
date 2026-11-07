@@ -16,9 +16,15 @@ export interface LevelEvent {
 
 export type Language = "multi" | "it" | "en";
 export type SttProvider = "deepgram";
-export type LlmProvider = "ollama" | "opencode" | "opencode-go" | "custom";
+export type LlmProvider =
+  | "ollama"
+  | "opencode"
+  | "opencode-go"
+  | "openai"
+  | "anthropic"
+  | "custom";
 /** Account delle API key nel Keychain. */
-export type KeyProvider = SttProvider | "opencode" | "custom";
+export type KeyProvider = SttProvider | "opencode" | "openai" | "anthropic" | "custom";
 
 /** Account della chiave del provider LLM; `null` = nessuna chiave. */
 export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
@@ -44,8 +50,8 @@ export interface Settings {
 export interface ModelInfo {
   id: string;
   name: string | null;
-  /** Servito su /chat/completions: usabile da Sottovoce. */
-  chatCompletions: boolean;
+  /** Usabile da Sottovoce (per i provider OpenAI-compatible: chat completions). */
+  usable: boolean;
 }
 
 export interface LlmTestResult {
