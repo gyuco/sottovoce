@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -196,6 +197,14 @@ export function LlmSettings() {
           models={models.state === "ok" ? usable : null}
           onChange={(assistModel) => void update({ assistModel })}
         />
+
+        <Row label={t("settings.llm.autoSummary")} hint={t("settings.llm.autoSummaryHint")}>
+          <Switch
+            checked={settings.autoSummary}
+            onCheckedChange={(autoSummary) => void update({ autoSummary })}
+            aria-label={t("settings.llm.autoSummary")}
+          />
+        </Row>
 
         <Row label={t("settings.llm.target")} hint={t("settings.llm.targetHint")}>
           <Select

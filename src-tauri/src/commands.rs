@@ -8,6 +8,7 @@ use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
+use crate::compress::{CompressConfig, CompressionEvent};
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
@@ -17,6 +18,7 @@ use crate::session::{LlmTasks, Outputs};
 use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
 use crate::state::{AppState, Db};
 use crate::stt;
+use crate::summary::SummaryConfig;
 use crate::translate::{TranslationEvent, TranslatorConfig};
 
 /// Errore restituito al frontend come stringa leggibile.
@@ -49,6 +51,7 @@ pub async fn start_session(
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
     on_assist: Channel<AssistEvent>,
+    on_compression: Channel<CompressionEvent>,
     context: Option<MeetingContext>,
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
@@ -106,6 +109,9 @@ pub async fn start_session(
         on_assist: Box::new(move |e| {
             let _ = on_assist.send(e);
         }),
+        on_compression: Box::new(move |e| {
+            let _ = on_compression.send(e);
+        }),
     };
     let session = Session::start(&settings, engine, context, llm, diarization, store, out)
         .map_err(|e| format!("{e:#}"))?;
@@ -145,28 +151,48 @@ async fn llm_tasks(settings: &Settings) -> LlmTasks {
                 return LlmTasks::default();
             }
         };
+    // Compressione e riepilogo usano il modello dell'assist; se non c'è,
+    // ripiegano su quello della traduzione.
+    let insight_model = if assist_model.is_empty() {
+        translation_model.clone()
+    } else {
+        assist_model.clone()
+    };
+    let language = settings.effective_target_language();
+    let insight_language = settings.summary_language();
     LlmTasks {
         translation: (!translation_model.is_empty()).then(|| TranslatorConfig {
             llm: client.clone(),
             model: translation_model,
-            target: settings.effective_target_language(),
+            target: language,
             source_hint: Some(settings.their_language).filter(|l| *l != Language::Multi),
         }),
         assist: (!assist_model.is_empty()).then(|| AssistConfig {
             llm: client.clone(),
             model: assist_model,
-            user_language: settings.effective_target_language(),
+            user_language: language,
         }),
+        compression: (!insight_model.is_empty()).then(|| CompressConfig {
+            llm: client.clone(),
+            model: insight_model.clone(),
+            language: insight_language,
+        }),
+        summary: (!insight_model.is_empty()).then(|| SummaryConfig {
+            llm: client,
+            model: insight_model,
+            language: insight_language,
+        }),
+        auto_summary: settings.auto_summary,
     }
 }
 
 #[tauri::command]
-pub async fn stop_session(state: State<'_, AppState>) -> CmdResult<()> {
+pub async fn stop_session(state: State<'_, AppState>) -> CmdResult<Option<sv_store::Summary>> {
     let session = state.session.lock().await.take();
-    if let Some(s) = session {
-        s.stop().await;
-    }
-    Ok(())
+    Ok(match session {
+        Some(s) => s.stop().await,
+        None => None,
+    })
 }
 
 // --- Storico meeting ---------------------------------------------------------
@@ -211,6 +237,104 @@ pub async fn rename_meeting(
 ) -> CmdResult<sv_store::Meeting> {
     let path = db.path.clone();
     blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await
+}
+
+/// Rigenera il riepilogo finale di un meeting salvato (anche in un'altra lingua).
+#[tauri::command]
+pub async fn generate_summary(
+    db: State<'_, Db>,
+    settings: State<'_, SettingsStore>,
+    id: i64,
+    language: Option<Language>,
+) -> CmdResult<sv_store::Summary> {
+    let settings = settings.get();
+    stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+    let model = if settings.assist_model.trim().is_empty() {
+        settings.translation_model.clone()
+    } else {
+        settings.assist_model.clone()
+    };
+    if model.trim().is_empty() {
+        return Err("scegli un modello per il live assist o la traduzione".into());
+    }
+    let language = match language.unwrap_or(settings.summary_language()) {
+        Language::En => Language::En,
+        _ => Language::It,
+    };
+    let path = db.path.clone();
+    let details = blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await?;
+    if details.segments.is_empty() && details.blocks.is_empty() {
+        return Err("nessuna trascrizione per questo meeting".into());
+    }
+
+    let speakers = details
+        .speakers
+        .iter()
+        .map(|s| (s.speaker, s.name.clone()))
+        .collect();
+    let context = MeetingContext {
+        name: details.meeting.name.clone(),
+        goal: details.meeting.goal.clone(),
+        notes: details.meeting.notes.clone(),
+        speakers,
+    };
+    let blocks = details
+        .blocks
+        .iter()
+        .map(|b| CompressionEvent {
+            index: b.index,
+            start: b.start_ms,
+            end: b.end_ms,
+            summary: b.summary.clone(),
+            topics: b.topics.clone(),
+            moments: b.moments.clone(),
+        })
+        .collect();
+    let lines = details
+        .segments
+        .iter()
+        .rev()
+        .take(80)
+        .rev()
+        .map(|s| crate::compress::CompressLine {
+            channel: if s.channel == "me" {
+                sv_audio::Channel::Me
+            } else {
+                sv_audio::Channel::Them
+            },
+            text: s.text.clone(),
+            speaker: s.speaker,
+            start_ms: s.start_ms,
+            end_ms: s.end_ms,
+        })
+        .collect();
+    let for_client = settings;
+    let client = blocking(move || llm::client(&for_client, true)).await?;
+    let cfg = SummaryConfig {
+        llm: client,
+        model,
+        language,
+    };
+    let input = crate::summary::SummaryInput {
+        context,
+        blocks,
+        lines,
+    };
+    let draft = crate::summary::generate(&cfg, &input)
+        .await
+        .ok_or_else(|| "riepilogo non generato".to_owned())?;
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.save_summary(id, &draft)?)).await
+}
+
+#[tauri::command]
+pub async fn update_summary_checklist(
+    db: State<'_, Db>,
+    id: i64,
+    items: Vec<sv_store::ActionItem>,
+) -> CmdResult<sv_store::Summary> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.set_action_items(id, &items)?)).await
 }
 
 // --- API key (Keychain) ---------------------------------------------------

@@ -12,7 +12,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::error::StoreError;
 use crate::schema;
 use crate::types::{
-    Assist, Meeting, MeetingDetails, MeetingPage, MeetingSummary, Segment, SpeakerName, Translation,
+    ActionItem, Assist, CompressionBlock, Meeting, MeetingDetails, MeetingPage, MeetingSummary,
+    NewCompressionBlock, NewSummary, Segment, SpeakerName, Summary, Translation,
 };
 
 pub struct Store {
@@ -244,7 +245,85 @@ impl Store {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
-    /// Meeting completo di frasi, traduzioni, parlanti e assist.
+    /// Blocchi di compressione in ordine cronologico.
+    pub fn compression_blocks(&self, meeting_id: i64) -> Result<Vec<CompressionBlock>, StoreError> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, meeting_id, block_index, start_ms, end_ms, summary, topics, moments
+             FROM compression_blocks WHERE meeting_id = ?1 ORDER BY block_index",
+        )?;
+        let rows = stmt.query_map(params![meeting_id], |row| {
+            Ok(CompressionBlock {
+                id: row.get(0)?,
+                meeting_id: row.get(1)?,
+                index: u32::try_from(row.get::<_, i64>(2)?).unwrap_or(0),
+                start_ms: row.get::<_, i64>(3)? as u64,
+                end_ms: row.get::<_, i64>(4)? as u64,
+                summary: row.get(5)?,
+                topics: json_column(row.get(6)?),
+                moments: json_column(row.get(7)?),
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    pub fn summary(&self, meeting_id: i64) -> Result<Option<Summary>, StoreError> {
+        let conn = self.conn();
+        conn.query_row(
+            "SELECT meeting_id, language, overview, key_points, action_items, created_at_ms
+             FROM summaries WHERE meeting_id = ?1",
+            params![meeting_id],
+            |row| {
+                Ok(Summary {
+                    meeting_id: row.get(0)?,
+                    language: row.get(1)?,
+                    overview: row.get(2)?,
+                    key_points: json_column(row.get(3)?),
+                    action_items: json_column(row.get(4)?),
+                    created_at_ms: row.get(5)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
+    /// Salva (o sostituisce) il riepilogo del meeting.
+    pub fn save_summary(
+        &self,
+        meeting_id: i64,
+        summary: &NewSummary,
+    ) -> Result<Summary, StoreError> {
+        let mut conn = self.conn();
+        let tx = conn.transaction()?;
+        upsert_summary_tx(&tx, meeting_id, now_ms(), summary)?;
+        tx.commit()?;
+        drop(conn);
+        self.summary(meeting_id)?
+            .ok_or(StoreError::MeetingNotFound(meeting_id))
+    }
+
+    /// Aggiorna lo stato spuntato delle voci della checklist.
+    pub fn set_action_items(
+        &self,
+        meeting_id: i64,
+        items: &[ActionItem],
+    ) -> Result<Summary, StoreError> {
+        let json = serde_json::to_string(items).unwrap_or_else(|_| "[]".into());
+        let conn = self.conn();
+        let changed = conn.execute(
+            "UPDATE summaries SET action_items = ?1 WHERE meeting_id = ?2",
+            params![json, meeting_id],
+        )?;
+        drop(conn);
+        if changed == 0 {
+            return Err(StoreError::MeetingNotFound(meeting_id));
+        }
+        self.summary(meeting_id)?
+            .ok_or(StoreError::MeetingNotFound(meeting_id))
+    }
+
+    /// Meeting completo di frasi, traduzioni, parlanti, assist e riepilogo.
     pub fn details(&self, meeting_id: i64) -> Result<MeetingDetails, StoreError> {
         Ok(MeetingDetails {
             meeting: self.meeting(meeting_id)?,
@@ -252,8 +331,87 @@ impl Store {
             translations: self.translations(meeting_id)?,
             speakers: self.speakers(meeting_id)?,
             assists: self.assists(meeting_id)?,
+            blocks: self.compression_blocks(meeting_id)?,
+            summary: self.summary(meeting_id)?,
         })
     }
+}
+
+pub(crate) fn upsert_block_tx(
+    tx: &rusqlite::Transaction<'_>,
+    meeting_id: i64,
+    now_ms: i64,
+    block: &NewCompressionBlock,
+) -> Result<(), StoreError> {
+    let topics = serde_json::to_string(&block.topics).unwrap_or_else(|_| "[]".into());
+    let moments = serde_json::to_string(&block.moments).unwrap_or_else(|_| "[]".into());
+    tx.execute(
+        "INSERT INTO compression_blocks
+             (meeting_id, block_index, start_ms, end_ms, summary, topics, moments, created_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(meeting_id, block_index) DO UPDATE SET
+             start_ms = excluded.start_ms,
+             end_ms = excluded.end_ms,
+             summary = excluded.summary,
+             topics = excluded.topics,
+             moments = excluded.moments,
+             created_at_ms = excluded.created_at_ms",
+        params![
+            meeting_id,
+            i64::from(block.index),
+            block.start_ms as i64,
+            block.end_ms as i64,
+            block.summary,
+            topics,
+            moments,
+            now_ms
+        ],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn upsert_summary_tx(
+    tx: &rusqlite::Transaction<'_>,
+    meeting_id: i64,
+    now_ms: i64,
+    summary: &NewSummary,
+) -> Result<(), StoreError> {
+    let key_points = serde_json::to_string(&summary.key_points).unwrap_or_else(|_| "[]".into());
+    let action_items = serde_json::to_string(&summary.action_items).unwrap_or_else(|_| "[]".into());
+    tx.execute(
+        "INSERT INTO summaries
+             (meeting_id, language, overview, key_points, action_items, created_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(meeting_id) DO UPDATE SET
+             language = excluded.language,
+             overview = excluded.overview,
+             key_points = excluded.key_points,
+             action_items = excluded.action_items,
+             created_at_ms = excluded.created_at_ms",
+        params![
+            meeting_id,
+            summary.language,
+            summary.overview,
+            key_points,
+            action_items,
+            now_ms
+        ],
+    )?;
+    Ok(())
+}
+
+fn json_column<T: serde::de::DeserializeOwned + Default>(raw: String) -> T {
+    serde_json::from_str(&raw).unwrap_or_else(|e| {
+        tracing::warn!("dato JSON non valido nel database: {e}");
+        T::default()
+    })
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 fn meeting_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Meeting> {

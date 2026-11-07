@@ -157,7 +157,9 @@
       "targetHint": "Language you read the others' sentences in.",
       "targetMine": "Your language",
       "test": "Test connection",
-      "testOk": "ok in {{ms}} ms · {{model}}"
+      "testOk": "ok in {{ms}} ms · {{model}}",
+      "autoSummary": "Automatic final summary",
+      "autoSummaryHint": "On stop, generate overview, key points and action items."
     },
     "localOnly": {
       "title": "Local only",
@@ -254,5 +256,34 @@
     "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
     "rename": "Rename meeting",
     "assists": "Suggestions"
+  },
+  "moment": {
+    "objection": "Objection",
+    "commitment": "Commitment",
+    "question": "Question",
+    "pain_point": "Pain point",
+    "decision": "Decision"
+  },
+  "moments": {
+    "objection": "Objection",
+    "commitment": "Commitment",
+    "question": "Question",
+    "pain_point": "Pain point",
+    "decision": "Decision"
+  },
+  "insights": {
+    "title": "Progressive summary",
+    "blocks": "{{count}} five-minute blocks",
+    "moments": "Important moments"
+  },
+  "summary": {
+    "title": "Final summary",
+    "keyPoints": "Key points",
+    "actions": "Action items",
+    "copy": "Copy",
+    "regenerate": "Regenerate",
+    "language": "Summary language",
+    "missing": "No summary for this meeting yet.",
+    "generate": "Generate summary"
   }
 }

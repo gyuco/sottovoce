@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { AssistPanel } from "@/components/AssistPanel";
 import { AudioPanel } from "@/components/AudioPanel";
 import { History } from "@/components/History";
+import { InsightsPanel } from "@/components/InsightsPanel";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -79,6 +80,7 @@ export default function App() {
           <div className="grid flex-1 gap-4 px-6 pb-6 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             <div className="flex flex-col gap-4 md:min-h-0">
               <AssistPanel />
+              <InsightsPanel />
               <AudioPanel />
             </div>
             <div className="flex flex-col gap-4 md:min-h-0">

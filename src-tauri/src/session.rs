@@ -17,9 +17,11 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
+use crate::compress::{self, CompressConfig, CompressLine, CompressionEvent, CompressionLog};
 use crate::diarize::{self, DiarConfig, DiarJob};
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
+use crate::summary::{self, SummaryConfig};
 use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
 
 /// Capacità del bus audio: ~16 s di frame da ~64 ms per canale.
@@ -35,6 +37,12 @@ const DIAR_TIMEOUT: Duration = Duration::from_secs(2);
 pub struct LlmTasks {
     pub translation: Option<TranslatorConfig>,
     pub assist: Option<AssistConfig>,
+    /// Compressione rolling dei 5 minuti.
+    pub compression: Option<CompressConfig>,
+    /// Riepilogo finale (tre estrazioni).
+    pub summary: Option<SummaryConfig>,
+    /// Riepilogo automatico allo stop.
+    pub auto_summary: bool,
 }
 
 /// Dove la sessione invia i propri eventi (canali IPC verso la UI).
@@ -43,6 +51,7 @@ pub struct Outputs {
     pub on_transcript: Arc<dyn Fn(SttEvent) + Send + Sync>,
     pub on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync>,
     pub on_assist: Box<dyn Fn(AssistEvent) + Send + Sync>,
+    pub on_compression: Box<dyn Fn(CompressionEvent) + Send + Sync>,
 }
 
 pub struct Session {
@@ -54,6 +63,10 @@ pub struct Session {
     store: Option<Writer>,
     /// Origine dei timestamp della sessione (durata salvata alla chiusura).
     started: Instant,
+    /// Blocchi compressi e coda recente condivisi con assist e riepilogo.
+    log: Option<CompressionLog>,
+    summary: Option<SummaryConfig>,
+    auto_summary: bool,
 }
 
 impl Session {
@@ -72,6 +85,7 @@ impl Session {
             on_transcript,
             on_translation,
             on_assist,
+            on_compression,
         } = out;
         let system_audio = settings.system_audio && sv_audio::system::is_supported();
         let mut channels = vec![Channel::Me];
@@ -108,12 +122,27 @@ impl Session {
             }
             on_translation(event);
         });
-        let assist_store = store_sink;
+        let assist_store = store_sink.clone();
         let on_assist: Box<dyn Fn(AssistEvent) + Send + Sync> = Box::new(move |event| {
             if let Some(store) = &assist_store {
                 store.assist(event.kind.code(), &event.text, event.at);
             }
             on_assist(event);
+        });
+
+        let compression_log = llm.compression.is_some().then(CompressionLog::default);
+        let compressor = llm.compression.map(|cfg| {
+            let (tx, task) = compress::spawn(
+                cfg,
+                context.clone(),
+                compression_log
+                    .clone()
+                    .expect("log creato con la compressione"),
+                store_sink,
+                on_compression,
+            );
+            tasks.push(task);
+            tx
         });
 
         let translating = llm.translation.is_some() && system_audio;
@@ -125,7 +154,13 @@ impl Session {
         });
         let assisting = llm.assist.is_some();
         let assistant = llm.assist.map(|cfg| {
-            let (tx, task) = assist::spawn(cfg, context.clone(), started, on_assist);
+            let (tx, task) = assist::spawn(
+                cfg,
+                context.clone(),
+                compression_log.clone(),
+                started,
+                on_assist,
+            );
             tasks.push(task);
             tx
         });
@@ -161,11 +196,12 @@ impl Session {
                     translate,
                     assist: assistant.clone(),
                     diarize,
+                    compress: compressor.clone(),
                 },
                 move |e| sink(e),
             ));
         }
-        drop((translator, assistant, diarizer));
+        drop((translator, assistant, diarizer, compressor));
 
         let capture = Capture::start(
             CaptureConfig {
@@ -187,6 +223,7 @@ impl Session {
                     translating,
                     assisting,
                     diarizing,
+                    compressing = compression_log.is_some(),
                     "sessione avviata"
                 );
                 Ok(Self {
@@ -195,6 +232,9 @@ impl Session {
                     context,
                     store,
                     started,
+                    log: compression_log,
+                    summary: llm.summary,
+                    auto_summary: llm.auto_summary,
                 })
             }
             Err(e) => {
@@ -220,13 +260,16 @@ impl Session {
         }
     }
 
-    pub async fn stop(self) {
+    pub async fn stop(self) -> Option<sv_store::Summary> {
         let Self {
             capture,
             tasks,
+            context,
             store,
             started,
-            ..
+            log,
+            summary,
+            auto_summary,
         } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
@@ -242,16 +285,51 @@ impl Session {
                 a.abort();
             }
         }
-        // Dopo i task (traduzioni e assist compresi): niente più eventi.
+        // Durata reale della call: il riepilogo che segue non la allunga.
+        let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+
+        // Riepilogo automatico dopo lo stop: compressione + coda finale.
+        let mut generated = None;
+        if auto_summary && let (Some(cfg), Some(log), Some(writer)) = (&summary, &log, &store) {
+            let input = summary::SummaryInput {
+                context: context.get(),
+                blocks: log.blocks(),
+                lines: log.lines(),
+            };
+            if input.blocks.is_empty() && input.lines.is_empty() {
+                tracing::info!("riepilogo finale saltato: nessuna trascrizione");
+            } else if let Some(draft) = summary::generate(cfg, &input).await {
+                let meeting_id = writer.meeting_id();
+                writer.handle().summary(draft.clone());
+                generated = Some(sv_store::Summary {
+                    meeting_id,
+                    language: draft.language,
+                    overview: draft.overview,
+                    key_points: draft.key_points,
+                    action_items: draft.action_items,
+                    created_at_ms: unix_ms(),
+                });
+                tracing::info!(meeting = meeting_id, "riepilogo finale generato");
+            }
+        }
+
+        // Dopo i task (traduzioni, assist e compressione compresi).
         if let Some(store) = store {
-            let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
             match store.finish(elapsed) {
                 Ok(id) => tracing::info!(meeting = id, elapsed_ms = elapsed, "meeting salvato"),
                 Err(e) => tracing::warn!("meeting non chiuso correttamente: {e}"),
             }
         }
         tracing::info!("sessione fermata");
+        generated
     }
+}
+
+fn unix_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or(0)
 }
 
 /// Copia nel database gli eventi che riguardano il meeting: frasi finali e
@@ -296,6 +374,8 @@ struct Followers {
     assist: Option<mpsc::Sender<AssistLine>>,
     /// Diarization ("Loro"): il `Final` aspetta il parlante.
     diarize: Option<mpsc::Sender<DiarJob>>,
+    /// Compressione rolling dei 5 minuti.
+    compress: Option<mpsc::Sender<CompressLine>>,
 }
 
 /// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
@@ -313,6 +393,7 @@ fn spawn_channel(
         translate,
         assist,
         diarize,
+        compress,
     } = followers;
     let SttStream {
         channel,
@@ -370,6 +451,17 @@ fn spawn_channel(
                     {
                         tracing::warn!(?channel, "coda live assist piena: frase scartata");
                     }
+                    if let Some(tx) = &compress
+                        && let Err(TrySendError::Full(_)) = tx.try_send(CompressLine {
+                            channel,
+                            text: seg.text.clone(),
+                            speaker: seg.speaker,
+                            start_ms: millis(seg.start),
+                            end_ms: millis(seg.end),
+                        })
+                    {
+                        tracing::warn!(?channel, "coda compressione piena: frase scartata");
+                    }
                     translate.as_ref().map(|_| Job {
                         segment_id: seg.id,
                         text: seg.text.clone(),
@@ -408,7 +500,7 @@ fn spawn_channel(
         drop(diarize);
         // Drop dei sender: traduttore e assist chiudono (dopo le richieste
         // in corso) quando tutti i canali hanno finito.
-        drop((translate, assist));
+        drop((translate, assist, compress));
         stats.report(channel);
         let _ = engine.await;
     });
@@ -584,6 +676,7 @@ mod tests {
                 translate: Some(tx),
                 assist: None,
                 diarize: None,
+                compress: None,
             },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {

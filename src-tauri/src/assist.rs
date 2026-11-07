@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
+use crate::compress::{CompressionLog, MAX_CONTEXT_CHARS};
 use crate::meeting::SharedContext;
 use crate::session::percentiles;
 
@@ -105,17 +106,21 @@ struct AssistOutput {
 pub fn spawn(
     cfg: AssistConfig,
     context: SharedContext,
+    compressed: Option<CompressionLog>,
     started: Instant,
     on_assist: impl Fn(AssistEvent) + Send + Sync + 'static,
 ) -> (mpsc::Sender<AssistLine>, JoinHandle<()>) {
     let (tx, rx) = mpsc::channel(QUEUE);
-    let task = tokio::spawn(run(cfg, context, started, PERIOD, rx, on_assist));
+    let task = tokio::spawn(run(
+        cfg, context, compressed, started, PERIOD, rx, on_assist,
+    ));
     (tx, task)
 }
 
 async fn run(
     cfg: AssistConfig,
     context: SharedContext,
+    compressed: Option<CompressionLog>,
     started: Instant,
     period: Duration,
     mut rx: mpsc::Receiver<AssistLine>,
@@ -132,7 +137,7 @@ async fn run(
                 None => break,
             },
             _ = ticks.tick() => {
-                let Some(messages) = state.next_prompt(&cfg, &context) else {
+                let Some(messages) = state.next_prompt(&cfg, &context, compressed.as_ref()) else {
                     state.stats.idle += 1;
                     continue;
                 };
@@ -166,7 +171,12 @@ impl State {
 
     /// Prompt del ciclo; `None` se non ci sono frasi nuove. Le frasi nuove
     /// passano nel contesto dei cicli successivi.
-    fn next_prompt(&mut self, cfg: &AssistConfig, context: &SharedContext) -> Option<Vec<Message>> {
+    fn next_prompt(
+        &mut self,
+        cfg: &AssistConfig,
+        context: &SharedContext,
+        compressed: Option<&CompressionLog>,
+    ) -> Option<Vec<Message>> {
         if self.fresh.is_empty() {
             return None;
         }
@@ -175,9 +185,11 @@ impl State {
         // Etichette risolte ora: un nome dato a un parlante vale anche per
         // le sue frasi precedenti.
         let label = |speaker| context.speaker_label(speaker);
+        let compressed = compressed.and_then(|log| log.prompt_block(MAX_CONTEXT_CHARS));
         let messages = messages(
             cfg.user_language,
             context.prompt_block().as_deref(),
+            compressed.as_deref(),
             &self.shown[shown_from..],
             self.earlier.make_contiguous(),
             &fresh,
@@ -257,6 +269,7 @@ impl State {
 fn messages(
     user_language: Language,
     context: Option<&str>,
+    compressed: Option<&str>,
     shown: &[String],
     earlier: &[AssistLine],
     fresh: &[AssistLine],
@@ -270,6 +283,10 @@ fn messages(
     system.push_str(&format!("\n\nThe User's language is {lang}."));
     if let Some(block) = context {
         system.push_str("\n\n");
+        system.push_str(block);
+    }
+    if let Some(block) = compressed {
+        system.push_str("\n\nMEETING SO FAR (compressed, context only):\n");
         system.push_str(block);
     }
     if !shown.is_empty() {
@@ -420,9 +437,15 @@ mod tests {
             model: "m".into(),
             user_language: Language::It,
         };
-        let task = tokio::spawn(run(cfg, context, Instant::now(), PERIOD, rx, move |e| {
-            sink.lock().unwrap().push(e)
-        }));
+        let task = tokio::spawn(run(
+            cfg,
+            context,
+            None,
+            Instant::now(),
+            PERIOD,
+            rx,
+            move |e| sink.lock().unwrap().push(e),
+        ));
         Harness { tx, task, events }
     }
 
@@ -517,6 +540,36 @@ mod tests {
     }
 
     #[test]
+    fn prompt_includes_compressed_blocks() {
+        let log = CompressionLog::default();
+        log.add_block(crate::compress::CompressionEvent {
+            index: 1,
+            start: 0,
+            end: 300_000,
+            summary: "vecchio riassunto sul budget".into(),
+            topics: vec!["budget".into()],
+            moments: Vec::new(),
+        });
+        let cfg = AssistConfig {
+            llm: ScriptedLlm::new(&[]),
+            model: "m".into(),
+            user_language: Language::It,
+        };
+        let mut state = State::default();
+        state.push(line(Channel::Them, "novità adesso"));
+        let messages = state
+            .next_prompt(&cfg, &SharedContext::default(), Some(&log))
+            .unwrap();
+        assert!(messages[0].content.contains("MEETING SO FAR"));
+        assert!(messages[0].content.contains("vecchio riassunto sul budget"));
+        assert!(
+            messages[1]
+                .content
+                .ends_with("Last 20 seconds:\n[Loro] novità adesso")
+        );
+    }
+
+    #[test]
     fn similarity() {
         assert!(similar("Ask about the budget!", "ask about the BUDGET"));
         assert!(!similar(
@@ -575,7 +628,7 @@ mod tests {
             state.push(line(ch, text));
         }
         let messages = state
-            .next_prompt(&cfg, &SharedContext::new(context))
+            .next_prompt(&cfg, &SharedContext::new(context), None)
             .unwrap();
         let started = Instant::now();
         let events = state.ask(&cfg, messages, 0).await;

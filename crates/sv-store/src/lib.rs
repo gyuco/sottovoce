@@ -20,7 +20,8 @@ pub use error::StoreError;
 pub use schema::SCHEMA_VERSION;
 pub use store::Store;
 pub use types::{
-    Assist, Meeting, MeetingDetails, MeetingDraft, MeetingPage, MeetingSummary, NewSegment,
-    Segment, SpeakerName, Translation,
+    ActionItem, Assist, CompressionBlock, ImportantMoment, KeyPoint, Meeting, MeetingDetails,
+    MeetingDraft, MeetingPage, MeetingSummary, NewCompressionBlock, NewSegment, NewSummary,
+    Segment, SpeakerName, Summary, Translation,
 };
 pub use writer::{FLUSH_INTERVAL, QUEUE, StoreHandle, Writer};

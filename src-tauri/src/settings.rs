@@ -109,6 +109,8 @@ pub struct Settings {
     pub translation_model: String,
     /// Modello per il live assist; vuoto = da scegliere.
     pub assist_model: String,
+    /// Genera il riepilogo finale automaticamente allo stop.
+    pub auto_summary: bool,
     /// Lingua in cui tradurre; `None` = la lingua dell'utente.
     pub target_language: Option<Language>,
 }
@@ -116,6 +118,14 @@ pub struct Settings {
 impl Settings {
     /// Lingua delle traduzioni. "Automatica" non è una lingua di arrivo:
     /// in quel caso si ripiega sull'italiano.
+    /// Lingua del riepilogo: quella dell'utente; "automatica" → italiano.
+    pub fn summary_language(&self) -> Language {
+        match self.my_language {
+            Language::Multi => Language::It,
+            l => l,
+        }
+    }
+
     pub fn effective_target_language(&self) -> Language {
         match self.target_language.unwrap_or(self.my_language) {
             Language::Multi => Language::It,
@@ -141,6 +151,7 @@ impl Default for Settings {
             llm_base_url: String::new(),
             translation_model: String::new(),
             assist_model: String::new(),
+            auto_summary: true,
             target_language: None,
         }
     }

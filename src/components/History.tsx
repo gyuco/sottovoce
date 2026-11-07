@@ -2,6 +2,7 @@ import { Check, Clock, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { SummaryPanel } from "@/components/SummaryPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import {
   type MeetingSummary,
   deleteMeeting,
   errorMessage,
+  generateSummary,
   getMeeting,
   listMeetings,
   renameMeeting,
@@ -34,6 +36,7 @@ export function History() {
   const [reload, setReload] = useState(0);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [generatingSummary, setGeneratingSummary] = useState(false);
 
   // Ricerca con debounce: niente richiesta a ogni tasto.
   useEffect(() => {
@@ -120,6 +123,20 @@ export function History() {
       setReload((r) => r + 1);
     } catch (e) {
       setError(errorMessage(e));
+    }
+  };
+
+  const createSummary = async () => {
+    if (selected === null) return;
+    setGeneratingSummary(true);
+    try {
+      const summary = await generateSummary(selected);
+      setDetails((d) => (d ? { ...d, summary } : d));
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setGeneratingSummary(false);
     }
   };
 
@@ -311,6 +328,28 @@ export function History() {
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+              {details.summary ? (
+                <div className="p-2">
+                  <SummaryPanel
+                    summary={details.summary}
+                    onChange={(summary) => setDetails((d) => (d ? { ...d, summary } : d))}
+                    onRegenerate={(language) => generateSummary(meeting.id, language)}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 px-2 py-2 text-xs text-muted-foreground">
+                  <span>{t("summary.missing")}</span>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={generatingSummary}
+                    onClick={() => void createSummary()}
+                  >
+                    {generatingSummary && <Loader2 className="animate-spin" />}
+                    {t("summary.generate")}
+                  </Button>
+                </div>
+              )}
               {details.segments.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   {t("history.noSegments")}

@@ -6,9 +6,11 @@ import { SpeakerLabel } from "@/components/SpeakerLabel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { formatDuration, useCopy } from "@/lib/hooks";
+import { MOMENT_COLORS } from "@/lib/moments";
 import type { TranslationEvent } from "@/lib/ipc";
 import { useSpeakerName } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
+import { useInsightsStore } from "@/stores/insights";
 import { type Line, useTranscriptStore } from "@/stores/transcript";
 
 /** Distanza dal fondo (px) entro cui l'autoscroll resta agganciato. */
@@ -23,6 +25,7 @@ export function Transcript() {
   const setShowTranslations = useTranscriptStore((s) => s.setShowTranslations);
   const { copied, copy } = useCopy();
   const speakerName = useSpeakerName();
+  const moments = useInsightsStore((s) => s.blocks.flatMap((b) => b.moments));
 
   const rows = useMemo(() => {
     const live = [partial.me, partial.them].filter((p): p is Line => p !== null);
@@ -85,6 +88,7 @@ export function Transcript() {
           {copied ? t("common.copied") : t("transcript.copy")}
         </Button>
       </header>
+      <MomentBar moments={moments} end={rows.reduce((max, r) => Math.max(max, r.end), 0)} />
       <div
         ref={box}
         onScroll={onScroll}
@@ -117,6 +121,34 @@ export function Transcript() {
         </Button>
       )}
     </section>
+  );
+}
+
+/** Marcatori dei momenti importanti sulla linea del tempo della trascrizione. */
+function MomentBar(props: {
+  moments: { timeMs: number; kind: string; text: string }[];
+  end: number;
+}) {
+  const { t } = useTranslation();
+  if (props.moments.length === 0) return null;
+  const total = Math.max(props.end, 1);
+  return (
+    <div
+      className="relative mx-4 mb-1 h-1.5 rounded-full bg-muted"
+      aria-label={t("insights.moments")}
+    >
+      {props.moments.map((moment, i) => (
+        <span
+          key={`${moment.timeMs}-${i}`}
+          className={cn(
+            "absolute top-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-current ring-2 ring-card",
+            MOMENT_COLORS[moment.kind],
+          )}
+          style={{ left: `${Math.min(100, (moment.timeMs / total) * 100)}%` }}
+          title={`${formatDuration(moment.timeMs)} · ${t(`moments.${moment.kind}`)}: ${moment.text}`}
+        />
+      ))}
+    </div>
   );
 }
 

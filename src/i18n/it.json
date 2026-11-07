@@ -157,7 +157,9 @@
       "targetHint": "Lingua in cui leggi le frasi degli altri.",
       "targetMine": "La tua lingua",
       "test": "Prova connessione",
-      "testOk": "ok in {{ms}} ms · {{model}}"
+      "testOk": "ok in {{ms}} ms · {{model}}",
+      "autoSummary": "Riepilogo finale automatico",
+      "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni."
     },
     "localOnly": {
       "title": "Solo locale",
@@ -254,5 +256,34 @@
     "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
     "rename": "Rinomina meeting",
     "assists": "Suggerimenti"
+  },
+  "moment": {
+    "objection": "Obiezione",
+    "commitment": "Impegno",
+    "question": "Domanda",
+    "pain_point": "Punto dolente",
+    "decision": "Decisione"
+  },
+  "moments": {
+    "objection": "Obiezione",
+    "commitment": "Impegno",
+    "question": "Domanda",
+    "pain_point": "Punto dolente",
+    "decision": "Decisione"
+  },
+  "insights": {
+    "title": "Riepilogo progressivo",
+    "blocks": "{{count}} blocchi da 5 min",
+    "moments": "Momenti importanti"
+  },
+  "summary": {
+    "title": "Riepilogo finale",
+    "keyPoints": "Punti chiave",
+    "actions": "Azioni",
+    "copy": "Copia",
+    "regenerate": "Rigenera",
+    "language": "Lingua del riepilogo",
+    "missing": "Nessun riepilogo per questo meeting.",
+    "generate": "Genera riepilogo"
   }
 }

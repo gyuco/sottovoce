@@ -103,6 +103,11 @@ impl SharedContext {
         *self.0.write().unwrap_or_else(|e| e.into_inner()) = ctx;
     }
 
+    /// Copia del contesto corrente (per il riepilogo finale).
+    pub fn get(&self) -> MeetingContext {
+        self.0.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
     /// Vedi [`MeetingContext::speaker_label`]; i nomi valgono subito, anche
     /// per le frasi già dette.
     pub fn speaker_label(&self, speaker: Option<u8>) -> String {

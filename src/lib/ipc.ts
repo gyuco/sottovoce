@@ -54,6 +54,8 @@ export interface Settings {
   llmBaseUrl: string;
   translationModel: string;
   assistModel: string;
+  /** Riepilogo finale automatico allo stop. */
+  autoSummary: boolean;
   /** `null` = la lingua dell'utente. */
   targetLanguage: Language | null;
 }
@@ -106,6 +108,45 @@ export interface TranslationEvent {
   latencyMs: number;
 }
 
+export type MomentKind = "objection" | "commitment" | "question" | "pain_point" | "decision";
+
+/** Momento importante emerso dalla compressione dei 5 minuti. */
+export interface ImportantMoment {
+  timeMs: number;
+  kind: MomentKind;
+  text: string;
+}
+
+/** Blocco di compressione di 5 minuti. */
+export interface CompressionEvent {
+  index: number;
+  start: number;
+  end: number;
+  summary: string;
+  topics: string[];
+  moments: ImportantMoment[];
+}
+
+export interface KeyPoint {
+  topic: string;
+  points: string[];
+}
+
+export interface ActionItem {
+  text: string;
+  done: boolean;
+}
+
+/** Riepilogo finale salvato. */
+export interface Summary {
+  meetingId: number;
+  language: Language;
+  overview: string;
+  keyPoints: KeyPoint[];
+  actionItems: ActionItem[];
+  createdAtMs: number;
+}
+
 export type SttEvent = { channel: ChannelId } & (
   | { type: "connected" }
   | ({ type: "partial" } & Segment)
@@ -134,6 +175,7 @@ export function startSession(
   onTranscript: (e: SttEvent) => void,
   onTranslation: (e: TranslationEvent) => void,
   onAssist: (e: AssistEvent) => void,
+  onCompression: (e: CompressionEvent) => void,
   context: MeetingContext,
 ) {
   const level = new Channel<LevelEvent>();
@@ -144,16 +186,19 @@ export function startSession(
   translation.onmessage = onTranslation;
   const assist = new Channel<AssistEvent>();
   assist.onmessage = onAssist;
+  const compression = new Channel<CompressionEvent>();
+  compression.onmessage = onCompression;
   return invoke<void>("start_session", {
     onLevel: level,
     onTranscript: transcript,
     onTranslation: translation,
     onAssist: assist,
+    onCompression: compression,
     context,
   });
 }
 
-export const stopSession = () => invoke<void>("stop_session");
+export const stopSession = () => invoke<Summary | null>("stop_session");
 
 // --- Storico meeting ---------------------------------------------------------
 
@@ -220,6 +265,8 @@ export interface MeetingDetails {
   translations: SavedTranslation[];
   speakers: SavedSpeaker[];
   assists: SavedAssist[];
+  blocks: CompressionEvent[];
+  summary: Summary | null;
 }
 
 export const listMeetings = (page: number, perPage: number, search?: string) =>
@@ -231,6 +278,12 @@ export const deleteMeeting = (id: number) => invoke<void>("delete_meeting", { id
 
 export const renameMeeting = (id: number, name: string) =>
   invoke<Meeting>("rename_meeting", { id, name });
+
+export const generateSummary = (id: number, language?: Language) =>
+  invoke<Summary>("generate_summary", { id, language: language ?? null });
+
+export const updateSummaryChecklist = (id: number, items: ActionItem[]) =>
+  invoke<Summary>("update_summary_checklist", { id, items });
 
 export const updateMeetingContext = (context: MeetingContext) =>
   invoke<void>("update_meeting_context", { context });

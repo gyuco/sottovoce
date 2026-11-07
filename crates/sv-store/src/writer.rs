@@ -15,7 +15,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::error::StoreError;
 use crate::schema;
-use crate::types::{MeetingDraft, NewSegment};
+use crate::types::{MeetingDraft, NewCompressionBlock, NewSegment, NewSummary};
 
 /// Eventi in attesa oltre i quali si scarta (DB in difficoltà).
 pub const QUEUE: usize = 2048;
@@ -44,6 +44,8 @@ enum Command {
         text: String,
         at_ms: u64,
     },
+    Compression(NewCompressionBlock),
+    Summary(NewSummary),
     Finish {
         elapsed_ms: Option<u64>,
         ack: SyncSender<Result<(), StoreError>>,
@@ -175,6 +177,16 @@ impl StoreHandle {
             text: text.to_owned(),
             at_ms,
         });
+    }
+
+    /// Blocco di compressione dei 5 minuti.
+    pub fn compression_block(&self, block: NewCompressionBlock) {
+        self.send(Command::Compression(block));
+    }
+
+    /// Riepilogo finale (sostituisce quello precedente del meeting).
+    pub fn summary(&self, summary: NewSummary) {
+        self.send(Command::Summary(summary));
     }
 
     fn send(&self, command: Command) {
@@ -342,6 +354,12 @@ fn apply(
                 params![meeting_id, kind, text, to_i64(at_ms), now_ms],
             )?;
         }
+        Command::Compression(block) => {
+            crate::store::upsert_block_tx(tx, meeting_id, now_ms, &block)?;
+        }
+        Command::Summary(summary) => {
+            crate::store::upsert_summary_tx(tx, meeting_id, now_ms, &summary)?;
+        }
         Command::Finish { .. } => unreachable!("Finish gestito dal loop"),
     }
     Ok(())
@@ -506,6 +524,57 @@ mod tests {
         assert_eq!(details.assists.len(), 1);
         assert_eq!(details.assists[0].kind, "say");
         assert_eq!(details.assists[0].at_ms, 1500);
+    }
+
+    #[test]
+    fn writes_compression_blocks_and_summary() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sottovoce.db");
+        let writer = Writer::start(&path, draft()).unwrap();
+        let meeting_id = writer.meeting_id();
+        let store = writer.handle();
+        store.compression_block(NewCompressionBlock {
+            index: 1,
+            start_ms: 0,
+            end_ms: 300_000,
+            summary: "- budget chiuso".into(),
+            topics: vec!["budget".into()],
+            moments: vec![crate::types::ImportantMoment {
+                time_ms: 42_000,
+                kind: "decision".into(),
+                text: "si chiude venerdì".into(),
+            }],
+        });
+        store.summary(NewSummary {
+            language: "it".into(),
+            overview: "Il team ha chiuso il budget.".into(),
+            key_points: vec![crate::types::KeyPoint {
+                topic: "Budget".into(),
+                points: vec!["Marco ha confermato.".into()],
+            }],
+            action_items: vec![crate::types::ActionItem {
+                text: "Marco invia il preventivo".into(),
+                done: false,
+            }],
+        });
+        writer.finish(10_000).unwrap();
+
+        let store = Store::open(&path).unwrap();
+        let details = store.details(meeting_id).unwrap();
+        assert_eq!(details.blocks.len(), 1);
+        assert_eq!(details.blocks[0].moments[0].time_ms, 42_000);
+        let summary = details.summary.unwrap();
+        assert_eq!(summary.overview, "Il team ha chiuso il budget.");
+        assert_eq!(summary.action_items.len(), 1);
+        assert!(!summary.action_items[0].done);
+
+        let items = vec![crate::types::ActionItem {
+            text: "Marco invia il preventivo".into(),
+            done: true,
+        }];
+        let updated = store.set_action_items(meeting_id, &items).unwrap();
+        assert!(updated.action_items[0].done);
+        assert!(store.set_action_items(meeting_id + 99, &items).is_err());
     }
 
     #[test]

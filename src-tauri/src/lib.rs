@@ -1,5 +1,6 @@
 mod assist;
 mod commands;
+mod compress;
 mod diarize;
 mod llm;
 mod meeting;
@@ -9,6 +10,7 @@ mod session;
 mod settings;
 mod state;
 mod stt;
+mod summary;
 mod translate;
 
 use tauri::Manager;
@@ -60,6 +62,8 @@ pub fn run() {
             commands::get_meeting,
             commands::delete_meeting,
             commands::rename_meeting,
+            commands::generate_summary,
+            commands::update_summary_checklist,
             commands::update_meeting_context,
             commands::set_api_key,
             commands::has_api_key,

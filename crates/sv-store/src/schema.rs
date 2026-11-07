@@ -12,7 +12,7 @@ use rusqlite::Connection;
 use crate::error::StoreError;
 
 /// Versione dello schema corrente.
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 const MIGRATIONS: &[&str] = &[
     // 1 — meeting, frasi finali, traduzioni, nomi dei parlanti, assist.
@@ -97,6 +97,30 @@ CREATE TRIGGER segments_fts_au AFTER UPDATE ON segments BEGIN
 END;
 
 INSERT INTO segments_fts(segments_fts) VALUES ('rebuild');
+"#,
+    // 3 — blocchi di compressione (5 min) e riepilogo finale.
+    r#"
+CREATE TABLE compression_blocks (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id   INTEGER NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
+    block_index  INTEGER NOT NULL,
+    start_ms     INTEGER NOT NULL,
+    end_ms       INTEGER NOT NULL,
+    summary      TEXT    NOT NULL,
+    topics       TEXT    NOT NULL,
+    moments      TEXT    NOT NULL,
+    created_at_ms INTEGER NOT NULL,
+    UNIQUE (meeting_id, block_index)
+);
+
+CREATE TABLE summaries (
+    meeting_id   INTEGER PRIMARY KEY REFERENCES meetings(id) ON DELETE CASCADE,
+    language     TEXT NOT NULL,
+    overview     TEXT NOT NULL,
+    key_points   TEXT NOT NULL,
+    action_items TEXT NOT NULL,
+    created_at_ms INTEGER NOT NULL
+);
 "#,
 ];
 

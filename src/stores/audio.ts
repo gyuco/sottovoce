@@ -11,6 +11,7 @@ import {
   systemAudioSupported,
 } from "@/lib/ipc";
 import { useAssistStore } from "@/stores/assist";
+import { useInsightsStore } from "@/stores/insights";
 import { useMeetingStore } from "@/stores/meeting";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
@@ -104,6 +105,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     transcript.reset();
     const assist = useAssistStore.getState();
     assist.reset();
+    const insights = useInsightsStore.getState();
+    insights.reset();
     // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
     useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
     try {
@@ -119,6 +122,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         transcript.apply,
         transcript.applyTranslation,
         assist.add,
+        insights.addBlock,
         useMeetingStore.getState().context,
       );
       set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });
@@ -130,7 +134,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   stop: async () => {
     set({ status: "stopping" });
     try {
-      await stopSession();
+      const summary = await stopSession();
+      useInsightsStore.getState().setSummary(summary);
     } finally {
       set({ status: "idle", levels: { me: silent(), them: silent() } });
     }

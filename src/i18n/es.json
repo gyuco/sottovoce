@@ -157,7 +157,9 @@
       "targetHint": "Idioma en el que lees las frases de los demás.",
       "targetMine": "Tu idioma",
       "test": "Probar conexión",
-      "testOk": "ok en {{ms}} ms · {{model}}"
+      "testOk": "ok en {{ms}} ms · {{model}}",
+      "autoSummary": "Resumen final automático",
+      "autoSummaryHint": "Al detener, genera resumen, puntos clave y acciones."
     },
     "localOnly": {
       "title": "Solo local",
@@ -254,5 +256,34 @@
     "deleteConfirm": "¿Eliminar esta reunión? Se perderán frases y traducciones.",
     "rename": "Renombrar reunión",
     "assists": "Sugerencias"
+  },
+  "moment": {
+    "objection": "Objeción",
+    "commitment": "Compromiso",
+    "question": "Pregunta",
+    "pain_point": "Punto de dolor",
+    "decision": "Decisión"
+  },
+  "moments": {
+    "objection": "Objeción",
+    "commitment": "Compromiso",
+    "question": "Pregunta",
+    "pain_point": "Punto de dolor",
+    "decision": "Decisión"
+  },
+  "insights": {
+    "title": "Resumen progresivo",
+    "blocks": "{{count}} bloques de 5 min",
+    "moments": "Momentos importantes"
+  },
+  "summary": {
+    "title": "Resumen final",
+    "keyPoints": "Puntos clave",
+    "actions": "Acciones",
+    "copy": "Copiar",
+    "regenerate": "Regenerar",
+    "language": "Idioma del resumen",
+    "missing": "Aún no hay resumen para esta reunión.",
+    "generate": "Generar resumen"
   }
 }

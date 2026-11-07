@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Dati con cui nasce un meeting (prima frase).
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -92,6 +92,78 @@ pub struct Assist {
     pub at_ms: u64,
 }
 
+/// Momento importante emerso da un blocco di compressione.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportantMoment {
+    /// ms dall'avvio della sessione.
+    pub time_ms: u64,
+    /// `objection`, `commitment`, `question`, `pain_point`, `decision`.
+    pub kind: String,
+    pub text: String,
+}
+
+/// Blocco di 5 minuti da salvare.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewCompressionBlock {
+    pub index: u32,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub summary: String,
+    pub topics: Vec<String>,
+    pub moments: Vec<ImportantMoment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressionBlock {
+    pub id: i64,
+    pub meeting_id: i64,
+    pub index: u32,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub summary: String,
+    pub topics: Vec<String>,
+    pub moments: Vec<ImportantMoment>,
+}
+
+/// Punto chiave del riepilogo, raggruppato per argomento.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyPoint {
+    pub topic: String,
+    pub points: Vec<String>,
+}
+
+/// Voce della checklist finale; `done` è lo stato spuntato dall'utente.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionItem {
+    pub text: String,
+    #[serde(default)]
+    pub done: bool,
+}
+
+/// Riepilogo da salvare (senza id/timestamp).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewSummary {
+    pub language: String,
+    pub overview: String,
+    pub key_points: Vec<KeyPoint>,
+    pub action_items: Vec<ActionItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Summary {
+    pub meeting_id: i64,
+    pub language: String,
+    pub overview: String,
+    pub key_points: Vec<KeyPoint>,
+    pub action_items: Vec<ActionItem>,
+    pub created_at_ms: i64,
+}
+
 /// Tutto ciò che serve a mostrare un meeting salvato.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -101,6 +173,8 @@ pub struct MeetingDetails {
     pub translations: Vec<Translation>,
     pub speakers: Vec<SpeakerName>,
     pub assists: Vec<Assist>,
+    pub blocks: Vec<CompressionBlock>,
+    pub summary: Option<Summary>,
 }
 
 /// Riga dello storico: meeting + numero di frasi.
