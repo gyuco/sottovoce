@@ -1,0 +1,26 @@
+[package]
+name = "sv-audio"
+description = "Cattura audio (mic + sistema), resampling a 16 kHz mono e livelli per canale"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cpal = "0.18"
+ringbuf = "0.6"
+rubato = "5"
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+objc2 = "0.6"
+objc2-core-audio = "0.3"
+objc2-core-audio-types = "0.3"
+objc2-core-foundation = "0.3"
+objc2-foundation = "0.3"
+
+[lints]
+workspace = true

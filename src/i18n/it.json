@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "Sottovoce",
+    "subtitle": "Trascrizione live"
+  },
+  "controls": {
+    "microphone": "Microfono",
+    "defaultDevice": "predefinito",
+    "start": "Avvia",
+    "stop": "Ferma",
+    "starting": "Avvio…",
+    "systemAudio": "Audio di sistema"
+  },
+  "channel": {
+    "me": "Io",
+    "meHint": "Microfono",
+    "them": "Loro",
+    "themHint": "Audio di sistema",
+    "idle": "inattivo",
+    "live": "attivo",
+    "disabled": "disattivato",
+    "noSignal": "nessun segnale",
+    "unsupported": "non supportato su questa piattaforma",
+    "noSignalHint": "Nessun dato dal canale. Controlla i permessi in Impostazioni di Sistema → Privacy e sicurezza."
+  },
+  "stt": {
+    "idle": "STT inattivo",
+    "connected": "STT connesso",
+    "reconnecting": "riconnessione…",
+    "error": "errore STT",
+    "closed": "STT chiuso"
+  },
+  "transcript": {
+    "title": "Trascrizione",
+    "empty": "La trascrizione apparirà qui quando avvii la sessione.",
+    "toBottom": "Torna in fondo"
+  },
+  "settings": {
+    "title": "Impostazioni",
+    "back": "Indietro",
+    "save": "Salva",
+    "applyHint": "Le modifiche valgono dalla prossima sessione.",
+    "systemAudioHint": "Trascrive anche gli altri partecipanti della call.",
+    "stt": {
+      "title": "Trascrizione cloud · Deepgram",
+      "hint": "La API key resta nel Portachiavi di macOS e non viene mai mostrata. Creala su console.deepgram.com.",
+      "keyLabel": "API key Deepgram",
+      "placeholder": "Incolla la API key",
+      "replacePlaceholder": "Incolla una nuova chiave per sostituirla",
+      "keySaved": "chiave salvata",
+      "keyMissing": "chiave non impostata",
+      "deleteKey": "Elimina chiave",
+      "needKey": "Per trascrivere serve una API key Deepgram.",
+      "openSettings": "Imposta chiave"
+    },
+    "language": {
+      "mine": "La tua lingua (Io)",
+      "mineHint": "Una lingua fissa è più accurata dell'automatica.",
+      "theirs": "Lingua degli altri (Loro)",
+      "theirsHint": "Automatica: privilegia italiano e inglese, riconosce anche il cambio di lingua.",
+      "multi": "Automatica (multilingua)",
+      "it": "Italiano",
+      "en": "Inglese"
+    }
+  },
+  "permissions": {
+    "hint": "Al primo avvio macOS chiede il permesso per il microfono e per la registrazione dell'audio di sistema."
+  },
+  "errors": {
+    "devices": "Impossibile leggere i dispositivi: {{message}}",
+    "start": "Impossibile avviare la sessione: {{message}}"
+  }
+}

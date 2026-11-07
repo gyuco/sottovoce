@@ -1,0 +1,23 @@
+[package]
+name = "sv-stt"
+description = "Astrazione speech-to-text (trait SttEngine) e motori per Sottovoce"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-audio.workspace = true
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-native-roots"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,31 @@
+[package]
+name = "sottovoce"
+description = "Assistente desktop per meeting: trascrive, traduce, suggerisce, riassume"
+authors = ["Giuseppe Concas"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+# Il suffisso `_lib` evita conflitti tra nome lib e bin su Windows (cargo#8519).
+name = "sottovoce_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+sv-audio.workspace = true
+sv-stt.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+keyring = "4"
+keyring-core = "1"
+
+[lints]
+workspace = true

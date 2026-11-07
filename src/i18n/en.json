@@ -1,0 +1,73 @@
+{
+  "app": {
+    "title": "Sottovoce",
+    "subtitle": "Live transcription"
+  },
+  "controls": {
+    "microphone": "Microphone",
+    "defaultDevice": "default",
+    "start": "Start",
+    "stop": "Stop",
+    "starting": "Starting…",
+    "systemAudio": "System audio"
+  },
+  "channel": {
+    "me": "Me",
+    "meHint": "Microphone",
+    "them": "Them",
+    "themHint": "System audio",
+    "idle": "idle",
+    "live": "live",
+    "disabled": "disabled",
+    "noSignal": "no signal",
+    "unsupported": "not supported on this platform",
+    "noSignalHint": "No data from this channel. Check permissions in System Settings → Privacy & Security."
+  },
+  "stt": {
+    "idle": "STT idle",
+    "connected": "STT connected",
+    "reconnecting": "reconnecting…",
+    "error": "STT error",
+    "closed": "STT closed"
+  },
+  "transcript": {
+    "title": "Transcript",
+    "empty": "The transcript will appear here once you start a session.",
+    "toBottom": "Jump to latest"
+  },
+  "settings": {
+    "title": "Settings",
+    "back": "Back",
+    "save": "Save",
+    "applyHint": "Changes apply from the next session.",
+    "systemAudioHint": "Also transcribes the other call participants.",
+    "stt": {
+      "title": "Cloud transcription · Deepgram",
+      "hint": "The API key stays in the macOS Keychain and is never shown. Create one at console.deepgram.com.",
+      "keyLabel": "Deepgram API key",
+      "placeholder": "Paste the API key",
+      "replacePlaceholder": "Paste a new key to replace it",
+      "keySaved": "key saved",
+      "keyMissing": "key not set",
+      "deleteKey": "Delete key",
+      "needKey": "A Deepgram API key is required to transcribe.",
+      "openSettings": "Set key"
+    },
+    "language": {
+      "mine": "Your language (Me)",
+      "mineHint": "A fixed language is more accurate than automatic.",
+      "theirs": "Others' language (Them)",
+      "theirsHint": "Automatic: favours Italian and English, also handles language switching.",
+      "multi": "Automatic (multilingual)",
+      "it": "Italian",
+      "en": "English"
+    }
+  },
+  "permissions": {
+    "hint": "On first launch macOS asks for microphone and system audio recording permission."
+  },
+  "errors": {
+    "devices": "Could not read devices: {{message}}",
+    "start": "Could not start the session: {{message}}"
+  }
+}

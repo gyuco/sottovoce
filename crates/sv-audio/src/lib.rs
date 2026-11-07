@@ -1,0 +1,23 @@
+//! Cattura audio per Sottovoce.
+//!
+//! Due canali indipendenti:
+//! - [`Channel::Me`]: microfono (via `cpal`).
+//! - [`Channel::Them`]: audio di sistema (macOS: Core Audio process tap).
+//!
+//! Ogni sorgente scrive campioni grezzi in un ring buffer lock-free dal thread
+//! realtime; un thread worker per canale fa downmix, calcola i livelli e
+//! ricampiona a 16 kHz mono, pubblicando [`AudioFrame`] su un canale broadcast.
+
+mod capture;
+mod error;
+mod frame;
+mod level;
+pub mod mic;
+mod resample;
+mod source;
+pub mod system;
+
+pub use capture::{Capture, CaptureConfig};
+pub use error::AudioError;
+pub use frame::{AudioFrame, Channel, LevelEvent, TARGET_SAMPLE_RATE};
+pub use mic::{InputDevice, list_input_devices};

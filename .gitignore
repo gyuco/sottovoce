@@ -5,3 +5,11 @@ src-tauri/target/
 *.onnx
 models/
 .env
+/target/
+src-tauri/gen/schemas
+dist-ssr
+*.local
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea

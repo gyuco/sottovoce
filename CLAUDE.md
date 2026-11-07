@@ -8,7 +8,15 @@ Documento di design completo (ricerca, confronti, prompt da riusare): `docs/DESI
 
 ## Stato
 
-Progetto vuoto: solo documentazione. Primo passo = scaffold Tauri (vedi Roadmap).
+Passo 1 fatto. Passo 2 (STT cloud end-to-end) implementato, in verifica con chiave Deepgram reale. Task su board `my-planner-Sottovoce` (tag `roadmap-2`).
+
+- Workspace Cargo alla radice: `src-tauri` (app), `crates/sv-audio` (cattura), `crates/sv-stt` (trait `SttEngine`, `FakeEngine`, motore Deepgram). I crate non dipendono da Tauri. Il `target/` è alla radice.
+- Audio di sistema: Core Audio process tap in `crates/sv-audio/src/system/macos_tap.rs`.
+- STT: `crates/sv-stt/src/deepgram/` (WebSocket Nova-3, `language=multi`). Le porzioni `is_final` sono unite in frasi: `Final` su `speech_final`/`UtteranceEnd`.
+- App: `session.rs` (bus audio per sessione → uno stream STT per canale → `ipc::Channel<SttEvent>`), `secrets.rs` (API key nel Keychain, mai al frontend), `settings.rs` (`settings.json` in app config dir, patch parziali).
+- Prova da terminale: `cargo run -p sv-audio --example levels -- 5`; `DEEPGRAM_API_KEY=... cargo run -p sv-stt --example live -- 30 [--system]`. Il tap da terminale resta muto se il terminale non ha il permesso "audio di sistema": per verificare "Loro" usare il bundle (`pnpm app:debug`).
+- Latenza STT: a fine sessione log `riepilogo latenza STT` per canale (primo parziale, p50/p95/max di parziali e final, in ms). I log si vedono lanciando il binario da terminale: `target/debug/bundle/macos/Sottovoce.app/Contents/MacOS/sottovoce`.
+- Comandi: `pnpm tauri dev`, `pnpm app:debug`, `pnpm typecheck`, `pnpm lint`, `cargo clippy --workspace --all-targets`, `cargo fmt --all --check`, `cargo test --workspace`.
 
 ## Principi
 
