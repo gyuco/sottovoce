@@ -91,6 +91,10 @@ pub struct Settings {
     /// Privacy: STT locale e LLM solo su questa macchina; l'avvio fallisce
     /// se la configurazione richiederebbe un host esterno.
     pub local_only: bool,
+    /// Riconoscimento dei parlanti su "Loro" (serve il modello CAM++).
+    pub diarization: bool,
+    /// Altri partecipanti noti (1–8); 0 = automatico.
+    pub their_speakers: u8,
     /// Lingua dell'utente (canale "Io"): monolingua = più accurato.
     pub my_language: Language,
     /// Lingua degli altri partecipanti (canale "Loro").
@@ -127,6 +131,8 @@ impl Default for Settings {
             stt_model: "nova-3".into(),
             local_stt_model: sv_models::PARAKEET_V3.into(),
             local_only: false,
+            diarization: true,
+            their_speakers: 0,
             my_language: Language::It,
             their_language: Language::Multi,
             mic_device_id: None,

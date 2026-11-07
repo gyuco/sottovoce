@@ -163,6 +163,13 @@
       "title": "Solo local",
       "hint": "Para reuniones confidenciales: transcripción en tu Mac y modelo de lenguaje solo en Ollama o en un endpoint en localhost. Durante la sesión ningún dato sale del equipo.",
       "violation": "El modelo de lenguaje elegido está en la nube: con «Solo local» la sesión no se inicia. Cambia a Ollama o a un endpoint en localhost, o quita los modelos de traducción y sugerencias."
+    },
+    "speakers": {
+      "title": "Reconocer a los hablantes",
+      "hint": "Distingue quién habla entre los demás participantes (Speaker 1, 2…). Funciona en local y necesita el modelo CAM++.",
+      "count": "Otros participantes",
+      "countHint": "Si sabes cuántos son, el reconocimiento es más estable y corrige las frases ya mostradas.",
+      "auto": "Automático"
     }
   },
   "permissions": {
@@ -220,5 +227,10 @@
       "stt": "Transcripción",
       "speakerEmbedding": "Reconocimiento de hablantes"
     }
+  },
+  "speakers": {
+    "label": "Speaker {{n}}",
+    "rename": "Renombrar a {{name}}",
+    "renameHint": "Haz clic para poner nombre a este hablante"
   }
 }

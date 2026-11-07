@@ -37,7 +37,7 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 
 const SYSTEM_PROMPT: &str = r#"You are a live meeting coach. You receive a rolling 20-second transcript from an ongoing meeting. Your job is to surface helpful nudges for the User.
 
-All assistance must be directed to the "User" (labeled [Io]). Do NOT provide assistance for other participants (labeled [Loro]). Focus exclusively on what the User can say or ask.
+All assistance must be directed to the "User" (labeled [Io]). Do NOT provide assistance for other participants (labeled [Loro], [Speaker N] or by name). Focus exclusively on what the User can say or ask.
 
 You may receive MEETING CONTEXT (name, purpose, notes, goals): keep suggestions aligned with it.
 
@@ -62,6 +62,8 @@ pub struct AssistConfig {
 pub struct AssistLine {
     pub channel: Channel,
     pub text: String,
+    /// Parlante su "Loro", se riconosciuto.
+    pub speaker: Option<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -120,7 +122,7 @@ async fn run(
                 None => break,
             },
             _ = ticks.tick() => {
-                let Some(messages) = state.next_prompt(&cfg, context.prompt_block()) else {
+                let Some(messages) = state.next_prompt(&cfg, &context) else {
                     state.stats.idle += 1;
                     continue;
                 };
@@ -154,18 +156,22 @@ impl State {
 
     /// Prompt del ciclo; `None` se non ci sono frasi nuove. Le frasi nuove
     /// passano nel contesto dei cicli successivi.
-    fn next_prompt(&mut self, cfg: &AssistConfig, context: Option<String>) -> Option<Vec<Message>> {
+    fn next_prompt(&mut self, cfg: &AssistConfig, context: &SharedContext) -> Option<Vec<Message>> {
         if self.fresh.is_empty() {
             return None;
         }
         let fresh = std::mem::take(&mut self.fresh);
         let shown_from = self.shown.len().saturating_sub(SHOWN_IN_PROMPT);
+        // Etichette risolte ora: un nome dato a un parlante vale anche per
+        // le sue frasi precedenti.
+        let label = |speaker| context.speaker_label(speaker);
         let messages = messages(
             cfg.user_language,
-            context.as_deref(),
+            context.prompt_block().as_deref(),
             &self.shown[shown_from..],
             self.earlier.make_contiguous(),
             &fresh,
+            &label,
         );
         for line in fresh {
             if self.earlier.len() == EARLIER_LINES {
@@ -244,6 +250,7 @@ fn messages(
     shown: &[String],
     earlier: &[AssistLine],
     fresh: &[AssistLine],
+    label: &dyn Fn(Option<u8>) -> String,
 ) -> Vec<Message> {
     let mut system = String::from(SYSTEM_PROMPT);
     let lang = match user_language {
@@ -266,21 +273,24 @@ fn messages(
     let mut user = String::new();
     if !earlier.is_empty() {
         user.push_str("Earlier in the meeting:\n");
-        push_lines(&mut user, earlier);
+        push_lines(&mut user, earlier, label);
         user.push('\n');
     }
     user.push_str("Last 20 seconds:\n");
-    push_lines(&mut user, fresh);
+    push_lines(&mut user, fresh, label);
     vec![Message::system(system), Message::user(user.trim_end())]
 }
 
-fn push_lines(out: &mut String, lines: &[AssistLine]) {
+fn push_lines(out: &mut String, lines: &[AssistLine], label: &dyn Fn(Option<u8>) -> String) {
     for l in lines {
-        let label = match l.channel {
-            Channel::Me => "[Io]",
-            Channel::Them => "[Loro]",
-        };
-        out.push_str(label);
+        match l.channel {
+            Channel::Me => out.push_str("[Io]"),
+            Channel::Them => {
+                out.push('[');
+                out.push_str(&label(l.speaker));
+                out.push(']');
+            }
+        }
         out.push(' ');
         out.push_str(l.text.trim());
         out.push('\n');
@@ -381,6 +391,7 @@ mod tests {
         AssistLine {
             channel,
             text: text.into(),
+            speaker: None,
         }
     }
 
@@ -553,7 +564,9 @@ mod tests {
         ] {
             state.push(line(ch, text));
         }
-        let messages = state.next_prompt(&cfg, context.prompt_block()).unwrap();
+        let messages = state
+            .next_prompt(&cfg, &SharedContext::new(context))
+            .unwrap();
         let started = Instant::now();
         let events = state.ask(&cfg, messages, 0).await;
         println!(

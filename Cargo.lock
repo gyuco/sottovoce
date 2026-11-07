@@ -4145,6 +4145,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sv-audio",
+ "sv-diar",
  "sv-llm",
  "sv-models",
  "sv-stt",
@@ -4253,6 +4254,18 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "sv-diar"
+version = "0.1.0"
+dependencies = [
+ "hound",
+ "sherpa-onnx",
+ "sv-audio",
+ "sv-vad",
+ "thiserror 2.0.21",
  "tracing",
 ]
 

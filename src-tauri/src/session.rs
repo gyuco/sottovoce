@@ -10,12 +10,13 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use sv_audio::{AudioFrame, Capture, CaptureConfig, Channel, LevelEvent};
-use sv_stt::{SttEngine, SttEvent, SttEventKind, SttStream};
+use sv_stt::{SpeakerUpdate, SttEngine, SttEvent, SttEventKind, SttStream};
 use tokio::sync::mpsc::error::TrySendError;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
+use crate::diarize::{self, DiarConfig, DiarJob};
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
 use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
@@ -24,6 +25,8 @@ use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
 const FRAME_BUS_CAPACITY: usize = 512;
 /// Tempo massimo per chiudere gli stream STT allo stop.
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
+/// Attesa massima del parlante prima di emettere comunque la frase.
+const DIAR_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Compiti LLM della sessione; `None` = disattivato (modello non scelto o
 /// LLM non configurabile): la trascrizione funziona comunque.
@@ -54,6 +57,7 @@ impl Session {
         engine: Box<dyn SttEngine>,
         context: MeetingContext,
         llm: LlmTasks,
+        diarization: Option<DiarConfig>,
         out: Outputs,
     ) -> Result<Self> {
         let Outputs {
@@ -87,6 +91,13 @@ impl Session {
         });
 
         let (frames, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
+        // Parlanti solo su "Loro" (senza audio di sistema non c'è nessuno).
+        let diarizing = diarization.is_some() && system_audio;
+        let diarizer = diarization.filter(|_| system_audio).map(|cfg| {
+            let (tx, task) = diarize::spawn(cfg, frames.subscribe());
+            tasks.push(task);
+            tx
+        });
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
@@ -96,9 +107,9 @@ impl Session {
                 Channel::Them => settings.their_language,
             };
             let stream = engine.start(channel, language);
-            let translate = match channel {
-                Channel::Them => translator.clone(),
-                Channel::Me => None,
+            let (translate, diarize) = match channel {
+                Channel::Them => (translator.clone(), diarizer.clone()),
+                Channel::Me => (None, None),
             };
             let sink = on_transcript.clone();
             tasks.extend(spawn_channel(
@@ -109,11 +120,12 @@ impl Session {
                 Followers {
                     translate,
                     assist: assistant.clone(),
+                    diarize,
                 },
                 move |e| sink(e),
             ));
         }
-        drop((translator, assistant));
+        drop((translator, assistant, diarizer));
 
         let capture = Capture::start(
             CaptureConfig {
@@ -134,6 +146,7 @@ impl Session {
                     with_context = context.prompt_block().is_some(),
                     translating,
                     assisting,
+                    diarizing,
                     "sessione avviata"
                 );
                 Ok(Self {
@@ -183,6 +196,8 @@ impl Session {
 struct Followers {
     translate: Option<mpsc::Sender<Job>>,
     assist: Option<mpsc::Sender<AssistLine>>,
+    /// Diarization ("Loro"): il `Final` aspetta il parlante.
+    diarize: Option<mpsc::Sender<DiarJob>>,
 }
 
 /// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
@@ -196,7 +211,11 @@ fn spawn_channel(
     followers: Followers,
     on_transcript: impl Fn(SttEvent) + Send + 'static,
 ) -> [JoinHandle<()>; 2] {
-    let Followers { translate, assist } = followers;
+    let Followers {
+        translate,
+        assist,
+        diarize,
+    } = followers;
     let SttStream {
         channel,
         audio,
@@ -234,13 +253,21 @@ fn spawn_channel(
         let mut dropped = 0u64;
         while let Some(mut event) = events.recv().await {
             stats.observe(&event, started);
+            let mut relabels = Vec::new();
             let job = match &mut event.kind {
                 SttEventKind::Final(seg) => {
                     seg.id = ids.fetch_add(1, Ordering::Relaxed);
+                    if let Some(tx) = &diarize
+                        && let Some(found) = speaker_of(tx, seg).await
+                    {
+                        seg.speaker = found.speaker;
+                        relabels = found.relabels;
+                    }
                     if let Some(tx) = &assist
                         && let Err(TrySendError::Full(_)) = tx.try_send(AssistLine {
                             channel,
                             text: seg.text.clone(),
+                            speaker: seg.speaker,
                         })
                     {
                         tracing::warn!(?channel, "coda live assist piena: frase scartata");
@@ -249,11 +276,26 @@ fn spawn_channel(
                         segment_id: seg.id,
                         text: seg.text.clone(),
                         language: seg.language.clone(),
+                        speaker: seg.speaker,
                     })
                 }
                 _ => None,
             };
             on_transcript(event);
+            if !relabels.is_empty() {
+                on_transcript(SttEvent {
+                    channel,
+                    kind: SttEventKind::Speakers {
+                        updates: relabels
+                            .into_iter()
+                            .map(|(segment_id, speaker)| SpeakerUpdate {
+                                segment_id,
+                                speaker,
+                            })
+                            .collect(),
+                    },
+                });
+            }
             if let (Some(tx), Some(job)) = (&translate, job)
                 && let Err(TrySendError::Full(_)) = tx.try_send(job)
             {
@@ -265,6 +307,7 @@ fn spawn_channel(
                 );
             }
         }
+        drop(diarize);
         // Drop dei sender: traduttore e assist chiudono (dopo le richieste
         // in corso) quando tutti i canali hanno finito.
         drop((translate, assist));
@@ -273,6 +316,33 @@ fn spawn_channel(
     });
 
     [forward, pump]
+}
+
+/// Parlante della frase dal task di diarization; `None` se il task non c'è
+/// più (modello non caricato), è in ritardo o la coda è piena.
+async fn speaker_of(
+    tx: &mpsc::Sender<DiarJob>,
+    seg: &sv_stt::Segment,
+) -> Option<sv_diar::Assignment> {
+    let (reply, rx) = oneshot::channel();
+    let job = DiarJob {
+        segment_id: seg.id,
+        start: seg.start,
+        end: seg.end,
+        reply,
+    };
+    if let Err(TrySendError::Full(_)) = tx.try_send(job) {
+        tracing::warn!("coda diarization piena: frase senza parlante");
+        return None;
+    }
+    match tokio::time::timeout(DIAR_TIMEOUT, rx).await {
+        Ok(Ok(found)) => Some(found),
+        Ok(Err(_)) => None,
+        Err(_) => {
+            tracing::warn!(segment = seg.id, "parlante non pronto in tempo");
+            None
+        }
+    }
 }
 
 /// Ritardo tra la fine dell'audio di un segmento e l'arrivo dell'evento.
@@ -415,6 +485,7 @@ mod tests {
             Followers {
                 translate: Some(tx),
                 assist: None,
+                diarize: None,
             },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {

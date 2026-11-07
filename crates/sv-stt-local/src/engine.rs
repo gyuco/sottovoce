@@ -182,6 +182,7 @@ async fn decode_loop(
                 end,
                 confidence: None,
                 language: detected,
+                speaker: None,
             })
         };
         let was_final = matches!(kind, SttEventKind::Final(_));

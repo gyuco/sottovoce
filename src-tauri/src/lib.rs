@@ -1,5 +1,6 @@
 mod assist;
 mod commands;
+mod diarize;
 mod llm;
 mod meeting;
 mod models;
@@ -19,7 +20,7 @@ pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             EnvFilter::new(
-                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_llm=debug",
+                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_diar=debug,sv_llm=debug",
             )
         }))
         .init();

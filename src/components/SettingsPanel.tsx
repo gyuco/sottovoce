@@ -24,6 +24,8 @@ import { useSettingsStore } from "@/stores/settings";
 
 const LANGUAGES: Language[] = ["multi", "it", "en"];
 const ENGINES: SttEngine[] = ["local", "deepgram"];
+/** Altri partecipanti: 0 = automatico. */
+const SPEAKER_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 export function SettingsPanel() {
   const { t, i18n } = useTranslation();
@@ -169,6 +171,45 @@ export function SettingsPanel() {
               onCheckedChange={(v) => void update({ systemAudio: v })}
             />
           </label>
+
+          <div className="flex flex-col gap-3 border-t pt-4">
+            <label className="flex items-center justify-between gap-4 text-sm">
+              <span>
+                {t("settings.speakers.title")}
+                <span className="block text-xs text-muted-foreground">{t("settings.speakers.hint")}</span>
+              </span>
+              <Switch
+                checked={settings.diarization}
+                onCheckedChange={(diarization) => void update({ diarization })}
+              />
+            </label>
+            {settings.diarization && (
+              <>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>
+                    {t("settings.speakers.count")}
+                    <span className="block text-xs text-muted-foreground">{t("settings.speakers.countHint")}</span>
+                  </span>
+                  <Select
+                    value={String(settings.theirSpeakers)}
+                    onValueChange={(v) => void update({ theirSpeakers: Number(v) })}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SPEAKER_COUNTS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n === 0 ? t("settings.speakers.auto") : String(n)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <RequiredModels ids={["campplus-zh-en"]} />
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 

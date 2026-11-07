@@ -42,6 +42,10 @@ export interface Settings {
   localSttModel: string;
   /** Privacy: niente audio né testo verso host esterni durante la sessione. */
   localOnly: boolean;
+  /** Riconoscimento dei parlanti su "Loro" (modello CAM++). */
+  diarization: boolean;
+  /** Altri partecipanti noti (1–8); 0 = automatico. */
+  theirSpeakers: number;
   myLanguage: Language;
   theirLanguage: Language;
   micDeviceId: string | null;
@@ -77,6 +81,13 @@ export interface Segment {
   confidence: number | null;
   /** Lingua rilevata (es. "en"), se disponibile. */
   language: string | null;
+  /** Parlante su "Loro" (0 = "Speaker 1"); `null` = sconosciuto o "Io". */
+  speaker: number | null;
+}
+
+export interface SpeakerUpdate {
+  segmentId: number;
+  speaker: number | null;
 }
 
 export type AssistKind = "say" | "ask";
@@ -102,6 +113,7 @@ export type SttEvent = { channel: ChannelId } & (
   | { type: "reconnecting"; attempt: number }
   | { type: "error"; message: string }
   | { type: "disconnected" }
+  | { type: "speakers"; updates: SpeakerUpdate[] }
 );
 
 export const listInputDevices = () => invoke<InputDevice[]>("list_input_devices");
@@ -113,6 +125,8 @@ export interface MeetingContext {
   name: string;
   goal: string;
   notes: string;
+  /** Nomi dei parlanti di "Loro" per indice ("0" = Speaker 1), per la sessione. */
+  speakers: Record<string, string>;
 }
 
 export function startSession(

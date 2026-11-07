@@ -45,6 +45,8 @@ pub struct Job {
     pub text: String,
     /// Lingua rilevata dal motore STT, se c'è.
     pub language: Option<String>,
+    /// Parlante, se riconosciuto (etichetta nel contesto delle frasi).
+    pub speaker: Option<u8>,
 }
 
 /// Traduzione pronta, inviata alla UI.
@@ -98,7 +100,10 @@ async fn run(
         if history.len() == HISTORY {
             history.pop_front();
         }
-        history.push_back(job.text.clone());
+        history.push_back(match job.speaker {
+            Some(_) => format!("{}: {}", context.speaker_label(job.speaker), job.text),
+            None => job.text.clone(),
+        });
         if skip {
             stats.skipped += 1;
             continue;
@@ -291,6 +296,7 @@ mod tests {
 
     fn job(id: u64, text: &str, language: Option<&str>) -> Job {
         Job {
+            speaker: None,
             segment_id: id,
             text: text.into(),
             language: language.map(Into::into),
@@ -419,6 +425,7 @@ mod tests {
             name: "Release planning".into(),
             goal: "Decide the beta date".into(),
             notes: "QA = quality assurance team".into(),
+            ..MeetingContext::default()
         }
         .prompt_block();
         let previous = vec!["Let's start with the release.".to_owned()];

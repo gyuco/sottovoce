@@ -64,6 +64,7 @@ pub async fn start_session(
     };
     let spec = stt::resolve(&settings, models.store(), api_key).map_err(|e| format!("{e:#}"))?;
     let engine = spec.build().map_err(|e| format!("{e:#}"))?;
+    let diarization = stt::diarization(&settings, models.store());
     let llm = llm_tasks(&settings).await;
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
     let out = Outputs {
@@ -80,8 +81,15 @@ pub async fn start_session(
             let _ = on_assist.send(e);
         }),
     };
-    let session = Session::start(&settings, engine, context.unwrap_or_default(), llm, out)
-        .map_err(|e| format!("{e:#}"))?;
+    let session = Session::start(
+        &settings,
+        engine,
+        context.unwrap_or_default(),
+        llm,
+        diarization,
+        out,
+    )
+    .map_err(|e| format!("{e:#}"))?;
     *slot = Some(session);
     Ok(())
 }

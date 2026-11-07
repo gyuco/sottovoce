@@ -67,6 +67,15 @@ export const useTranscriptStore = create<TranscriptState>((set) => ({
           };
         case "disconnected":
           return { conn: { ...s.conn, [ch]: "closed" }, partial: { ...s.partial, [ch]: null } };
+        case "speakers": {
+          const next = new Map(e.updates.map((u) => [u.segmentId, u.speaker]));
+          return {
+            lines: s.lines.map((l) => {
+              const speaker = next.get(l.id);
+              return speaker === undefined ? l : { ...l, speaker };
+            }),
+          };
+        }
       }
     }),
 
@@ -81,5 +90,6 @@ function seg(e: Segment): Segment {
     end: e.end,
     confidence: e.confidence,
     language: e.language,
+    speaker: e.speaker,
   };
 }

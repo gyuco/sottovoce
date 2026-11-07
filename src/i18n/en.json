@@ -163,6 +163,13 @@
       "title": "Local only",
       "hint": "For confidential meetings: transcription on your Mac and a language model only on Ollama or a localhost endpoint. No data leaves the machine during the session.",
       "violation": "The selected language model runs in the cloud: with \"Local only\" the session won't start. Switch to Ollama or a localhost endpoint, or clear the translation and suggestion models."
+    },
+    "speakers": {
+      "title": "Recognize speakers",
+      "hint": "Tells apart who is speaking among the other participants (Speaker 1, 2…). Runs locally and needs the CAM++ model.",
+      "count": "Other participants",
+      "countHint": "If you know how many there are, recognition is steadier and fixes sentences already shown.",
+      "auto": "Automatic"
     }
   },
   "permissions": {
@@ -220,5 +227,10 @@
       "stt": "Transcription",
       "speakerEmbedding": "Speaker recognition"
     }
+  },
+  "speakers": {
+    "label": "Speaker {{n}}",
+    "rename": "Rename {{name}}",
+    "renameHint": "Click to name this speaker"
   }
 }

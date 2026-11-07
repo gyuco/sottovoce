@@ -152,6 +152,7 @@ mod tests {
                 end: Duration::from_millis(2250),
                 id: 7,
                 language: Some("en".into()),
+                speaker: Some(1),
                 ..Segment::default()
             }),
         };
@@ -166,7 +167,25 @@ mod tests {
                 "end": 2250,
                 "confidence": null,
                 "id": 7,
-                "language": "en"
+                "language": "en",
+                "speaker": 1
+            })
+        );
+        let relabel = SttEvent {
+            channel: Channel::Them,
+            kind: SttEventKind::Speakers {
+                updates: vec![crate::SpeakerUpdate {
+                    segment_id: 3,
+                    speaker: Some(0),
+                }],
+            },
+        };
+        assert_eq!(
+            serde_json::to_value(&relabel).unwrap(),
+            serde_json::json!({
+                "channel": "them",
+                "type": "speakers",
+                "updates": [{"segmentId": 3, "speaker": 0}]
             })
         );
     }

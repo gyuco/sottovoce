@@ -104,6 +104,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     transcript.reset();
     const assist = useAssistStore.getState();
     assist.reset();
+    // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
+    useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
     try {
       await startSession(
         (e) => {

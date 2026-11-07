@@ -19,6 +19,17 @@ pub struct Segment {
     pub confidence: Option<f32>,
     /// Lingua rilevata (codice BCP-47, es. `en`), se fornita dal motore.
     pub language: Option<String>,
+    /// Parlante sul canale "Loro" (0 = "Speaker 1"), assegnato dall'app
+    /// dopo la diarization; `None` = sconosciuto o canale "Io".
+    pub speaker: Option<u8>,
+}
+
+/// Nuovo parlante di una frase già emessa.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeakerUpdate {
+    pub segment_id: u64,
+    pub speaker: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -36,6 +47,9 @@ pub enum SttEventKind {
     Error { message: String },
     /// Stream chiuso normalmente.
     Disconnected,
+    /// Rietichettatura: frasi già emesse che cambiano parlante. Emesso
+    /// dall'app (diarization), mai dai motori.
+    Speakers { updates: Vec<SpeakerUpdate> },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

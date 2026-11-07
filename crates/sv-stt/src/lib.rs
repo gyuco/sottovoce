@@ -14,4 +14,4 @@ pub mod fake;
 
 pub use engine::{AUDIO_QUEUE, EVENT_QUEUE, EventSender, Language, SttEngine, SttStream};
 pub use error::SttError;
-pub use event::{Segment, SttEvent, SttEventKind};
+pub use event::{Segment, SpeakerUpdate, SttEvent, SttEventKind};

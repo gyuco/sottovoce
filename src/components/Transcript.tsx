@@ -2,10 +2,12 @@ import { ArrowDown, Check, Copy, ScrollText } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { SpeakerLabel } from "@/components/SpeakerLabel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { formatDuration, useCopy } from "@/lib/hooks";
 import type { TranslationEvent } from "@/lib/ipc";
+import { useSpeakerName } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 import { type Line, useTranscriptStore } from "@/stores/transcript";
 
@@ -20,6 +22,7 @@ export function Transcript() {
   const showTranslations = useTranscriptStore((s) => s.showTranslations);
   const setShowTranslations = useTranscriptStore((s) => s.setShowTranslations);
   const { copied, copy } = useCopy();
+  const speakerName = useSpeakerName();
 
   const rows = useMemo(() => {
     const live = [partial.me, partial.them].filter((p): p is Line => p !== null);
@@ -54,7 +57,7 @@ export function Transcript() {
   const copyAll = () => {
     const text = lines
       .map((l) => {
-        const head = `[${formatDuration(l.start)}] ${t(`channel.${l.channel}`)}: ${l.text}`;
+        const head = `[${formatDuration(l.start)}] ${speakerName(l.channel, l.speaker)}: ${l.text}`;
         const tr = showTranslations ? translations[l.id]?.text : undefined;
         return tr ? `${head}\n    ${tr}` : head;
       })
@@ -123,16 +126,9 @@ function TranscriptRow({ line, translation }: { line: Line; translation: Transla
   const partial = line.id === 0;
 
   return (
-    <li className="group grid grid-cols-[2.75rem_3.25rem_1fr_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
+    <li className="group grid grid-cols-[2.75rem_6rem_1fr_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatDuration(line.start)}</span>
-      <span
-        className={cn(
-          "justify-self-start rounded-md px-1.5 py-px text-xs font-medium",
-          line.channel === "me" ? "bg-me/12 text-me" : "bg-them/12 text-them",
-        )}
-      >
-        {t(`channel.${line.channel}`)}
-      </span>
+      <SpeakerLabel channel={line.channel} speaker={line.speaker} editable={!partial} />
       <span className={cn("leading-relaxed select-text", partial && "text-muted-foreground italic")}>
         {line.text}
         {translation?.text && (

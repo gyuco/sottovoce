@@ -14,6 +14,7 @@ use sv_stt::deepgram::{Deepgram, DeepgramConfig};
 use sv_stt_local::{LocalEngine, LocalEngineConfig, LocalModel};
 use sv_vad::VadConfig;
 
+use crate::diarize::DiarConfig;
 use crate::settings::{LlmProvider, Settings, SttEngineKind};
 
 /// Motore da creare per la sessione, con tutto ciò che gli serve.
@@ -121,6 +122,25 @@ fn ready_dir(models: &ModelStore, spec: &sv_models::ModelSpec) -> Result<PathBuf
         "modello \"{}\" {state}: scaricalo in Impostazioni → Modelli locali",
         spec.name
     )
+}
+
+/// Diarization dai settings: `None` se spenta o se il modello CAM++ non è
+/// pronto (la sessione parte comunque, senza parlanti).
+pub fn diarization(settings: &Settings, models: &ModelStore) -> Option<DiarConfig> {
+    if !settings.diarization {
+        return None;
+    }
+    let spec = sv_models::find(sv_models::CAMPLUS).expect("CAM++ nel catalogo");
+    match ready_dir(models, spec) {
+        Ok(dir) => Some(DiarConfig {
+            model: dir.join(&spec.files[0].name),
+            speakers: settings.their_speakers,
+        }),
+        Err(e) => {
+            tracing::info!("riconoscimento dei parlanti disattivato: {e:#}");
+            None
+        }
+    }
 }
 
 /// Vincoli della modalità "solo locale" sul modello linguistico: se
@@ -245,6 +265,19 @@ mod tests {
             let err = resolve(&s, &models, None).unwrap_err();
             assert!(err.to_string().contains("sconosciuto"), "{err}");
         }
+    }
+
+    #[test]
+    fn diarization_off_or_without_model() {
+        let (models, _) = store("diar");
+        let on = Settings::default();
+        assert!(on.diarization);
+        assert!(diarization(&on, &models).is_none(), "modello assente");
+        let off = Settings {
+            diarization: false,
+            ..Settings::default()
+        };
+        assert!(diarization(&off, &models).is_none());
     }
 
     #[test]
