@@ -17,7 +17,7 @@ use keyring::{Entry, Error};
 const SERVICE: &str = "sottovoce";
 
 /// Provider per cui si accetta una chiave (account nel Keychain).
-pub const KNOWN_PROVIDERS: &[&str] = &["deepgram"];
+pub const KNOWN_PROVIDERS: &[&str] = &["deepgram", "opencode", "custom"];
 
 static CACHE: LazyLock<Mutex<HashMap<&'static str, String>>> = LazyLock::new(Default::default);
 

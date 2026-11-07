@@ -1,11 +1,10 @@
-import { KeyRound, Trash2 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { KeyForm } from "@/components/KeyForm";
+import { LlmSettings } from "@/components/LlmSettings";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,19 +21,10 @@ const LANGUAGES: Language[] = ["multi", "it", "en"];
 
 export function SettingsPanel() {
   const { t } = useTranslation();
-  const { settings, hasKey, error, update, saveKey, deleteKey } = useSettingsStore();
+  const { settings, hasKey, error, update } = useSettingsStore();
   const systemSupported = useAudioStore((s) => s.systemSupported);
-  const [key, setKey] = useState("");
-  const [saving, setSaving] = useState(false);
 
   if (!settings) return null;
-
-  const onSave = async (e: FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    if (await saveKey(key)) setKey("");
-    setSaving(false);
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,38 +34,13 @@ export function SettingsPanel() {
             <KeyRound className="size-4 text-muted-foreground" aria-hidden />
             {t("settings.stt.title")}
             <Badge variant={hasKey ? "default" : "secondary"} className="ml-auto font-normal">
-              {hasKey ? t("settings.stt.keySaved") : t("settings.stt.keyMissing")}
+              {hasKey ? t("settings.key.saved") : t("settings.key.missing")}
             </Badge>
           </CardTitle>
           <CardDescription>{t("settings.stt.hint")}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form onSubmit={(e) => void onSave(e)} className="flex gap-2">
-            <Input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              placeholder={hasKey ? t("settings.stt.replacePlaceholder") : t("settings.stt.placeholder")}
-              aria-label={t("settings.stt.keyLabel")}
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-            />
-            <Button type="submit" disabled={saving || key.trim() === ""}>
-              {t("settings.save")}
-            </Button>
-            {hasKey && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label={t("settings.stt.deleteKey")}
-                title={t("settings.stt.deleteKey")}
-                onClick={() => void deleteKey()}
-              >
-                <Trash2 />
-              </Button>
-            )}
-          </form>
+          <KeyForm provider={settings.sttProvider} label={t("settings.stt.keyLabel")} />
 
           <LanguageSelect
             label={t("settings.language.mine")}
@@ -105,6 +70,8 @@ export function SettingsPanel() {
           </label>
         </CardContent>
       </Card>
+
+      <LlmSettings />
 
       {error && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

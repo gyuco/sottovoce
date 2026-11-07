@@ -18,6 +18,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 sv-audio.workspace = true
 sv-stt.workspace = true
+sv-llm.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

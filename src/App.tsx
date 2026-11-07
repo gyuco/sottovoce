@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChannelCard } from "@/components/ChannelCard";
+import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { Transcript } from "@/components/Transcript";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,8 @@ export default function App() {
             <ChannelCard channel="me" />
             <ChannelCard channel="them" />
           </section>
+
+          <MeetingContextPanel />
 
           <Transcript />
 

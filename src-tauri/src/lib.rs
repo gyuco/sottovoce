@@ -1,8 +1,11 @@
 mod commands;
+mod llm;
+mod meeting;
 mod secrets;
 mod session;
 mod settings;
 mod state;
+mod translate;
 
 use tauri::Manager;
 
@@ -11,11 +14,9 @@ use tracing_subscriber::EnvFilter;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                EnvFilter::new("info,sottovoce=debug,sv_audio=debug,sv_stt=debug")
-            }),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+            EnvFilter::new("info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_llm=debug")
+        }))
         .init();
 
     tauri::Builder::default()
@@ -30,11 +31,14 @@ pub fn run() {
             commands::system_audio_supported,
             commands::start_session,
             commands::stop_session,
+            commands::update_meeting_context,
             commands::set_api_key,
             commands::has_api_key,
             commands::delete_api_key,
             commands::get_settings,
             commands::update_settings,
+            commands::list_llm_models,
+            commands::test_llm,
         ])
         .run(tauri::generate_context!())
         .expect("errore durante l'avvio di Sottovoce");

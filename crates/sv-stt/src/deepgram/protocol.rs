@@ -47,6 +47,9 @@ pub struct Alternative {
     pub transcript: String,
     #[serde(default)]
     pub confidence: Option<f32>,
+    /// Lingue rilevate (solo con `language=multi`), la prevalente per prima.
+    #[serde(default)]
+    pub languages: Vec<String>,
 }
 
 pub fn parse(text: &str) -> Result<ServerMessage, serde_json::Error> {
@@ -60,6 +63,8 @@ pub struct Utterance {
     start: Option<Duration>,
     end: Duration,
     confidence: Option<f32>,
+    /// Parole per lingua rilevata nelle porzioni definitive.
+    language_words: Vec<(String, usize)>,
 }
 
 impl Utterance {
@@ -80,6 +85,8 @@ impl Utterance {
                 start: self.start.unwrap_or(start),
                 end,
                 confidence: alt.confidence,
+                language: self.language().or_else(|| alt.languages.first().cloned()),
+                ..Segment::default()
             };
             return Some(SttEventKind::Partial(seg));
         }
@@ -89,6 +96,13 @@ impl Utterance {
             self.start.get_or_insert(start);
             self.end = end;
             self.confidence = min_conf(self.confidence, alt.confidence);
+            if let Some(lang) = alt.languages.first() {
+                let words = piece.split_whitespace().count();
+                match self.language_words.iter_mut().find(|(l, _)| l == lang) {
+                    Some((_, n)) => *n += words,
+                    None => self.language_words.push((lang.clone(), words)),
+                }
+            }
         }
         if r.speech_final {
             return self.flush();
@@ -114,7 +128,20 @@ impl Utterance {
             start: self.start.unwrap_or(self.end),
             end: self.end,
             confidence: self.confidence,
+            language: self.language(),
+            ..Segment::default()
         }
+    }
+
+    /// Lingua con più parole nella frase (a parità, la prima incontrata).
+    fn language(&self) -> Option<String> {
+        self.language_words
+            .iter()
+            .fold(None::<&(String, usize)>, |best, cur| match best {
+                Some(b) if b.1 >= cur.1 => Some(b),
+                _ => Some(cur),
+            })
+            .map(|(l, _)| l.clone())
     }
 }
 
@@ -157,6 +184,41 @@ mod tests {
     }
 
     const O: Duration = Duration::from_secs(10);
+
+    fn results_lang(text: &str, langs: &str, speech_final: bool) -> Results {
+        let json = format!(
+            r#"{{"type":"Results","duration":1.0,"start":0.0,"is_final":true,
+            "speech_final":{speech_final},"channel":{{"alternatives":[{{"transcript":"{text}",
+            "languages":{langs}}}]}}}}"#
+        );
+        match parse(&json).unwrap() {
+            ServerMessage::Results(r) => r,
+            other => panic!("atteso Results, trovato {other:?}"),
+        }
+    }
+
+    #[test]
+    fn final_language_is_the_dominant_one() {
+        let mut u = Utterance::default();
+        u.on_results(&results_lang("ok allora", r#"["it"]"#, false), O);
+        u.on_results(
+            &results_lang("we should ship it next week", r#"["en","it"]"#, false),
+            O,
+        );
+        let f = u.on_results(&results_lang("", "[]", true), O);
+        let Some(SttEventKind::Final(s)) = f else {
+            panic!("atteso Final")
+        };
+        assert_eq!(s.language.as_deref(), Some("en"));
+        assert_eq!(s.id, 0);
+    }
+
+    #[test]
+    fn no_language_without_detection() {
+        let mut u = Utterance::default();
+        let f = u.on_results(&results_lang("ciao", "[]", true), O);
+        assert!(matches!(f, Some(SttEventKind::Final(s)) if s.language.is_none()));
+    }
 
     #[test]
     fn parses_other_message_types() {

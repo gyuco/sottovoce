@@ -4,17 +4,21 @@
 //! i forwarder terminano, i motori ricevono fine audio (CloseStream), emettono
 //! gli ultimi `Final` e chiudono. Lo stop attende questa catena (con timeout).
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use sv_audio::{AudioFrame, Capture, CaptureConfig, Channel, LevelEvent};
 use sv_stt::deepgram::{Deepgram, DeepgramConfig};
 use sv_stt::{SttEngine, SttEvent, SttEventKind, SttStream};
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 
+use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::{Settings, SttProvider};
+use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
 
 /// Capacità del bus audio: ~16 s di frame da ~64 ms per canale.
 const FRAME_BUS_CAPACITY: usize = 512;
@@ -24,15 +28,21 @@ const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct Session {
     capture: Capture,
     tasks: Vec<JoinHandle<()>>,
+    context: SharedContext,
 }
 
 impl Session {
     /// `api_key` già letta dal Keychain dal chiamante.
+    /// `translation`: `None` = niente traduzione (modello non scelto o LLM
+    /// non configurabile); la trascrizione funziona comunque.
     pub fn start(
         settings: &Settings,
         api_key: String,
+        context: MeetingContext,
+        translation: Option<TranslatorConfig>,
         on_level: impl Fn(LevelEvent) + Send + Sync + 'static,
         on_transcript: impl Fn(SttEvent) + Send + Sync + Clone + 'static,
+        on_translation: impl Fn(TranslationEvent) + Send + Sync + 'static,
     ) -> Result<Self> {
         let engine: Box<dyn SttEngine> = match settings.stt_provider {
             SttProvider::Deepgram => Box::new(Deepgram::new(DeepgramConfig {
@@ -48,10 +58,20 @@ impl Session {
             channels.push(Channel::Them);
         }
 
+        let context = SharedContext::new(context);
+        let mut tasks = Vec::new();
+        let translating = translation.is_some() && system_audio;
+        // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
+        let translator = translation.filter(|_| system_audio).map(|cfg| {
+            let (tx, task) = translate::spawn(cfg, context.clone(), on_translation);
+            tasks.push(task);
+            tx
+        });
+
         let (frames, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
         // ≈ origine dei timestamp dei frame (la cattura parte subito dopo).
         let started = Instant::now();
-        let mut tasks = Vec::new();
+        let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
             let bus = frames.subscribe();
@@ -60,8 +80,20 @@ impl Session {
                 Channel::Them => settings.their_language,
             };
             let stream = engine.start(channel, language);
-            tasks.extend(spawn_channel(stream, bus, started, on_transcript.clone()));
+            let translate = match channel {
+                Channel::Them => translator.clone(),
+                Channel::Me => None,
+            };
+            tasks.extend(spawn_channel(
+                stream,
+                bus,
+                started,
+                ids.clone(),
+                translate,
+                on_transcript.clone(),
+            ));
         }
+        drop(translator);
 
         let capture = Capture::start(
             CaptureConfig {
@@ -78,9 +110,15 @@ impl Session {
                     me = settings.my_language.code(),
                     them = settings.their_language.code(),
                     system_audio,
+                    with_context = context.prompt_block().is_some(),
+                    translating,
                     "sessione avviata"
                 );
-                Ok(Self { capture, tasks })
+                Ok(Self {
+                    capture,
+                    tasks,
+                    context,
+                })
             }
             Err(e) => {
                 // Il bus è già chiuso (sender droppato): i task terminano da soli,
@@ -93,8 +131,13 @@ impl Session {
         }
     }
 
+    /// Contesto del meeting, letto dai prompt a ogni chiamata.
+    pub fn context(&self) -> &SharedContext {
+        &self.context
+    }
+
     pub async fn stop(self) {
-        let Self { capture, tasks } = self;
+        let Self { capture, tasks, .. } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
         let aborts: Vec<_> = tasks.iter().map(JoinHandle::abort_handle).collect();
@@ -113,11 +156,15 @@ impl Session {
     }
 }
 
-/// Due task per canale: bus audio → motore, eventi motore → UI.
+/// Due task per canale: bus audio → motore, eventi motore → UI (e, se
+/// `translate` c'è, frasi finali → traduttore). `ids` numera i `Final` della
+/// sessione, su tutti i canali.
 fn spawn_channel(
     stream: SttStream,
     mut bus: broadcast::Receiver<AudioFrame>,
     started: Instant,
+    ids: Arc<AtomicU64>,
+    translate: Option<mpsc::Sender<Job>>,
     on_transcript: impl Fn(SttEvent) + Send + 'static,
 ) -> [JoinHandle<()>; 2] {
     let SttStream {
@@ -154,10 +201,34 @@ fn spawn_channel(
 
     let pump = tokio::spawn(async move {
         let mut stats = LatencyStats::default();
-        while let Some(event) = events.recv().await {
+        let mut dropped = 0u64;
+        while let Some(mut event) = events.recv().await {
             stats.observe(&event, started);
+            let job = match &mut event.kind {
+                SttEventKind::Final(seg) => {
+                    seg.id = ids.fetch_add(1, Ordering::Relaxed);
+                    translate.as_ref().map(|_| Job {
+                        segment_id: seg.id,
+                        text: seg.text.clone(),
+                        language: seg.language.clone(),
+                    })
+                }
+                _ => None,
+            };
             on_transcript(event);
+            if let (Some(tx), Some(job)) = (&translate, job)
+                && let Err(TrySendError::Full(_)) = tx.try_send(job)
+            {
+                dropped += 1;
+                tracing::warn!(
+                    ?channel,
+                    dropped,
+                    "coda traduzione piena: frase non tradotta"
+                );
+            }
         }
+        // Drop di `translate`: il traduttore chiude dopo le richieste in corso.
+        drop(translate);
         stats.report(channel);
         let _ = engine.await;
     });
@@ -214,7 +285,7 @@ impl LatencyStats {
 }
 
 /// [p50, p95, max] (0 se vuoto).
-fn percentiles(v: &mut [u64]) -> [u64; 3] {
+pub(crate) fn percentiles(v: &mut [u64]) -> [u64; 3] {
     if v.is_empty() {
         return [0; 3];
     }
@@ -259,6 +330,8 @@ mod tests {
             engine.start(Channel::Them, Language::Multi),
             bus.subscribe(),
             Instant::now(),
+            Arc::new(AtomicU64::new(1)),
+            None,
             move |e| sink.lock().unwrap().push(e),
         );
         for i in 0..3 {
@@ -284,5 +357,42 @@ mod tests {
         // 3 frame "Loro": una frase da 2 + quella chiusa a fine audio.
         assert_eq!(finals, ["w1 w2", "w1"]);
         assert_eq!(got.last().unwrap().kind, SttEventKind::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn finals_get_ids_and_go_to_translator() {
+        let (bus, _) = broadcast::channel(64);
+        let engine = FakeEngine {
+            frames_per_final: 2,
+        };
+        let (tx, mut jobs) = mpsc::channel(8);
+        let finals = Arc::new(Mutex::new(Vec::new()));
+        let sink = finals.clone();
+        let tasks = spawn_channel(
+            engine.start(Channel::Them, Language::Multi),
+            bus.subscribe(),
+            Instant::now(),
+            Arc::new(AtomicU64::new(5)),
+            Some(tx),
+            move |e| {
+                if let SttEventKind::Final(s) = e.kind {
+                    sink.lock().unwrap().push(s.id);
+                }
+            },
+        );
+        for i in 0..4 {
+            bus.send(frame(Channel::Them, i)).unwrap();
+        }
+        drop(bus);
+        for t in tasks {
+            t.await.unwrap();
+        }
+        assert_eq!(*finals.lock().unwrap(), [5, 6]);
+        let mut sent = Vec::new();
+        while let Some(job) = jobs.recv().await {
+            sent.push((job.segment_id, job.text));
+        }
+        // Il canale si chiude con il pump: il traduttore termina.
+        assert_eq!(sent, [(5, "w1 w2".to_owned()), (6, "w1 w2".to_owned())]);
     }
 }

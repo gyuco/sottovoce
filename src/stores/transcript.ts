@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { ChannelId, Segment, SttEvent } from "@/lib/ipc";
+import type { ChannelId, Segment, SttEvent, TranslationEvent } from "@/lib/ipc";
 
 export type ConnState = "idle" | "connected" | "reconnecting" | "error" | "closed";
 
@@ -15,21 +15,31 @@ interface TranscriptState {
   partial: Record<ChannelId, Line | null>;
   conn: Record<ChannelId, ConnState>;
   connError: Record<ChannelId, string | null>;
+  /** Traduzioni per id di frase (arrivano anche fuori ordine). */
+  translations: Record<number, TranslationEvent>;
+  showTranslations: boolean;
   apply: (e: SttEvent) => void;
+  applyTranslation: (e: TranslationEvent) => void;
+  setShowTranslations: (show: boolean) => void;
   reset: () => void;
 }
-
-let nextId = 1;
 
 const initial = () => ({
   lines: [] as Line[],
   partial: { me: null, them: null },
   conn: { me: "idle", them: "idle" } as Record<ChannelId, ConnState>,
   connError: { me: null, them: null },
+  translations: {} as Record<number, TranslationEvent>,
 });
 
 export const useTranscriptStore = create<TranscriptState>((set) => ({
   ...initial(),
+  showTranslations: true,
+
+  applyTranslation: (e) =>
+    set((s) => ({ translations: { ...s.translations, [e.segmentId]: e } })),
+
+  setShowTranslations: (showTranslations) => set({ showTranslations }),
 
   apply: (e) =>
     set((s) => {
@@ -39,7 +49,7 @@ export const useTranscriptStore = create<TranscriptState>((set) => ({
           return { partial: { ...s.partial, [ch]: { ...seg(e), id: 0, channel: ch } } };
         case "final":
           return {
-            lines: [...s.lines, { ...seg(e), id: nextId++, channel: ch }],
+            lines: [...s.lines, { ...seg(e), channel: ch }],
             partial: { ...s.partial, [ch]: null },
           };
         case "connected":
@@ -61,5 +71,12 @@ export const useTranscriptStore = create<TranscriptState>((set) => ({
 }));
 
 function seg(e: Segment): Segment {
-  return { text: e.text, start: e.start, end: e.end, confidence: e.confidence };
+  return {
+    id: e.id,
+    text: e.text,
+    start: e.start,
+    end: e.end,
+    confidence: e.confidence,
+    language: e.language,
+  };
 }

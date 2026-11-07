@@ -16,6 +16,15 @@ export interface LevelEvent {
 
 export type Language = "multi" | "it" | "en";
 export type SttProvider = "deepgram";
+export type LlmProvider = "ollama" | "opencode" | "opencode-go" | "custom";
+/** Account delle API key nel Keychain. */
+export type KeyProvider = SttProvider | "opencode" | "custom";
+
+/** Account della chiave del provider LLM; `null` = nessuna chiave. */
+export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
+  if (p === "ollama") return null;
+  return p === "opencode-go" ? "opencode" : p;
+}
 
 export interface Settings {
   sttProvider: SttProvider;
@@ -24,14 +33,43 @@ export interface Settings {
   theirLanguage: Language;
   micDeviceId: string | null;
   systemAudio: boolean;
+  llmProvider: LlmProvider;
+  llmBaseUrl: string;
+  translationModel: string;
+  assistModel: string;
+  /** `null` = la lingua dell'utente. */
+  targetLanguage: Language | null;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string | null;
+  /** Servito su /chat/completions: usabile da Sottovoce. */
+  chatCompletions: boolean;
+}
+
+export interface LlmTestResult {
+  model: string;
+  latencyMs: number;
+  reply: string;
 }
 
 /** Tempi in ms dall'avvio della cattura. */
 export interface Segment {
+  /** Id della frase nella sessione (solo nei `final`; 0 nei parziali). */
+  id: number;
   text: string;
   start: number;
   end: number;
   confidence: number | null;
+  /** Lingua rilevata (es. "en"), se disponibile. */
+  language: string | null;
+}
+
+export interface TranslationEvent {
+  segmentId: number;
+  text: string;
+  latencyMs: number;
 }
 
 export type SttEvent = { channel: ChannelId } & (
@@ -47,31 +85,54 @@ export const listInputDevices = () => invoke<InputDevice[]>("list_input_devices"
 
 export const systemAudioSupported = () => invoke<boolean>("system_audio_supported");
 
+/** Contesto del meeting: vive nella sessione, non nei settings. */
+export interface MeetingContext {
+  name: string;
+  goal: string;
+  notes: string;
+}
+
 export function startSession(
   onLevel: (e: LevelEvent) => void,
   onTranscript: (e: SttEvent) => void,
+  onTranslation: (e: TranslationEvent) => void,
+  context: MeetingContext,
 ) {
   const level = new Channel<LevelEvent>();
   level.onmessage = onLevel;
   const transcript = new Channel<SttEvent>();
   transcript.onmessage = onTranscript;
-  return invoke<void>("start_session", { onLevel: level, onTranscript: transcript });
+  const translation = new Channel<TranslationEvent>();
+  translation.onmessage = onTranslation;
+  return invoke<void>("start_session", {
+    onLevel: level,
+    onTranscript: transcript,
+    onTranslation: translation,
+    context,
+  });
 }
 
 export const stopSession = () => invoke<void>("stop_session");
+
+export const updateMeetingContext = (context: MeetingContext) =>
+  invoke<void>("update_meeting_context", { context });
 
 export const getSettings = () => invoke<Settings>("get_settings");
 
 export const updateSettings = (patch: Partial<Settings>) =>
   invoke<Settings>("update_settings", { patch });
 
-export const setApiKey = (provider: SttProvider, key: string) =>
+export const setApiKey = (provider: KeyProvider, key: string) =>
   invoke<void>("set_api_key", { provider, key });
 
-export const hasApiKey = (provider: SttProvider) => invoke<boolean>("has_api_key", { provider });
+export const hasApiKey = (provider: KeyProvider) => invoke<boolean>("has_api_key", { provider });
 
-export const deleteApiKey = (provider: SttProvider) =>
+export const deleteApiKey = (provider: KeyProvider) =>
   invoke<void>("delete_api_key", { provider });
+
+export const listLlmModels = () => invoke<ModelInfo[]>("list_llm_models");
+
+export const testLlm = (model?: string) => invoke<LlmTestResult>("test_llm", { model });
 
 export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);

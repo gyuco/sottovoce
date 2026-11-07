@@ -77,6 +77,7 @@ fn segment(words: usize, start: Duration, end: Duration) -> Segment {
         start,
         end,
         confidence: Some(1.0),
+        ..Segment::default()
     }
 }
 
@@ -149,7 +150,9 @@ mod tests {
                 text: "ciao".into(),
                 start: Duration::from_millis(1500),
                 end: Duration::from_millis(2250),
-                confidence: None,
+                id: 7,
+                language: Some("en".into()),
+                ..Segment::default()
             }),
         };
         let json = serde_json::to_value(&e).unwrap();
@@ -161,7 +164,9 @@ mod tests {
                 "text": "ciao",
                 "start": 1500,
                 "end": 2250,
-                "confidence": null
+                "confidence": null,
+                "id": 7,
+                "language": "en"
             })
         );
     }

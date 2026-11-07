@@ -33,7 +33,18 @@
   "transcript": {
     "title": "Transcript",
     "empty": "The transcript will appear here once you start a session.",
-    "toBottom": "Jump to latest"
+    "toBottom": "Jump to latest",
+    "showTranslations": "Show translations"
+  },
+  "meeting": {
+    "title": "Meeting context",
+    "empty": "optional: improves translations and suggestions",
+    "name": "Meeting name",
+    "goal": "Goal",
+    "goalPlaceholder": "Goal (e.g. close the Q3 budget)",
+    "notes": "Notes",
+    "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
+    "hint": "Editable during the session too: applies from the next request."
   },
   "settings": {
     "title": "Settings",
@@ -45,11 +56,6 @@
       "title": "Cloud transcription · Deepgram",
       "hint": "The API key stays in the macOS Keychain and is never shown. Create one at console.deepgram.com.",
       "keyLabel": "Deepgram API key",
-      "placeholder": "Paste the API key",
-      "replacePlaceholder": "Paste a new key to replace it",
-      "keySaved": "key saved",
-      "keyMissing": "key not set",
-      "deleteKey": "Delete key",
       "needKey": "A Deepgram API key is required to transcribe.",
       "openSettings": "Set key"
     },
@@ -61,6 +67,54 @@
       "multi": "Automatic (multilingual)",
       "it": "Italian",
       "en": "English"
+    },
+    "key": {
+      "placeholder": "Paste the API key",
+      "replacePlaceholder": "Paste a new key to replace it",
+      "saved": "key saved",
+      "missing": "key not set",
+      "delete": "Delete key"
+    },
+    "llm": {
+      "title": "Language model",
+      "provider": "Provider",
+      "providers": {
+        "ollama": {
+          "name": "Ollama (local)",
+          "hint": "Runs on your Mac: nothing leaves the machine and no key is needed. Start Ollama and pull a model (e.g. ollama pull qwen3:8b)."
+        },
+        "opencode": {
+          "name": "OpenCode Zen",
+          "hint": "Pay-per-use cloud (Zen credits). The API key stays in the macOS Keychain: create it in the opencode.ai console under Settings → Service accounts. Only compatible models (chat completions) are listed."
+        },
+        "opencode-go": {
+          "name": "OpenCode Go",
+          "hint": "OpenCode Go subscription, same console API key (Settings → Service accounts). Go is meant for coding agents and traffic is monitored: meeting use may get the account limited. Only compatible models are listed."
+        },
+        "custom": {
+          "name": "Custom",
+          "hint": "Any OpenAI-compatible endpoint (Groq, OpenRouter, LM Studio…). The key is optional and stays in the Keychain."
+        }
+      },
+      "baseUrl": "Endpoint URL",
+      "baseUrlHint": "Including the version, e.g. https://api.groq.com/openai/v1",
+      "keyLabel": "Language model API key",
+      "modelsLoading": "Loading models…",
+      "modelsCount": "{{count}} models available",
+      "modelsHidden": "{{count}} compatible models ({{hidden}} incompatible hidden)",
+      "reload": "Reload models",
+      "translationModel": "Translation model",
+      "translationHint": "Small and fast: translates every sentence.",
+      "assistModel": "Suggestions model",
+      "assistHint": "Medium, JSON output: every 20 seconds.",
+      "chooseModel": "Choose a model",
+      "modelPlaceholder": "model id",
+      "unavailable": "unavailable",
+      "target": "Translate into",
+      "targetHint": "Language you read the others' sentences in.",
+      "targetMine": "Your language",
+      "test": "Test connection",
+      "testOk": "ok in {{ms}} ms · {{model}}"
     }
   },
   "permissions": {

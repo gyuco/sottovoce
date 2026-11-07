@@ -4,9 +4,12 @@ use serde::Serialize;
 use sv_audio::Channel;
 
 /// Porzione di testo riconosciuta, con tempi relativi all'avvio della cattura.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Segment {
+    /// Id progressivo della frase nella sessione, assegnato dall'app ai
+    /// `Final` (0 = non assegnato, es. per i parziali).
+    pub id: u64,
     pub text: String,
     #[serde(serialize_with = "ser_ms")]
     pub start: Duration,
@@ -14,6 +17,8 @@ pub struct Segment {
     pub end: Duration,
     /// Confidenza 0..1, se fornita dal motore.
     pub confidence: Option<f32>,
+    /// Lingua rilevata (codice BCP-47, es. `en`), se fornita dal motore.
+    pub language: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

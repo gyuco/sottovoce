@@ -33,7 +33,18 @@
   "transcript": {
     "title": "Trascrizione",
     "empty": "La trascrizione apparirà qui quando avvii la sessione.",
-    "toBottom": "Torna in fondo"
+    "toBottom": "Torna in fondo",
+    "showTranslations": "Mostra traduzioni"
+  },
+  "meeting": {
+    "title": "Contesto meeting",
+    "empty": "facoltativo: migliora traduzioni e suggerimenti",
+    "name": "Nome del meeting",
+    "goal": "Obiettivo",
+    "goalPlaceholder": "Obiettivo (es. chiudere il budget Q3)",
+    "notes": "Note",
+    "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
+    "hint": "Modificabile anche durante la sessione: vale dalla richiesta successiva."
   },
   "settings": {
     "title": "Impostazioni",
@@ -45,11 +56,6 @@
       "title": "Trascrizione cloud · Deepgram",
       "hint": "La API key resta nel Portachiavi di macOS e non viene mai mostrata. Creala su console.deepgram.com.",
       "keyLabel": "API key Deepgram",
-      "placeholder": "Incolla la API key",
-      "replacePlaceholder": "Incolla una nuova chiave per sostituirla",
-      "keySaved": "chiave salvata",
-      "keyMissing": "chiave non impostata",
-      "deleteKey": "Elimina chiave",
       "needKey": "Per trascrivere serve una API key Deepgram.",
       "openSettings": "Imposta chiave"
     },
@@ -61,6 +67,54 @@
       "multi": "Automatica (multilingua)",
       "it": "Italiano",
       "en": "Inglese"
+    },
+    "key": {
+      "placeholder": "Incolla la API key",
+      "replacePlaceholder": "Incolla una nuova chiave per sostituirla",
+      "saved": "chiave salvata",
+      "missing": "chiave non impostata",
+      "delete": "Elimina chiave"
+    },
+    "llm": {
+      "title": "Modello linguistico",
+      "provider": "Provider",
+      "providers": {
+        "ollama": {
+          "name": "Ollama (locale)",
+          "hint": "Gira sul tuo Mac: niente esce dalla macchina e non serve una chiave. Avvia Ollama e scarica un modello (es. ollama pull qwen3:8b)."
+        },
+        "opencode": {
+          "name": "OpenCode Zen",
+          "hint": "Cloud a consumo (credito Zen). La API key resta nel Portachiavi di macOS: creala nella console di opencode.ai in Settings → Service accounts. Elencati solo i modelli compatibili (chat completions)."
+        },
+        "opencode-go": {
+          "name": "OpenCode Go",
+          "hint": "Abbonamento OpenCode Go, stessa API key della console (Settings → Service accounts). Go è pensato per i coding agent e il traffico è monitorato: l'uso per i meeting può portare a limitazioni dell'account. Elencati solo i modelli compatibili."
+        },
+        "custom": {
+          "name": "Personalizzato",
+          "hint": "Qualsiasi endpoint compatibile con OpenAI (Groq, OpenRouter, LM Studio…). La chiave è facoltativa e resta nel Portachiavi."
+        }
+      },
+      "baseUrl": "Indirizzo endpoint",
+      "baseUrlHint": "Con la versione, es. https://api.groq.com/openai/v1",
+      "keyLabel": "API key del modello linguistico",
+      "modelsLoading": "Caricamento modelli…",
+      "modelsCount": "{{count}} modelli disponibili",
+      "modelsHidden": "{{count}} modelli compatibili ({{hidden}} non compatibili nascosti)",
+      "reload": "Ricarica modelli",
+      "translationModel": "Modello per la traduzione",
+      "translationHint": "Piccolo e veloce: traduce ogni frase.",
+      "assistModel": "Modello per i suggerimenti",
+      "assistHint": "Medio, con output JSON: ogni 20 secondi.",
+      "chooseModel": "Scegli un modello",
+      "modelPlaceholder": "id del modello",
+      "unavailable": "non disponibile",
+      "target": "Traduci in",
+      "targetHint": "Lingua in cui leggi le frasi degli altri.",
+      "targetMine": "La tua lingua",
+      "test": "Prova connessione",
+      "testOk": "ok in {{ms}} ms · {{model}}"
     }
   },
   "permissions": {

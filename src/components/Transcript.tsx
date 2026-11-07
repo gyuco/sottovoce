@@ -3,6 +3,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { type Line, useTranscriptStore } from "@/stores/transcript";
 
 /** Distanza dal fondo (px) entro cui l'autoscroll resta agganciato. */
@@ -17,6 +18,9 @@ export function Transcript() {
   const { t } = useTranslation();
   const lines = useTranscriptStore((s) => s.lines);
   const partial = useTranscriptStore((s) => s.partial);
+  const translations = useTranscriptStore((s) => s.translations);
+  const showTranslations = useTranscriptStore((s) => s.showTranslations);
+  const setShowTranslations = useTranscriptStore((s) => s.setShowTranslations);
 
   const rows = useMemo(() => {
     const live = [partial.me, partial.them].filter((p): p is Line => p !== null);
@@ -38,7 +42,7 @@ export function Transcript() {
   useLayoutEffect(() => {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [rows]);
+  }, [rows, translations, showTranslations]);
 
   const toBottom = () => {
     const el = box.current;
@@ -50,6 +54,12 @@ export function Transcript() {
 
   return (
     <section className="relative flex min-h-0 flex-1 flex-col rounded-xl border bg-card">
+      <div className="flex items-center justify-end border-b px-4 py-1.5">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          {t("transcript.showTranslations")}
+          <Switch size="sm" checked={showTranslations} onCheckedChange={setShowTranslations} />
+        </label>
+      </div>
       <div
         ref={box}
         onScroll={onScroll}
@@ -80,6 +90,9 @@ export function Transcript() {
                 </span>
                 <span className={r.id === 0 ? "text-muted-foreground italic" : undefined}>
                   {r.text}
+                  {showTranslations && r.id !== 0 && (
+                    <TranslationLine text={translations[r.id]?.text} />
+                  )}
                 </span>
               </li>
             ))}
@@ -98,4 +111,9 @@ export function Transcript() {
       )}
     </section>
   );
+}
+
+function TranslationLine({ text }: { text: string | undefined }) {
+  if (!text) return null;
+  return <span className="mt-0.5 block text-muted-foreground">{text}</span>;
 }

@@ -10,6 +10,7 @@ import {
   stopSession,
   systemAudioSupported,
 } from "@/lib/ipc";
+import { useMeetingStore } from "@/stores/meeting";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
 
@@ -108,6 +109,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
           }));
         },
         transcript.apply,
+        transcript.applyTranslation,
+        useMeetingStore.getState().context,
       );
       set({ status: "running", startedAt: performance.now() });
     } catch (e) {

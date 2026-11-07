@@ -25,6 +25,52 @@ impl SttProvider {
     }
 }
 
+/// Provider LLM (endpoint OpenAI-compatible).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LlmProvider {
+    /// Locale, nessuna chiave: modalità privacy.
+    #[default]
+    Ollama,
+    /// OpenCode Zen, pay-per-use. Solo i modelli serviti su chat completions.
+    Opencode,
+    /// Abbonamento OpenCode Go (stessa chiave della console di Zen). Pensato
+    /// per i coding agent: richiede `x-opencode-session` per conversazione.
+    #[serde(rename = "opencode-go")]
+    OpencodeGo,
+    /// Endpoint OpenAI-compatible qualsiasi (`llm_base_url`), chiave opzionale.
+    Custom,
+}
+
+impl LlmProvider {
+    /// Account della API key nel Keychain; `None` = nessuna chiave.
+    pub fn key_account(self) -> Option<&'static str> {
+        match self {
+            Self::Ollama => None,
+            Self::Opencode | Self::OpencodeGo => Some("opencode"),
+            Self::Custom => Some("custom"),
+        }
+    }
+
+    /// Base URL dell'API (con la versione). Per `Custom` è quello impostato.
+    pub fn base_url(self, custom: &str) -> Result<String> {
+        Ok(match self {
+            Self::Ollama => "http://localhost:11434/v1".into(),
+            Self::Opencode => "https://opencode.ai/inference/openai/v1".into(),
+            Self::OpencodeGo => "https://opencode.ai/inference/go/openai/v1".into(),
+            Self::Custom => {
+                let url = custom.trim();
+                if !(url.starts_with("http://") || url.starts_with("https://")) {
+                    bail!(
+                        "indirizzo dell'endpoint non valido: deve iniziare con http:// o https://"
+                    );
+                }
+                url.to_owned()
+            }
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -37,6 +83,26 @@ pub struct Settings {
     /// `None` = microfono di default di sistema.
     pub mic_device_id: Option<String>,
     pub system_audio: bool,
+    pub llm_provider: LlmProvider,
+    /// Base URL per `LlmProvider::Custom` (es. `https://api.groq.com/openai/v1`).
+    pub llm_base_url: String,
+    /// Modello per la traduzione per frase; vuoto = da scegliere.
+    pub translation_model: String,
+    /// Modello per il live assist; vuoto = da scegliere.
+    pub assist_model: String,
+    /// Lingua in cui tradurre; `None` = la lingua dell'utente.
+    pub target_language: Option<Language>,
+}
+
+impl Settings {
+    /// Lingua delle traduzioni. "Automatica" non è una lingua di arrivo:
+    /// in quel caso si ripiega sull'italiano.
+    pub fn effective_target_language(&self) -> Language {
+        match self.target_language.unwrap_or(self.my_language) {
+            Language::Multi => Language::It,
+            l => l,
+        }
+    }
 }
 
 impl Default for Settings {
@@ -48,6 +114,11 @@ impl Default for Settings {
             their_language: Language::Multi,
             mic_device_id: None,
             system_audio: true,
+            llm_provider: LlmProvider::Ollama,
+            llm_base_url: String::new(),
+            translation_model: String::new(),
+            assist_model: String::new(),
+            target_language: None,
         }
     }
 }
@@ -158,6 +229,50 @@ mod tests {
         assert!(store.update(json!({"myLanguage": "klingon"})).is_err());
         assert!(store.update(json!([1, 2])).is_err());
         assert_eq!(store.get(), Settings::default());
+    }
+
+    #[test]
+    fn old_file_without_llm_fields_loads() {
+        let path = temp_path("old");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, br#"{"sttProvider":"deepgram","myLanguage":"en"}"#).unwrap();
+        let s = SettingsStore::load(path.clone()).get();
+        assert_eq!(s.my_language, Language::En);
+        assert_eq!(s.llm_provider, LlmProvider::Ollama);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn llm_patch_and_target_language() {
+        let store = SettingsStore::load(temp_path("llm"));
+        let s = store
+            .update(json!({"llmProvider": "opencode", "translationModel": "glm-5.3"}))
+            .unwrap();
+        assert_eq!(s.llm_provider, LlmProvider::Opencode);
+        assert_eq!(s.translation_model, "glm-5.3");
+        assert_eq!(s.effective_target_language(), Language::It);
+        let s = store.update(json!({"targetLanguage": "en"})).unwrap();
+        assert_eq!(s.effective_target_language(), Language::En);
+        let s = store
+            .update(json!({"targetLanguage": null, "myLanguage": "multi"}))
+            .unwrap();
+        assert_eq!(s.effective_target_language(), Language::It);
+        assert!(store.update(json!({"llmProvider": "openai"})).is_err());
+        let s = store.update(json!({"llmProvider": "opencode-go"})).unwrap();
+        assert_eq!(s.llm_provider, LlmProvider::OpencodeGo);
+        assert_eq!(s.llm_provider.key_account(), Some("opencode"));
+        let _ = std::fs::remove_dir_all(temp_path("llm").parent().unwrap());
+    }
+
+    #[test]
+    fn llm_base_url() {
+        assert!(LlmProvider::Ollama.base_url("").unwrap().contains("11434"));
+        assert_eq!(
+            LlmProvider::Custom.base_url(" https://x.dev/v1 ").unwrap(),
+            "https://x.dev/v1"
+        );
+        assert!(LlmProvider::Custom.base_url("").is_err());
+        assert!(LlmProvider::Custom.base_url("ftp://x").is_err());
     }
 
     #[test]
