@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound, Languages } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { KeyForm } from "@/components/KeyForm";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
 import type { Language } from "@/lib/ipc";
 import { useAudioStore } from "@/stores/audio";
 import { useSettingsStore } from "@/stores/settings";
@@ -20,14 +21,47 @@ import { useSettingsStore } from "@/stores/settings";
 const LANGUAGES: Language[] = ["multi", "it", "en"];
 
 export function SettingsPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, hasKey, error, update } = useSettingsStore();
   const systemSupported = useAudioStore((s) => s.systemSupported);
 
   if (!settings) return null;
 
+  const currentUiLanguage =
+    UI_LANGUAGES.find((language) => language.code === i18n.resolvedLanguage)?.code ?? "it";
+
   return (
     <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Languages className="size-4 text-muted-foreground" aria-hidden />
+            {t("settings.ui.title")}
+          </CardTitle>
+          <CardDescription>{t("settings.ui.languageHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>{t("settings.ui.language")}</span>
+            <Select
+              value={currentUiLanguage}
+              onValueChange={(value) => void setUiLanguage(value as UiLanguage)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UI_LANGUAGES.map((language) => (
+                  <SelectItem key={language.code} value={language.code}>
+                    {language.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

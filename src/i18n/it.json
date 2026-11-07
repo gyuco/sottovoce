@@ -68,6 +68,11 @@
     "save": "Salva",
     "applyHint": "Le modifiche valgono dalla prossima sessione.",
     "systemAudioHint": "Trascrive anche gli altri partecipanti della call.",
+    "ui": {
+      "title": "Interfaccia",
+      "language": "Lingua dell'interfaccia",
+      "languageHint": "Cambia la lingua dei testi dell'app."
+    },
     "stt": {
       "title": "Trascrizione cloud · Deepgram",
       "hint": "La API key resta nel Portachiavi di macOS e non viene mai mostrata. Creala su console.deepgram.com.",

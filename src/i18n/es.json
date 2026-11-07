@@ -1,0 +1,199 @@
+{
+  "app": {
+    "title": "Sottovoce",
+    "subtitle": "Transcripción en vivo"
+  },
+  "controls": {
+    "microphone": "Micrófono",
+    "defaultDevice": "predeterminado",
+    "start": "Iniciar",
+    "stop": "Detener",
+    "starting": "Iniciando…",
+    "systemAudio": "Audio del sistema"
+  },
+  "channel": {
+    "me": "Yo",
+    "meHint": "Micrófono",
+    "them": "Ellos",
+    "themHint": "Audio del sistema",
+    "idle": "inactivo",
+    "live": "activo",
+    "disabled": "desactivado",
+    "noSignal": "sin señal",
+    "unsupported": "no compatible con esta plataforma",
+    "noSignalHint": "No hay datos de este canal. Revisa los permisos en Ajustes del Sistema → Privacidad y seguridad."
+  },
+  "stt": {
+    "idle": "STT inactivo",
+    "connected": "STT conectado",
+    "reconnecting": "reconectando…",
+    "error": "error de STT",
+    "closed": "STT cerrado"
+  },
+  "transcript": {
+    "title": "Transcripción",
+    "empty": "La transcripción aparecerá aquí cuando inicies la sesión.",
+    "toBottom": "Ir al final",
+    "showTranslations": "Mostrar traducciones",
+    "copy": "Copiar",
+    "copyAll": "Copiar toda la transcripción",
+    "copyLine": "Copiar frase"
+  },
+  "meeting": {
+    "title": "Contexto de la reunión",
+    "empty": "opcional: mejora las traducciones y las sugerencias",
+    "name": "Nombre de la reunión",
+    "goal": "Objetivo",
+    "goalPlaceholder": "Objetivo (p. ej. cerrar el presupuesto del Q3)",
+    "notes": "Notas",
+    "notesPlaceholder": "Notas: participantes, siglas, nombres de productos, lo que quieres conseguir…",
+    "hint": "También se puede editar durante la sesión: se aplica desde la siguiente solicitud."
+  },
+  "assist": {
+    "title": "Asistencia en vivo",
+    "empty": "Cada 20 segundos, mientras la conversación avanza, aquí aparecerá lo que podrías decir o preguntar. Elige el modelo en Ajustes.",
+    "say": "Di",
+    "ask": "Pregunta",
+    "copy": "Copiar",
+    "dismiss": "Cerrar",
+    "sayTitle": "Di esto",
+    "askTitle": "Pregunta esto",
+    "none": "Aún nada.",
+    "markUsed": "Marcar como usado",
+    "markUnused": "Marcar como no usado"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "back": "Atrás",
+    "save": "Guardar",
+    "applyHint": "Los cambios se aplican desde la próxima sesión.",
+    "systemAudioHint": "También transcribe a los demás participantes de la llamada.",
+    "ui": {
+      "title": "Interfaz",
+      "language": "Idioma de la interfaz",
+      "languageHint": "Cambia el idioma de los textos de la aplicación."
+    },
+    "stt": {
+      "title": "Transcripción en la nube · Deepgram",
+      "hint": "La API key permanece en el Llavero de macOS y nunca se muestra. Créala en console.deepgram.com.",
+      "keyLabel": "API key de Deepgram",
+      "needKey": "Para transcribir hace falta una API key de Deepgram.",
+      "openSettings": "Configurar clave"
+    },
+    "language": {
+      "mine": "Tu idioma (Yo)",
+      "mineHint": "Un idioma fijo es más preciso que el automático.",
+      "theirs": "Idioma de los demás (Ellos)",
+      "theirsHint": "Automático: prioriza italiano e inglés y también reconoce el cambio de idioma.",
+      "multi": "Automático (multilingüe)",
+      "it": "Italiano",
+      "en": "Inglés"
+    },
+    "key": {
+      "placeholder": "Pega la API key",
+      "replacePlaceholder": "Pega una nueva clave para sustituirla",
+      "saved": "clave guardada",
+      "missing": "clave no configurada",
+      "delete": "Eliminar clave"
+    },
+    "llm": {
+      "title": "Modelo de lenguaje",
+      "provider": "Proveedor",
+      "providers": {
+        "ollama": {
+          "name": "Ollama (local)",
+          "hint": "Se ejecuta en tu Mac: nada sale del equipo y no hace falta una clave. Inicia Ollama y descarga un modelo (p. ej. ollama pull qwen3:8b)."
+        },
+        "opencode": {
+          "name": "OpenCode Zen",
+          "hint": "Nube de pago por uso (crédito Zen). La API key permanece en el Llavero de macOS: créala en la consola de opencode.ai en Cuenta → Personal API keys (espacio de trabajo con crédito). Solo se listan los modelos compatibles (chat completions)."
+        },
+        "opencode-go": {
+          "name": "OpenCode Go",
+          "hint": "Suscripción OpenCode Go, misma API key de la consola (Cuenta → Personal API keys). Go está pensado para agentes de programación y el tráfico se monitoriza: usarlo para reuniones puede provocar limitaciones en la cuenta. Solo se listan los modelos compatibles."
+        },
+        "openai": {
+          "name": "OpenAI",
+          "hint": "Nube de pago por uso. La API key permanece en el Llavero de macOS: créala en platform.openai.com → API keys. Solo se listan los modelos de chat (p. ej. gpt-5.4-mini para la traducción)."
+        },
+        "anthropic": {
+          "name": "Anthropic (Claude)",
+          "hint": "Nube de pago por uso, API nativa de Claude. La API key permanece en el Llavero de macOS: créala en platform.claude.com → API keys. Para la traducción basta con claude-haiku-5-5."
+        },
+        "custom": {
+          "name": "Personalizado",
+          "hint": "Cualquier endpoint compatible con OpenAI (Groq, OpenRouter, LM Studio…). La clave es opcional y permanece en el Llavero."
+        }
+      },
+      "baseUrl": "Dirección del endpoint",
+      "baseUrlHint": "Con la versión, p. ej. https://api.groq.com/openai/v1",
+      "keyLabel": "API key del modelo de lenguaje",
+      "modelsLoading": "Cargando modelos…",
+      "modelsCount": "{{count}} modelos disponibles",
+      "modelsHidden": "{{count}} modelos compatibles ({{hidden}} no compatibles ocultos)",
+      "reload": "Recargar modelos",
+      "translationModel": "Modelo para la traducción",
+      "translationHint": "Pequeño y rápido: traduce cada frase.",
+      "assistModel": "Modelo para las sugerencias",
+      "assistHint": "Mediano, con salida JSON: cada 20 segundos.",
+      "chooseModel": "Elige un modelo",
+      "modelPlaceholder": "id del modelo",
+      "unavailable": "no disponible",
+      "target": "Traducir a",
+      "targetHint": "Idioma en el que lees las frases de los demás.",
+      "targetMine": "Tu idioma",
+      "test": "Probar conexión",
+      "testOk": "ok en {{ms}} ms · {{model}}"
+    }
+  },
+  "permissions": {
+    "hint": "Al iniciar por primera vez, macOS solicita permiso para el micrófono y para grabar el audio del sistema."
+  },
+  "errors": {
+    "devices": "No se pudieron leer los dispositivos: {{message}}",
+    "start": "No se pudo iniciar la sesión: {{message}}"
+  },
+  "common": {
+    "copied": "Copiado"
+  },
+  "nav": {
+    "label": "Navegación",
+    "live": "Sesión en vivo",
+    "settings": "Ajustes"
+  },
+  "header": {
+    "untitled": "Nueva reunión",
+    "startedAt": "Iniciada a las {{time}}",
+    "ready": "Listo: inicia cuando empiece la llamada",
+    "elapsed": "Duración de la sesión"
+  },
+  "audio": {
+    "title": "Audio"
+  },
+  "talk": {
+    "title": "Tiempo de palabra",
+    "label": "Yo {{me}}% · Ellos {{them}}%",
+    "empty": "El tiempo de palabra aparecerá con la transcripción"
+  },
+  "models": {
+    "title": "Modelos locales",
+    "hint": "Para transcribir y reconocer a los hablantes sin enviar audio a terceros. Los modelos se quedan en tu Mac; tras la descarga también funcionan sin conexión.",
+    "used": "{{size}} ocupados",
+    "ready": "listo",
+    "missing": "no descargado",
+    "partial": "parcial {{pct}}%",
+    "corrupt": "hay que volver a descargarlo",
+    "downloading": "descarga {{pct}}%",
+    "download": "Descargar",
+    "resume": "Reanudar",
+    "redownload": "Volver a descargar",
+    "cancel": "Cancelar",
+    "verify": "Verificar integridad",
+    "delete": "Eliminar",
+    "kind": {
+      "vad": "Detección del habla",
+      "stt": "Transcripción",
+      "speakerEmbedding": "Reconocimiento de hablantes"
+    }
+  }
+}

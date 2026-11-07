@@ -63,6 +63,6 @@ Un task tokio per stadio; canali `tokio::sync::mpsc`/`broadcast` tra stadi.
 
 ## Convenzioni
 
-- Lingua UI: italiano di default, i18n predisposto.
+- Lingua UI: italiano di default, con inglese e spagnolo; cataloghi in `src/i18n/` (`it`, `en`, `es`). La lingua si sceglie in Impostazioni → Interfaccia e viene ricordata. Dopo aver toccato i testi: `pnpm i18n:check` (chiavi e segnaposto allineati tra le lingue).
 - Commit Conventional Commits.
 - Rust: `cargo clippy` e `cargo fmt` puliti; frontend: `tsc --noEmit` + eslint.

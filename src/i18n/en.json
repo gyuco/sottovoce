@@ -68,6 +68,11 @@
     "save": "Save",
     "applyHint": "Changes apply from the next session.",
     "systemAudioHint": "Also transcribes the other call participants.",
+    "ui": {
+      "title": "Interface",
+      "language": "Interface language",
+      "languageHint": "Changes the language of the app's text."
+    },
     "stt": {
       "title": "Cloud transcription · Deepgram",
       "hint": "The API key stays in the macOS Keychain and is never shown. Create one at console.deepgram.com.",
