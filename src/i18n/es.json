@@ -74,11 +74,25 @@
       "languageHint": "Cambia el idioma de los textos de la aplicación."
     },
     "stt": {
-      "title": "Transcripción en la nube · Deepgram",
-      "hint": "La API key permanece en el Llavero de macOS y nunca se muestra. Créala en console.deepgram.com.",
+      "title": "Transcripción",
+      "engine": "Motor",
+      "engines": {
+        "local": {
+          "name": "Local · Parakeet",
+          "hint": "En tu Mac: el audio no sale del equipo y funciona sin conexión. Hacen falta los modelos de abajo."
+        },
+        "deepgram": {
+          "name": "Nube · Deepgram",
+          "hint": "Baja latencia y excelente con audio difícil; el audio se envía a los servidores de Deepgram. La API key permanece en el Llavero de macOS: créala en console.deepgram.com."
+        }
+      },
+      "lockedByLocalOnly": "Con «Solo local» activado se usa siempre el motor local.",
+      "requiredModels": "Modelos necesarios",
       "keyLabel": "API key de Deepgram",
-      "needKey": "Para transcribir hace falta una API key de Deepgram.",
-      "openSettings": "Configurar clave"
+      "needKey": "Para transcribir con Deepgram hace falta una API key.",
+      "openSettings": "Configurar clave",
+      "needModels": "Para transcribir en local, descarga los modelos en Ajustes.",
+      "openModels": "Descargar modelos"
     },
     "language": {
       "mine": "Tu idioma (Yo)",
@@ -144,6 +158,11 @@
       "targetMine": "Tu idioma",
       "test": "Probar conexión",
       "testOk": "ok en {{ms}} ms · {{model}}"
+    },
+    "localOnly": {
+      "title": "Solo local",
+      "hint": "Para reuniones confidenciales: transcripción en tu Mac y modelo de lenguaje solo en Ollama o en un endpoint en localhost. Durante la sesión ningún dato sale del equipo.",
+      "violation": "El modelo de lenguaje elegido está en la nube: con «Solo local» la sesión no se inicia. Cambia a Ollama o a un endpoint en localhost, o quita los modelos de traducción y sugerencias."
     }
   },
   "permissions": {
@@ -165,7 +184,13 @@
     "untitled": "Nueva reunión",
     "startedAt": "Iniciada a las {{time}}",
     "ready": "Listo: inicia cuando empiece la llamada",
-    "elapsed": "Duración de la sesión"
+    "elapsed": "Duración de la sesión",
+    "mode": {
+      "local": "Local",
+      "cloud": "Nube",
+      "localHint": "Ningún dato sale de este ordenador durante la sesión",
+      "cloudHint": "El audio o el texto se envían a servicios externos"
+    }
   },
   "audio": {
     "title": "Audio"

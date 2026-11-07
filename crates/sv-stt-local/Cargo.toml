@@ -1,0 +1,24 @@
+[package]
+name = "sv-stt-local"
+description = "Motore STT locale (VAD + Parakeet / Whisper via sherpa-onnx) per Sottovoce"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-audio.workspace = true
+sv-stt.workspace = true
+sv-vad.workspace = true
+sherpa-onnx = "2.0.1"
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+hound = "3"
+sv-models.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

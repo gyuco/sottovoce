@@ -74,11 +74,25 @@
       "languageHint": "Cambia la lingua dei testi dell'app."
     },
     "stt": {
-      "title": "Trascrizione cloud · Deepgram",
-      "hint": "La API key resta nel Portachiavi di macOS e non viene mai mostrata. Creala su console.deepgram.com.",
+      "title": "Trascrizione",
+      "engine": "Motore",
+      "engines": {
+        "local": {
+          "name": "Locale · Parakeet",
+          "hint": "Sul tuo Mac: l'audio non esce dalla macchina e funziona offline. Servono i modelli qui sotto."
+        },
+        "deepgram": {
+          "name": "Cloud · Deepgram",
+          "hint": "Bassa latenza e ottimo su audio difficile; l'audio va ai server di Deepgram. La API key resta nel Portachiavi di macOS: creala su console.deepgram.com."
+        }
+      },
+      "lockedByLocalOnly": "Con \"Solo locale\" attivo si usa sempre il motore locale.",
+      "requiredModels": "Modelli necessari",
       "keyLabel": "API key Deepgram",
-      "needKey": "Per trascrivere serve una API key Deepgram.",
-      "openSettings": "Imposta chiave"
+      "needKey": "Per trascrivere con Deepgram serve una API key.",
+      "openSettings": "Imposta chiave",
+      "needModels": "Per trascrivere in locale scarica i modelli nelle Impostazioni.",
+      "openModels": "Scarica modelli"
     },
     "language": {
       "mine": "La tua lingua (Io)",
@@ -144,6 +158,11 @@
       "targetMine": "La tua lingua",
       "test": "Prova connessione",
       "testOk": "ok in {{ms}} ms · {{model}}"
+    },
+    "localOnly": {
+      "title": "Solo locale",
+      "hint": "Per i meeting riservati: trascrizione sul tuo Mac e modello linguistico solo su Ollama o su un endpoint in localhost. Durante la sessione nessun dato esce dalla macchina.",
+      "violation": "Il modello linguistico scelto è nel cloud: con \"Solo locale\" la sessione non parte. Passa a Ollama o a un endpoint su localhost, oppure togli i modelli di traduzione e suggerimenti."
     }
   },
   "permissions": {
@@ -165,7 +184,13 @@
     "untitled": "Nuovo meeting",
     "startedAt": "Iniziato alle {{time}}",
     "ready": "Pronto: avvia quando parte la call",
-    "elapsed": "Durata della sessione"
+    "elapsed": "Durata della sessione",
+    "mode": {
+      "local": "Locale",
+      "cloud": "Cloud",
+      "localHint": "Nessun dato esce da questo computer durante la sessione",
+      "cloudHint": "Audio o testo vengono inviati a servizi esterni"
+    }
   },
   "audio": {
     "title": "Audio"
@@ -174,5 +199,26 @@
     "title": "Tempo di parola",
     "label": "Io {{me}}% · Loro {{them}}%",
     "empty": "Il tempo di parola apparirà con la trascrizione"
+  },
+  "models": {
+    "title": "Modelli locali",
+    "hint": "Per trascrivere e riconoscere i parlanti senza inviare audio a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
+    "used": "{{size}} occupati",
+    "ready": "pronto",
+    "missing": "non scaricato",
+    "partial": "parziale {{pct}}%",
+    "corrupt": "da riscaricare",
+    "downloading": "download {{pct}}%",
+    "download": "Scarica",
+    "resume": "Riprendi",
+    "redownload": "Riscarica",
+    "cancel": "Annulla",
+    "verify": "Verifica integrità",
+    "delete": "Elimina",
+    "kind": {
+      "vad": "Rilevamento del parlato",
+      "stt": "Trascrizione",
+      "speakerEmbedding": "Riconoscimento parlanti"
+    }
   }
 }

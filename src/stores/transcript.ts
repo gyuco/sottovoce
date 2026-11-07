@@ -46,7 +46,10 @@ export const useTranscriptStore = create<TranscriptState>((set) => ({
       const ch = e.channel;
       switch (e.type) {
         case "partial":
-          return { partial: { ...s.partial, [ch]: { ...seg(e), id: 0, channel: ch } } };
+          // Parziale vuoto = nessuna ipotesi in corso (es. rumore scartato dal motore locale).
+          return {
+            partial: { ...s.partial, [ch]: e.text.trim() === "" ? null : { ...seg(e), id: 0, channel: ch } },
+          };
         case "final":
           return {
             lines: [...s.lines, { ...seg(e), channel: ch }],

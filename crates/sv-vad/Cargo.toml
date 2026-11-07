@@ -1,0 +1,19 @@
+[package]
+name = "sv-vad"
+description = "Rilevamento del parlato (Silero VAD via sherpa-onnx) e segmentazione in frasi per canale"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-audio.workspace = true
+sherpa-onnx = "2.0.1"
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+hound = "3"
+tokio.workspace = true
+
+[lints]
+workspace = true

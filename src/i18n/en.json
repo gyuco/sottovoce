@@ -74,11 +74,25 @@
       "languageHint": "Changes the language of the app's text."
     },
     "stt": {
-      "title": "Cloud transcription · Deepgram",
-      "hint": "The API key stays in the macOS Keychain and is never shown. Create one at console.deepgram.com.",
+      "title": "Transcription",
+      "engine": "Engine",
+      "engines": {
+        "local": {
+          "name": "Local · Parakeet",
+          "hint": "On your Mac: audio never leaves the machine and it works offline. Needs the models below."
+        },
+        "deepgram": {
+          "name": "Cloud · Deepgram",
+          "hint": "Low latency and strong on difficult audio; audio is sent to Deepgram's servers. The API key stays in the macOS Keychain: create one at console.deepgram.com."
+        }
+      },
+      "lockedByLocalOnly": "With \"Local only\" on, the local engine is always used.",
+      "requiredModels": "Required models",
       "keyLabel": "Deepgram API key",
-      "needKey": "A Deepgram API key is required to transcribe.",
-      "openSettings": "Set key"
+      "needKey": "A Deepgram API key is required to transcribe with Deepgram.",
+      "openSettings": "Set key",
+      "needModels": "To transcribe locally, download the models in Settings.",
+      "openModels": "Download models"
     },
     "language": {
       "mine": "Your language (Me)",
@@ -144,6 +158,11 @@
       "targetMine": "Your language",
       "test": "Test connection",
       "testOk": "ok in {{ms}} ms · {{model}}"
+    },
+    "localOnly": {
+      "title": "Local only",
+      "hint": "For confidential meetings: transcription on your Mac and a language model only on Ollama or a localhost endpoint. No data leaves the machine during the session.",
+      "violation": "The selected language model runs in the cloud: with \"Local only\" the session won't start. Switch to Ollama or a localhost endpoint, or clear the translation and suggestion models."
     }
   },
   "permissions": {
@@ -165,7 +184,13 @@
     "untitled": "New meeting",
     "startedAt": "Started at {{time}}",
     "ready": "Ready: start when the call begins",
-    "elapsed": "Session duration"
+    "elapsed": "Session duration",
+    "mode": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "localHint": "No data leaves this computer during the session",
+      "cloudHint": "Audio or text is sent to external services"
+    }
   },
   "audio": {
     "title": "Audio"
@@ -174,5 +199,26 @@
     "title": "Talk time",
     "label": "Me {{me}}% · Them {{them}}%",
     "empty": "Talk time appears with the transcript"
+  },
+  "models": {
+    "title": "Local models",
+    "hint": "Transcribe and recognize speakers without sending audio to third parties. Models stay on your Mac and work offline once downloaded.",
+    "used": "{{size}} used",
+    "ready": "ready",
+    "missing": "not downloaded",
+    "partial": "partial {{pct}}%",
+    "corrupt": "needs re-download",
+    "downloading": "downloading {{pct}}%",
+    "download": "Download",
+    "resume": "Resume",
+    "redownload": "Re-download",
+    "cancel": "Cancel",
+    "verify": "Verify integrity",
+    "delete": "Delete",
+    "kind": {
+      "vad": "Speech detection",
+      "stt": "Transcription",
+      "speakerEmbedding": "Speaker recognition"
+    }
   }
 }

@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { HardDriveDownload, KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,19 +11,24 @@ import { Sidebar, type View } from "@/components/Sidebar";
 import { TalkRatio } from "@/components/TalkRatio";
 import { Transcript } from "@/components/Transcript";
 import { Button } from "@/components/ui/button";
+import { useSttBlocker } from "@/lib/readiness";
 import { useAudioStore } from "@/stores/audio";
+import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
 export default function App() {
   const { t } = useTranslation();
   const { error, init } = useAudioStore();
-  const { settings, hasKey, load } = useSettingsStore();
+  const load = useSettingsStore((s) => s.load);
+  const loadModels = useModelsStore((s) => s.load);
+  const blocker = useSttBlocker();
   const [view, setView] = useState<View>("live");
 
   useEffect(() => {
     void load();
     void init();
-  }, [load, init]);
+    void loadModels();
+  }, [load, init, loadModels]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -40,14 +45,18 @@ export default function App() {
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
           <SessionHeader />
 
-          {(settings && !hasKey) || error ? (
+          {blocker || error ? (
             <div className="flex flex-col gap-2 px-6 pb-3">
-              {settings && !hasKey && (
+              {blocker && (
                 <div className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2 text-sm shadow-xs">
-                  <KeyRound className="size-4 shrink-0 text-primary" aria-hidden />
-                  <span className="flex-1">{t("settings.stt.needKey")}</span>
+                  {blocker === "needKey" ? (
+                    <KeyRound className="size-4 shrink-0 text-primary" aria-hidden />
+                  ) : (
+                    <HardDriveDownload className="size-4 shrink-0 text-primary" aria-hidden />
+                  )}
+                  <span className="flex-1">{t(`settings.stt.${blocker}`)}</span>
                   <Button size="sm" variant="outline" onClick={() => setView("settings")}>
-                    {t("settings.stt.openSettings")}
+                    {blocker === "needKey" ? t("settings.stt.openSettings") : t("settings.stt.openModels")}
                   </Button>
                 </div>
               )}

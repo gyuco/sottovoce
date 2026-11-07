@@ -15,7 +15,8 @@ export interface LevelEvent {
 }
 
 export type Language = "multi" | "it" | "en";
-export type SttProvider = "deepgram";
+/** Motore di trascrizione. */
+export type SttEngine = "local" | "deepgram";
 export type LlmProvider =
   | "ollama"
   | "opencode"
@@ -24,7 +25,7 @@ export type LlmProvider =
   | "anthropic"
   | "custom";
 /** Account delle API key nel Keychain. */
-export type KeyProvider = SttProvider | "opencode" | "openai" | "anthropic" | "custom";
+export type KeyProvider = "deepgram" | "opencode" | "openai" | "anthropic" | "custom";
 
 /** Account della chiave del provider LLM; `null` = nessuna chiave. */
 export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
@@ -33,8 +34,14 @@ export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
 }
 
 export interface Settings {
-  sttProvider: SttProvider;
+  /** Con `localOnly` vale comunque il motore locale. */
+  sttEngine: SttEngine;
+  /** Modello Deepgram. */
   sttModel: string;
+  /** Id del modello di trascrizione locale (catalogo modelli). */
+  localSttModel: string;
+  /** Privacy: niente audio né testo verso host esterni durante la sessione. */
+  localOnly: boolean;
   myLanguage: Language;
   theirLanguage: Language;
   micDeviceId: string | null;
@@ -157,3 +164,44 @@ export const testLlm = (model?: string) => invoke<LlmTestResult>("test_llm", { m
 export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
 }
+
+// --- Modelli locali ---------------------------------------------------------
+
+export type LocalModelKind = "vad" | "stt" | "speakerEmbedding";
+
+export type LocalModelStatus =
+  | { state: "missing" }
+  | { state: "partial"; downloaded: number }
+  | { state: "ready" }
+  | { state: "corrupt" };
+
+export interface LocalModel {
+  id: string;
+  kind: LocalModelKind;
+  name: string;
+  files: { name: string; size: number }[];
+  size: number;
+  status: LocalModelStatus;
+  onDisk: number;
+  downloading: boolean;
+}
+
+export interface DownloadProgress {
+  downloaded: number;
+  total: number;
+}
+
+export const listLocalModels = () => invoke<LocalModel[]>("list_local_models");
+
+export function downloadLocalModel(id: string, onProgress: (p: DownloadProgress) => void) {
+  const channel = new Channel<DownloadProgress>();
+  channel.onmessage = onProgress;
+  return invoke<LocalModel>("download_local_model", { id, onProgress: channel });
+}
+
+export const cancelLocalModelDownload = (id: string) =>
+  invoke<boolean>("cancel_local_model_download", { id });
+
+export const deleteLocalModel = (id: string) => invoke<LocalModel>("delete_local_model", { id });
+
+export const verifyLocalModel = (id: string) => invoke<LocalModel>("verify_local_model", { id });

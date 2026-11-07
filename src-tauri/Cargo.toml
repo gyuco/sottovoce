@@ -19,6 +19,9 @@ tauri = { version = "2", features = [] }
 sv-audio.workspace = true
 sv-stt.workspace = true
 sv-llm.workspace = true
+sv-models.workspace = true
+sv-stt-local.workspace = true
+sv-vad.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

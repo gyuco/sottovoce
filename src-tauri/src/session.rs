@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use sv_audio::{AudioFrame, Capture, CaptureConfig, Channel, LevelEvent};
-use sv_stt::deepgram::{Deepgram, DeepgramConfig};
 use sv_stt::{SttEngine, SttEvent, SttEventKind, SttStream};
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{broadcast, mpsc};
@@ -18,7 +17,7 @@ use tokio::task::JoinHandle;
 
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
 use crate::meeting::{MeetingContext, SharedContext};
-use crate::settings::{Settings, SttProvider};
+use crate::settings::Settings;
 use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
 
 /// Capacità del bus audio: ~16 s di frame da ~64 ms per canale.
@@ -49,10 +48,10 @@ pub struct Session {
 }
 
 impl Session {
-    /// `api_key` già letta dal Keychain dal chiamante.
+    /// `engine` già scelto dal chiamante (vedi `stt::resolve`).
     pub fn start(
         settings: &Settings,
-        api_key: String,
+        engine: Box<dyn SttEngine>,
         context: MeetingContext,
         llm: LlmTasks,
         out: Outputs,
@@ -63,14 +62,6 @@ impl Session {
             on_translation,
             on_assist,
         } = out;
-        let engine: Box<dyn SttEngine> = match settings.stt_provider {
-            SttProvider::Deepgram => Box::new(Deepgram::new(DeepgramConfig {
-                api_key,
-                model: settings.stt_model.clone(),
-                endpoint: None,
-            })?),
-        };
-
         let system_audio = settings.system_audio && sv_audio::system::is_supported();
         let mut channels = vec![Channel::Me];
         if system_audio {
@@ -136,6 +127,7 @@ impl Session {
             Ok(capture) => {
                 tracing::info!(
                     provider = engine.name(),
+                    local_only = settings.local_only,
                     me = settings.my_language.code(),
                     them = settings.their_language.code(),
                     system_audio,

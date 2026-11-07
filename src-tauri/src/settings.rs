@@ -9,21 +9,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sv_stt::Language;
 
+/// Motore di trascrizione.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SttProvider {
+pub enum SttEngineKind {
+    /// Sul computer (VAD + Parakeet): niente audio a terzi, funziona offline.
+    Local,
+    /// Deepgram Nova-3 in streaming (cloud, API key).
     #[default]
     Deepgram,
 }
 
-impl SttProvider {
-    /// Account della API key nel Keychain (vedi `secrets::KNOWN_PROVIDERS`).
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Deepgram => "deepgram",
-        }
-    }
-}
+/// Account Keychain della API key Deepgram (vedi `secrets::KNOWN_PROVIDERS`).
+pub const DEEPGRAM_KEY: &str = "deepgram";
 
 /// Provider LLM. Tutti OpenAI-compatible tranne `Anthropic` (Messages API).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,8 +80,17 @@ impl LlmProvider {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    pub stt_provider: SttProvider,
+    /// Motore scelto; con `local_only` vale comunque quello locale.
+    /// Alias: i file salvati prima del motore locale usavano `sttProvider`.
+    #[serde(alias = "sttProvider")]
+    pub stt_engine: SttEngineKind,
+    /// Modello Deepgram.
     pub stt_model: String,
+    /// Modello del catalogo `sv-models` per il motore locale.
+    pub local_stt_model: String,
+    /// Privacy: STT locale e LLM solo su questa macchina; l'avvio fallisce
+    /// se la configurazione richiederebbe un host esterno.
+    pub local_only: bool,
     /// Lingua dell'utente (canale "Io"): monolingua = più accurato.
     pub my_language: Language,
     /// Lingua degli altri partecipanti (canale "Loro").
@@ -116,8 +123,10 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            stt_provider: SttProvider::Deepgram,
+            stt_engine: SttEngineKind::Deepgram,
             stt_model: "nova-3".into(),
+            local_stt_model: sv_models::PARAKEET_V3.into(),
+            local_only: false,
             my_language: Language::It,
             their_language: Language::Multi,
             mic_device_id: None,
@@ -247,6 +256,25 @@ mod tests {
         let s = SettingsStore::load(path.clone()).get();
         assert_eq!(s.my_language, Language::En);
         assert_eq!(s.llm_provider, LlmProvider::Ollama);
+        assert_eq!(s.stt_engine, SttEngineKind::Deepgram);
+        assert!(!s.local_only);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn stt_engine_and_local_only_patch() {
+        let path = temp_path("engine");
+        let store = SettingsStore::load(path.clone());
+        let s = store
+            .update(json!({"sttEngine": "local", "localOnly": true}))
+            .unwrap();
+        assert_eq!(s.stt_engine, SttEngineKind::Local);
+        assert!(s.local_only);
+        assert_eq!(s.local_stt_model, sv_models::PARAKEET_V3);
+        assert_eq!(SettingsStore::load(path.clone()).get(), s);
+        assert!(store.update(json!({"sttEngine": "whisper"})).is_err());
+        // La vecchia chiave non è più accettata nei patch.
+        assert!(store.update(json!({"sttProvider": "deepgram"})).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

@@ -9,11 +9,13 @@ use sv_stt::{Language, SttEvent};
 use crate::assist::{AssistConfig, AssistEvent};
 use crate::llm;
 use crate::meeting::MeetingContext;
+use crate::models::{self, LocalModel, Models};
 use crate::secrets;
 use crate::session::Session;
 use crate::session::{LlmTasks, Outputs};
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
 use crate::state::AppState;
+use crate::stt;
 use crate::translate::{TranslationEvent, TranslatorConfig};
 
 /// Errore restituito al frontend come stringa leggibile.
@@ -36,9 +38,11 @@ pub fn system_audio_supported() -> bool {
 /// Avvia una sessione (ferma quella eventualmente attiva) con le impostazioni
 /// correnti. Livelli su `on_level`, trascrizione su `on_transcript`.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // stato Tauri + un canale IPC per flusso
 pub async fn start_session(
     state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
+    models: State<'_, Models>,
     on_level: Channel<LevelEvent>,
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
@@ -50,10 +54,16 @@ pub async fn start_session(
         old.stop().await;
     }
     let settings = settings.get();
-    let provider = settings.stt_provider.id();
-    let api_key = blocking(move || secrets::get_api_key(provider))
-        .await?
-        .ok_or_else(|| format!("API key mancante per {provider}: impostala nelle Impostazioni"))?;
+    // Prima di qualsiasi connessione: "solo locale" non ammette LLM esterni.
+    stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+    let api_key = match stt::engine_kind(&settings) {
+        SttEngineKind::Deepgram => {
+            blocking(|| secrets::get_api_key(settings::DEEPGRAM_KEY)).await?
+        }
+        SttEngineKind::Local => None,
+    };
+    let spec = stt::resolve(&settings, models.store(), api_key).map_err(|e| format!("{e:#}"))?;
+    let engine = spec.build().map_err(|e| format!("{e:#}"))?;
     let llm = llm_tasks(&settings).await;
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
     let out = Outputs {
@@ -70,7 +80,7 @@ pub async fn start_session(
             let _ = on_assist.send(e);
         }),
     };
-    let session = Session::start(&settings, api_key, context.unwrap_or_default(), llm, out)
+    let session = Session::start(&settings, engine, context.unwrap_or_default(), llm, out)
         .map_err(|e| format!("{e:#}"))?;
     *slot = Some(session);
     Ok(())
@@ -228,4 +238,67 @@ pub async fn test_llm(
         latency_ms: u64::try_from(resp.latency.as_millis()).unwrap_or(u64::MAX),
         reply: resp.content.trim().chars().take(80).collect(),
     })
+}
+
+// --- Modelli locali ------------------------------------------------------------
+
+#[tauri::command]
+pub fn list_local_models(models: State<'_, Models>) -> Vec<LocalModel> {
+    models.list()
+}
+
+/// Scarica (o riprende) un modello; avanzamento su `on_progress`. Ritorna lo
+/// stato finale. Annullato → errore "download annullato", parziale conservato.
+#[tauri::command]
+pub async fn download_local_model(
+    models: State<'_, Models>,
+    id: String,
+    on_progress: Channel<sv_models::DownloadProgress>,
+) -> CmdResult<LocalModel> {
+    let spec = models::spec(&id).map_err(to_msg)?;
+    let guard = models
+        .begin(&id)
+        .ok_or_else(|| format!("download di {id} già in corso"))?;
+    let result = models
+        .store()
+        .download(
+            spec,
+            |p| {
+                let _ = on_progress.send(p);
+            },
+            &guard.cancel,
+        )
+        .await;
+    drop(guard);
+    result.map_err(to_msg)?;
+    Ok(models.describe(spec))
+}
+
+#[tauri::command]
+pub fn cancel_local_model_download(models: State<'_, Models>, id: String) -> bool {
+    models.cancel(&id)
+}
+
+#[tauri::command]
+pub async fn delete_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+    let spec = models::spec(&id).map_err(to_msg)?;
+    // Il guard impedisce un download concorrente durante l'eliminazione.
+    let guard = models
+        .begin(&id)
+        .ok_or_else(|| format!("download di {id} in corso: annullalo prima"))?;
+    models.store().delete(spec).await.map_err(to_msg)?;
+    drop(guard);
+    Ok(models.describe(spec))
+}
+
+/// Verifica completa (SHA-256 di tutti i file).
+#[tauri::command]
+pub async fn verify_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+    let spec = models::spec(&id).map_err(to_msg)?;
+    let guard = models
+        .begin(&id)
+        .ok_or_else(|| format!("download di {id} in corso"))?;
+    models.store().verify(spec).await.map_err(to_msg)?;
+    drop(guard);
+    Ok(models.describe(spec))
 }
