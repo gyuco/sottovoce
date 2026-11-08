@@ -101,9 +101,11 @@ jobs:
 
       - name: Build
         env:
-          # Incorporato nell'app: serve a capire se la release è più recente.
+          # Incorporati nell'app: servono a capire se la release è più recente.
           SOTTOVOCE_BUILD_SHA: ${{ github.sha }}
-        run: pnpm tauri build
+        run: |
+          echo "SOTTOVOCE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          pnpm tauri build
 
       - name: Package
         id: pkg

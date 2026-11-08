@@ -19,6 +19,10 @@ const RELEASE_PREFIX: &str = "https://github.com/gyuco/sottovoce/releases/";
 /// Sha del commit con cui è stata compilata la build corrente.
 const BUILD_SHA: Option<&str> = option_env!("SOTTOVOCE_BUILD_SHA");
 
+/// Istante di compilazione (RFC 3339 UTC), confrontabile in modo lessicografico
+/// con `published_at` dell'API perché hanno lo stesso formato.
+const BUILD_TIME: Option<&str> = option_env!("SOTTOVOCE_BUILD_TIME");
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
@@ -86,6 +90,13 @@ pub async fn check() -> Option<UpdateInfo> {
 
     // Stessa build già installata: niente da segnalare.
     if build == current {
+        return None;
+    }
+
+    // Release pubblicata prima che questa build esistesse: è più vecchia.
+    if let (Some(built), Some(published)) = (BUILD_TIME, latest.published_at.as_deref())
+        && published <= built
+    {
         return None;
     }
 
