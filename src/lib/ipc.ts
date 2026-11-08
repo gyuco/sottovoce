@@ -368,6 +368,25 @@ export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
 }
 
+// --- Aggiornamenti ----------------------------------------------------------
+
+export interface UpdateInfo {
+  /** Versione della release (`0.1.0`). */
+  version: string;
+  /** Sha corto della build disponibile. */
+  build: string;
+  notes: string;
+  url: string;
+  /** Data di pubblicazione (RFC 3339). */
+  publishedAt: string | null;
+}
+
+/** Ultima release pubblicata più recente di questa build; `null` se non c'è nulla. */
+export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+
+/** Apre nel browser la pagina della release. */
+export const openReleasePage = (url: string) => invoke<void>("open_release_page", { url });
+
 // --- Modelli locali ---------------------------------------------------------
 
 export type LocalModelKind = "vad" | "stt" | "speakerEmbedding";

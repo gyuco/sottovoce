@@ -24,6 +24,7 @@ use crate::state::{AppState, Db};
 use crate::stt;
 use crate::summary::SummaryConfig;
 use crate::translate::{TranslationEvent, TranslatorConfig};
+use crate::update;
 
 /// Errore restituito al frontend come stringa leggibile.
 type CmdResult<T> = Result<T, String>;
@@ -735,4 +736,18 @@ pub async fn verify_local_model(models: State<'_, Models>, id: String) -> CmdRes
     models.store().verify(spec).await.map_err(to_msg)?;
     drop(guard);
     Ok(models.describe(spec))
+}
+
+// --- Aggiornamenti -----------------------------------------------------------
+
+/// Ultima release pubblicata più recente di questa build (`null` se nessuna).
+#[tauri::command]
+pub async fn check_update() -> Option<update::UpdateInfo> {
+    update::check().await
+}
+
+/// Apre nel browser la pagina di una release del repo dell'app.
+#[tauri::command]
+pub fn open_release_page(url: String) -> CmdResult<()> {
+    update::open_release(&url).map_err(to_msg)
 }

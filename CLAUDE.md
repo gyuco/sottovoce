@@ -28,6 +28,7 @@ Passo 1 fatto. Passo 2 (STT cloud end-to-end) implementato, in verifica con chia
 - `.github/workflows/release.yml`: a ogni merge su `main` compila `Sottovoce.app` + `.dmg` e crea una **release draft** (tag `v<versione>-<sha7>`, versione letta da `tauri.conf.json`). La release non è pubblica finché non la pubblichi a mano; gli asset di un re-run sullo stesso commit vengono sostituiti.
 - Firma: senza `APPLE_CERTIFICATE`/`APPLE_SIGNING_IDENTITY` (e `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` per la notarizzazione) la build è ad-hoc; su un altro Mac serve `xattr -dr com.apple.quarantine Sottovoce.app`.
 - Solo arm64 (`macos-latest`): per Mac Intel serve `macos-13` o un build universal.
+- Aggiornamenti: la CI compila con `SOTTOVOCE_BUILD_SHA`, che `update.rs` incorpora; all'avvio l'app chiede all'API GitHub l'ultima release **pubblicata** (`v<versione>-<sha7>`) e, se lo sha è diverso, mostra `UpdateBanner` in alto con "Scarica" (apre la release) e "Ignora" (sha salvato in `localStorage`). Le release in bozza non vengono viste: vanno pubblicate. Controllo al massimo ogni 6 ore; le build locali (senza lo sha) non controllano.
 
 ## Principi
 

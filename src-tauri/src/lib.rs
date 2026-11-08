@@ -15,6 +15,7 @@ mod state;
 mod stt;
 mod summary;
 mod translate;
+mod update;
 
 use tauri::Manager;
 
@@ -86,6 +87,8 @@ pub fn run() {
             commands::cancel_local_model_download,
             commands::delete_local_model,
             commands::verify_local_model,
+            commands::check_update,
+            commands::open_release_page,
         ])
         .run(tauri::generate_context!())
         .expect("errore durante l'avvio di Sottovoce");

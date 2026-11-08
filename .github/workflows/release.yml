@@ -100,6 +100,9 @@ jobs:
           echo "Firma configurata (identita: ${SIGNING_IDENTITY:-automatica})."
 
       - name: Build
+        env:
+          # Incorporato nell'app: serve a capire se la release è più recente.
+          SOTTOVOCE_BUILD_SHA: ${{ github.sha }}
         run: pnpm tauri build
 
       - name: Package

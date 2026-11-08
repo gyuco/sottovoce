@@ -17,6 +17,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-dialog = "2"
+reqwest = { version = "0.13", default-features = false, features = ["json", "http2", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 sv-audio.workspace = true
 sv-stt.workspace = true
 sv-llm.workspace = true

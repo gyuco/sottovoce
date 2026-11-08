@@ -317,6 +317,12 @@
     "open": "Open summary",
     "dismiss": "Dismiss"
   },
+  "update": {
+    "available": "New version available",
+    "detail": "version {{version}} · build {{build}}",
+    "download": "Download",
+    "dismiss": "Ignore this version"
+  },
   "tray": {
     "show": "Show Sottovoce",
     "quit": "Quit Sottovoce",
