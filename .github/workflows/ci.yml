@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  web:
+    name: Frontend (typecheck, lint, i18n)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: i18n check
+        run: pnpm i18n:check
+
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          key: ci
+
+      # sherpa-onnx scarica le librerie statiche al primo build: senza cache
+      # ogni run riparte da zero.
+      - name: Cache sherpa-onnx prebuilt
+        uses: actions/cache@v4
+        with:
+          path: target/sherpa-onnx-prebuilt
+          key: sherpa-onnx-prebuilt-${{ runner.arch }}-v1
+          restore-keys: |
+            sherpa-onnx-prebuilt-${{ runner.arch }}-
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
