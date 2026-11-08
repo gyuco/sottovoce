@@ -21,15 +21,6 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUST_BACKTRACE: 1
-  # Se questi secret non esistono il workflow compila comunque (firma ad-hoc)
-  # e salta l'import del certificato. Per abilitare la firma/notarizzazione
-  # basta valorizzarli nei GitHub Secrets.
-  APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-  APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-  APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-  APPLE_ID: ${{ secrets.APPLE_ID }}
-  APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
 jobs:
   build:
@@ -72,20 +63,41 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Import Developer ID certificate (opzionale)
-        if: env.APPLE_CERTIFICATE != ''
+      - name: Configure signing (opzionale)
+        env:
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          KEYCHAIN=build.keychain
-          security create-keychain -p actions "$KEYCHAIN"
-          security default-keychain -s "$KEYCHAIN"
-          security unlock-keychain -p actions "$KEYCHAIN"
-          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security import certificate.p12 -k "$KEYCHAIN" \
-            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k actions "$KEYCHAIN"
-          rm -f certificate.p12
+          set -euo pipefail
+          # Le variabili vanno esportate nel job solo se valorizzate: Tauri
+          # importa il certificato quando APPLE_CERTIFICATE esiste, anche se
+          # vuota, e fallirebbe con "Unable to decode the provided data".
+          if [ -z "${CERT_B64:-}" ]; then
+            echo "Nessun certificato configurato: build ad-hoc (non notarizzata)."
+            exit 0
+          fi
+
+          emit() {
+            local name="$1" value="$2"
+            [ -n "$value" ] || return 0
+            {
+              echo "${name}<<__TAURI_ENV__"
+              echo "$value"
+              echo "__TAURI_ENV__"
+            } >> "$GITHUB_ENV"
+          }
+
+          emit APPLE_CERTIFICATE "$CERT_B64"
+          emit APPLE_CERTIFICATE_PASSWORD "${CERT_PASSWORD:-}"
+          emit APPLE_SIGNING_IDENTITY "${SIGNING_IDENTITY:-}"
+          emit APPLE_ID "${NOTARY_APPLE_ID:-}"
+          emit APPLE_PASSWORD "${NOTARY_PASSWORD:-}"
+          emit APPLE_TEAM_ID "${NOTARY_TEAM_ID:-}"
+          echo "Firma configurata (identita: ${SIGNING_IDENTITY:-automatica})."
 
       - name: Build
         run: pnpm tauri build
@@ -167,7 +179,3 @@ jobs:
               --title "Sottovoce ${{ steps.pkg.outputs.version }} (${{ steps.pkg.outputs.sha }})" \
               --notes-file release-notes.md
           fi
-
-      - name: Rimuovi keychain temporaneo
-        if: always() && env.APPLE_CERTIFICATE != ''
-        run: security delete-keychain build.keychain || true
