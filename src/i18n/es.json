@@ -49,7 +49,24 @@
     "goalPlaceholder": "Objetivo (p. ej. cerrar el presupuesto del Q3)",
     "notes": "Notas",
     "notesPlaceholder": "Notas: participantes, siglas, nombres de productos, lo que quieres conseguir…",
+    "codePath": "Carpeta del código",
+    "codePathPlaceholder": "Ruta del proyecto (p. ej. ~/proyectos/app)",
+    "codePathBrowse": "Elegir carpeta",
+    "codePathHint": "Opcional: el asistente en vivo lee el código para verificar archivos, API y nombres mencionados en la reunión.",
+    "codePathChecking": "Verificando la carpeta…",
+    "codePathError": "La verificación ha fallado.",
+    "codePathMissing": "Carpeta no encontrada: revisa la ruta.",
+    "codePathNotDir": "La ruta no es una carpeta.",
+    "codePathOk": "Verificada · {{count}} archivos",
     "hint": "También se puede editar durante la sesión: se aplica desde la siguiente solicitud."
+  },
+  "chat": {
+    "title": "Pregunta al modelo",
+    "subtitle": "una pregunta libre durante la reunión",
+    "empty": "Pregunta sobre lo dicho, el código o qué hacer.",
+    "placeholder": "Escribe una pregunta…",
+    "send": "Enviar",
+    "thinking": "El modelo está respondiendo…"
   },
   "assist": {
     "title": "Asistencia en vivo",
@@ -299,5 +316,10 @@
     "failed": "Resumen no generado: {{message}}. Puedes reintentarlo desde el Historial.",
     "open": "Abrir resumen",
     "dismiss": "Cerrar aviso"
+  },
+  "tray": {
+    "show": "Mostrar Sottovoce",
+    "quit": "Salir de Sottovoce",
+    "tooltip": "Sottovoce — transcripción en vivo"
   }
 }

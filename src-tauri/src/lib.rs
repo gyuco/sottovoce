@@ -1,4 +1,6 @@
 mod assist;
+mod chat;
+mod codebase;
 mod commands;
 mod compress;
 mod diarize;
@@ -29,6 +31,7 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(state::AppState::default())
         .setup(|app| {
             let path = app.path().app_config_dir()?.join("settings.json");
@@ -58,6 +61,7 @@ pub fn run() {
             commands::list_input_devices,
             commands::system_audio_supported,
             commands::js_error,
+            commands::quit_app,
             commands::start_session,
             commands::stop_session,
             commands::translate_segment,
@@ -68,6 +72,8 @@ pub fn run() {
             commands::generate_summary,
             commands::update_summary_checklist,
             commands::update_meeting_context,
+            commands::inspect_code_path,
+            commands::ask_model,
             commands::set_api_key,
             commands::has_api_key,
             commands::delete_api_key,

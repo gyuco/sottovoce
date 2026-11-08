@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
+use crate::codebase::{self, Codebase};
 use crate::compress::{CompressionLog, MAX_CONTEXT_CHARS};
 use crate::meeting::SharedContext;
 use crate::session::percentiles;
@@ -41,6 +42,8 @@ const SYSTEM_PROMPT: &str = r#"You are a live meeting coach. You receive a rolli
 All assistance must be directed to the "User" (labeled [Io]). Do NOT provide assistance for other participants (labeled [Loro], [Speaker N] or by name). Focus exclusively on what the User can say or ask.
 
 You may receive MEETING CONTEXT (name, purpose, notes, goals): keep suggestions aligned with it.
+
+You may also receive CODEBASE content: a file outline and real excerpts read from the user's local project. Treat it as ground truth: when a participant mentions a file, function, API or behavior, check it against the excerpts, use exact names, and never invent code, files or APIs. If the excerpts do not cover a point, say so instead of guessing.
 
 Surface: a way to respond to something said; an opportunity to summarize or steer; a topic to park; a decision to capture; a commitment to acknowledge; a clarifying question; a vague claim to pin down; follow-up questions.
 
@@ -129,6 +132,7 @@ async fn run(
     let mut ticks = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut state = State::default();
+    let mut code = CodeCache::default();
 
     loop {
         tokio::select! {
@@ -137,7 +141,9 @@ async fn run(
                 None => break,
             },
             _ = ticks.tick() => {
-                let Some(messages) = state.next_prompt(&cfg, &context, compressed.as_ref()) else {
+                let Some(messages) =
+                    state.next_prompt(&cfg, &context, compressed.as_ref(), &mut code).await
+                else {
                     state.stats.idle += 1;
                     continue;
                 };
@@ -149,6 +155,49 @@ async fn run(
         }
     }
     state.stats.report();
+}
+
+/// Cartella di codice della sessione, riaperta solo quando il percorso
+/// cambia (l'utente può modificarlo anche a call in corso).
+#[derive(Default)]
+struct CodeCache {
+    path: Option<String>,
+    base: Option<Arc<Codebase>>,
+}
+
+impl CodeCache {
+    /// Blocco `CODEBASE` per il ciclo corrente; `None` senza percorso o se
+    /// la cartella non è leggibile. La lettura dei file sta su un thread
+    /// bloccante: non deve mai fermare il pump STT né il runtime.
+    async fn block_for(&mut self, path: &str, terms: &[String]) -> Option<String> {
+        let path = path.trim();
+        if path.is_empty() {
+            self.path = None;
+            self.base = None;
+            return None;
+        }
+        if self.path.as_deref() != Some(path) {
+            let opened = path.to_owned();
+            self.base = tokio::task::spawn_blocking(move || Codebase::open(&opened))
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .map(Arc::new);
+            self.path = Some(path.to_owned());
+            if self.base.is_none() {
+                tracing::warn!(
+                    path,
+                    "cartella del codice non disponibile: live assist senza CODEBASE"
+                );
+            }
+        }
+        let base = self.base.clone()?;
+        let terms = terms.to_vec();
+        tokio::task::spawn_blocking(move || base.context_block(&terms))
+            .await
+            .ok()
+            .flatten()
+    }
 }
 
 #[derive(Default)]
@@ -171,11 +220,12 @@ impl State {
 
     /// Prompt del ciclo; `None` se non ci sono frasi nuove. Le frasi nuove
     /// passano nel contesto dei cicli successivi.
-    fn next_prompt(
+    async fn next_prompt(
         &mut self,
         cfg: &AssistConfig,
         context: &SharedContext,
         compressed: Option<&CompressionLog>,
+        code: &mut CodeCache,
     ) -> Option<Vec<Message>> {
         if self.fresh.is_empty() {
             return None;
@@ -186,10 +236,15 @@ impl State {
         // le sue frasi precedenti.
         let label = |speaker| context.speaker_label(speaker);
         let compressed = compressed.and_then(|log| log.prompt_block(MAX_CONTEXT_CHARS));
+        let terms = codebase::extract_terms(fresh.iter().map(|l| l.text.as_str()), 6);
+        let code_block = code.block_for(&context.get().code_path, &terms).await;
         let messages = messages(
             cfg.user_language,
-            context.prompt_block().as_deref(),
-            compressed.as_deref(),
+            Blocks {
+                context: context.prompt_block().as_deref(),
+                code: code_block.as_deref(),
+                compressed: compressed.as_deref(),
+            },
             &self.shown[shown_from..],
             self.earlier.make_contiguous(),
             &fresh,
@@ -263,13 +318,19 @@ impl State {
     }
 }
 
+/// Blocchi opzionali del system prompt.
+struct Blocks<'a> {
+    context: Option<&'a str>,
+    code: Option<&'a str>,
+    compressed: Option<&'a str>,
+}
+
 /// Prompt del live assist: system da `docs/DESIGN.md` §6 più lingua
-/// dell'utente, contesto meeting e suggerimenti già dati; user con la
-/// trascrizione etichettata.
+/// dell'utente, contesto meeting, codice del progetto e suggerimenti già
+/// dati; user con la trascrizione etichettata.
 fn messages(
     user_language: Language,
-    context: Option<&str>,
-    compressed: Option<&str>,
+    blocks: Blocks<'_>,
     shown: &[String],
     earlier: &[AssistLine],
     fresh: &[AssistLine],
@@ -281,11 +342,15 @@ fn messages(
         Language::It | Language::Multi => "Italian",
     };
     system.push_str(&format!("\n\nThe User's language is {lang}."));
-    if let Some(block) = context {
+    if let Some(block) = blocks.context {
         system.push_str("\n\n");
         system.push_str(block);
     }
-    if let Some(block) = compressed {
+    if let Some(block) = blocks.code {
+        system.push_str("\n\n");
+        system.push_str(block);
+    }
+    if let Some(block) = blocks.compressed {
         system.push_str("\n\nMEETING SO FAR (compressed, context only):\n");
         system.push_str(block);
     }
@@ -539,8 +604,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn prompt_includes_compressed_blocks() {
+    #[tokio::test]
+    async fn prompt_includes_compressed_blocks() {
         let log = CompressionLog::default();
         log.add_block(crate::compress::CompressionEvent {
             index: 1,
@@ -558,7 +623,13 @@ mod tests {
         let mut state = State::default();
         state.push(line(Channel::Them, "novità adesso"));
         let messages = state
-            .next_prompt(&cfg, &SharedContext::default(), Some(&log))
+            .next_prompt(
+                &cfg,
+                &SharedContext::default(),
+                Some(&log),
+                &mut CodeCache::default(),
+            )
+            .await
             .unwrap();
         assert!(messages[0].content.contains("MEETING SO FAR"));
         assert!(messages[0].content.contains("vecchio riassunto sul budget"));
@@ -567,6 +638,42 @@ mod tests {
                 .content
                 .ends_with("Last 20 seconds:\n[Loro] novità adesso")
         );
+    }
+
+    #[tokio::test]
+    async fn codebase_excerpts_reach_the_prompt() {
+        let dir = std::env::temp_dir().join(format!("sv-assist-code-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("src/totals.rs"),
+            "pub fn compute_totals(items: &[Item]) -> u64 {\n    items.len() as u64\n}\n",
+        )
+        .unwrap();
+
+        let context = SharedContext::new(MeetingContext {
+            code_path: dir.to_string_lossy().into_owned(),
+            ..MeetingContext::default()
+        });
+        let cfg = AssistConfig {
+            llm: ScriptedLlm::new(&[]),
+            model: "m".into(),
+            user_language: Language::It,
+        };
+        let mut state = State::default();
+        state.push(line(
+            Channel::Them,
+            "We should check compute_totals before shipping.",
+        ));
+        let messages = state
+            .next_prompt(&cfg, &context, None, &mut CodeCache::default())
+            .await
+            .unwrap();
+        let system = &messages[0].content;
+        assert!(system.contains("CODEBASE"), "{system}");
+        assert!(system.contains("src/totals.rs"), "{system}");
+        assert!(system.contains("pub fn compute_totals"), "{system}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -628,7 +735,13 @@ mod tests {
             state.push(line(ch, text));
         }
         let messages = state
-            .next_prompt(&cfg, &SharedContext::new(context), None)
+            .next_prompt(
+                &cfg,
+                &SharedContext::new(context),
+                None,
+                &mut CodeCache::default(),
+            )
+            .await
             .unwrap();
         let started = Instant::now();
         let events = state.ask(&cfg, messages, 0).await;

@@ -49,7 +49,24 @@
     "goalPlaceholder": "Goal (e.g. close the Q3 budget)",
     "notes": "Notes",
     "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
+    "codePath": "Code folder",
+    "codePathPlaceholder": "Project path (e.g. ~/projects/app)",
+    "codePathBrowse": "Choose folder",
+    "codePathHint": "Optional: live assist reads the code to verify files, APIs and names mentioned in the call.",
+    "codePathChecking": "Checking the folder…",
+    "codePathError": "Check failed.",
+    "codePathMissing": "Folder not found: check the path.",
+    "codePathNotDir": "The path is not a folder.",
+    "codePathOk": "Verified · {{count}} files",
     "hint": "Editable during the session too: applies from the next request."
+  },
+  "chat": {
+    "title": "Ask the model",
+    "subtitle": "a free-form question during the call",
+    "empty": "Ask about what was said, the code, or what to do next.",
+    "placeholder": "Type a question…",
+    "send": "Send",
+    "thinking": "The model is answering…"
   },
   "assist": {
     "title": "Live assist",
@@ -299,5 +316,10 @@
     "failed": "Summary not generated: {{message}}. You can retry from History.",
     "open": "Open summary",
     "dismiss": "Dismiss"
+  },
+  "tray": {
+    "show": "Show Sottovoce",
+    "quit": "Quit Sottovoce",
+    "tooltip": "Sottovoce — live transcription"
   }
 }

@@ -173,9 +173,40 @@ export interface MeetingContext {
   name: string;
   goal: string;
   notes: string;
+  /** Cartella del progetto locale da cui il live assist legge il codice. */
+  codePath: string;
   /** Nomi dei parlanti di "Loro" per indice ("0" = Speaker 1), per la sessione. */
   speakers: Record<string, string>;
 }
+
+/** Esito della verifica di una cartella di codice. */
+export interface CodePathInfo {
+  path: string;
+  exists: boolean;
+  isDir: boolean;
+  files: number;
+  truncated: boolean;
+  languages: { name: string; files: number }[];
+  outline: string;
+}
+
+export const inspectCodePath = (path: string) =>
+  invoke<CodePathInfo>("inspect_code_path", { path });
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatTurn {
+  role: ChatRole;
+  content: string;
+}
+
+/** Domanda libera al modello durante la call; risposta completa (no streaming). */
+export const askModel = (input: {
+  question: string;
+  history: ChatTurn[];
+  transcript: string;
+  context: MeetingContext;
+}) => invoke<string>("ask_model", input);
 
 export function startSession(
   onLevel: (e: LevelEvent) => void,

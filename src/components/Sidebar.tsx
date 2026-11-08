@@ -1,6 +1,7 @@
-import { AudioWaveform, History, type LucideIcon, Radio, Settings } from "lucide-react";
+import { History, type LucideIcon, Radio, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
 
@@ -22,11 +23,8 @@ export function Sidebar({ view, onChange }: { view: View; onChange: (v: View) =>
       className="flex w-16 shrink-0 flex-col items-center gap-2 border-r bg-sidebar py-4"
       aria-label={t("nav.label")}
     >
-      <div
-        className="mb-4 flex size-10 items-center justify-center rounded-xl bg-foreground text-background shadow-sm"
-        title={t("app.title")}
-      >
-        <AudioWaveform className="size-5" aria-hidden />
+      <div className="mb-4 size-10" title={t("app.title")}>
+        <Logo className="size-10" label={t("app.title")} />
       </div>
       {NAV.map(({ view: v, icon: Icon, label }) => (
         <button

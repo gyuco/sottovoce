@@ -3,7 +3,13 @@ import { create } from "zustand";
 import { type MeetingContext, errorMessage, updateMeetingContext } from "@/lib/ipc";
 
 /** Limiti dei campi (allineati a `src-tauri/src/meeting.rs`). */
-export const MEETING_LIMITS = { name: 200, goal: 500, notes: 2000, speakerName: 60 } as const;
+export const MEETING_LIMITS = {
+  name: 200,
+  goal: 500,
+  notes: 2000,
+  codePath: 1024,
+  speakerName: 60,
+} as const;
 
 /** Attesa dopo l'ultima modifica prima di inviare il contesto alla sessione. */
 const SYNC_DELAY_MS = 600;
@@ -20,7 +26,7 @@ interface MeetingState {
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 export const useMeetingStore = create<MeetingState>((set, get) => ({
-  context: { name: "", goal: "", notes: "", speakers: {} },
+  context: { name: "", goal: "", notes: "", codePath: "", speakers: {} },
   syncError: null,
 
   set: (patch) => {

@@ -49,7 +49,24 @@
     "goalPlaceholder": "Obiettivo (es. chiudere il budget Q3)",
     "notes": "Note",
     "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
+    "codePath": "Cartella del codice",
+    "codePathPlaceholder": "Percorso del progetto (es. ~/progetti/app)",
+    "codePathBrowse": "Scegli cartella",
+    "codePathHint": "Facoltativa: il live assist legge il codice per verificare file, API e nomi citati in call.",
+    "codePathChecking": "Verifica della cartella…",
+    "codePathError": "Verifica non riuscita.",
+    "codePathMissing": "Cartella non trovata: controlla il percorso.",
+    "codePathNotDir": "Il percorso non è una cartella.",
+    "codePathOk": "Verificata · {{count}} file",
     "hint": "Modificabile anche durante la sessione: vale dalla richiesta successiva."
+  },
+  "chat": {
+    "title": "Chiedi al modello",
+    "subtitle": "una domanda libera durante la call",
+    "empty": "Chiedi qualcosa su quanto detto, sul codice o sul da farsi.",
+    "placeholder": "Scrivi una domanda…",
+    "send": "Invia",
+    "thinking": "Il modello sta rispondendo…"
   },
   "assist": {
     "title": "Live assist",
@@ -299,5 +316,10 @@
     "failed": "Riepilogo non generato: {{message}}. Puoi riprovare dallo Storico.",
     "open": "Apri riepilogo",
     "dismiss": "Chiudi avviso"
+  },
+  "tray": {
+    "show": "Mostra Sottovoce",
+    "quit": "Esci da Sottovoce",
+    "tooltip": "Sottovoce — trascrizione live"
   }
 }

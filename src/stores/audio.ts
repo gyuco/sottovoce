@@ -11,6 +11,7 @@ import {
   systemAudioSupported,
 } from "@/lib/ipc";
 import { useAssistStore } from "@/stores/assist";
+import { useChatStore } from "@/stores/chat";
 import { useInsightsStore } from "@/stores/insights";
 import { useMeetingStore } from "@/stores/meeting";
 import { useSettingsStore } from "@/stores/settings";
@@ -107,6 +108,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     assist.reset();
     const insights = useInsightsStore.getState();
     insights.reset();
+    useChatStore.getState().reset();
     // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
     useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
     try {

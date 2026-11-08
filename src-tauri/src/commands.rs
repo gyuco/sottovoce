@@ -10,6 +10,8 @@ use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
+use crate::chat::{self, ChatInput, ChatTurn};
+use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
 use crate::llm;
 use crate::meeting::MeetingContext;
@@ -44,6 +46,12 @@ pub fn system_audio_supported() -> bool {
 #[tauri::command]
 pub fn js_error(message: String) {
     eprintln!("JS-ERROR: {message}");
+}
+
+/// Chiude l'applicazione (voce "Esci" dell'icona nel menu bar).
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    app.exit(0);
 }
 
 /// Avvia una sessione (ferma quella eventualmente attiva) con le impostazioni
@@ -130,6 +138,89 @@ pub async fn start_session(
         .map_err(|e| format!("{e:#}"))?;
     *slot = Some(session);
     Ok(())
+}
+
+/// Verifica una cartella di codice locale: esistenza, numero di file e
+/// linguaggi. Sola lettura, nessun indice persistente.
+#[tauri::command]
+pub async fn inspect_code_path(path: String) -> CmdResult<CodePathInfo> {
+    tauri::async_runtime::spawn_blocking(move || codebase::inspect(&path))
+        .await
+        .map_err(to_msg)
+}
+
+/// Domanda libera al modello durante la call. Il contesto e la trascrizione
+/// recente arrivano dalla UI (che li ha già); il codice locale lo legge qui
+/// `codebase.rs`, in sola lettura.
+#[tauri::command]
+pub async fn ask_model(
+    settings: State<'_, SettingsStore>,
+    context: MeetingContext,
+    question: String,
+    history: Vec<ChatTurn>,
+    transcript: String,
+) -> CmdResult<String> {
+    let settings = settings.get();
+    // "Solo locale" vale anche per la chat.
+    stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+    let task = settings.insight_llm().ok_or_else(|| {
+        "nessun modello scelto per la chat: impostane uno nelle Impostazioni".to_owned()
+    })?;
+    let question = question.trim().to_owned();
+    if question.is_empty() {
+        return Err("domanda vuota".into());
+    }
+
+    let context = context.normalized();
+    let terms = codebase::extract_terms(
+        std::iter::once(question.as_str()).chain(transcript.lines()),
+        8,
+    );
+    let code_path = context.code_path.clone();
+    let code = if code_path.is_empty() {
+        None
+    } else {
+        tauri::async_runtime::spawn_blocking(move || {
+            codebase::Codebase::open(&code_path)
+                .ok()
+                .and_then(|base| base.context_block(&terms))
+        })
+        .await
+        .map_err(to_msg)?
+    };
+
+    let language = match settings.summary_language() {
+        Language::En => "English",
+        _ => "Italian",
+    };
+    let messages = chat::messages(
+        &context,
+        ChatInput {
+            question,
+            history,
+            transcript,
+            language,
+            code,
+        },
+    );
+    let provider = task.provider;
+    let client = {
+        let settings = settings.clone();
+        blocking(move || llm::client(&settings, provider, true)).await?
+    };
+    let request = ChatRequest::new(task.model, messages)
+        .temperature(0.4)
+        .max_tokens(700)
+        .timeout(chat::TIMEOUT);
+    let reply = client
+        .chat(request)
+        .await
+        .map_err(|e| format!("risposta del modello non riuscita: {e}"))?;
+    let reply = reply.content.trim().to_owned();
+    if reply.is_empty() {
+        return Err("il modello ha risposto vuoto".into());
+    }
+    Ok(reply)
 }
 
 /// Aggiorna il contesto della sessione attiva: vale dalla prossima chiamata
@@ -413,6 +504,8 @@ pub async fn generate_summary(
         name: details.meeting.name.clone(),
         goal: details.meeting.goal.clone(),
         notes: details.meeting.notes.clone(),
+        // Il percorso del codice non è salvato nello storico.
+        code_path: String::new(),
         speakers,
     };
     let blocks = details

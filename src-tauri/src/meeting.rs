@@ -15,6 +15,7 @@ pub const MAX_BLOCK_CHARS: usize = 2000;
 const MAX_NAME_CHARS: usize = 200;
 const MAX_GOAL_CHARS: usize = 500;
 const MAX_SPEAKER_NAME_CHARS: usize = 60;
+const MAX_CODE_PATH_CHARS: usize = 1024;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -22,6 +23,10 @@ pub struct MeetingContext {
     pub name: String,
     pub goal: String,
     pub notes: String,
+    /// Cartella del progetto locale da cui il live assist legge il codice.
+    /// Non fa parte di [`Self::prompt_block`]: il blocco `CODEBASE` lo
+    /// costruisce `codebase.rs` solo per le chiamate che lo usano.
+    pub code_path: String,
     /// Nomi dati dall'utente ai parlanti di "Loro" (0 = "Speaker 1"),
     /// validi per la sessione.
     pub speakers: BTreeMap<u8, String>,
@@ -34,6 +39,7 @@ impl MeetingContext {
             name: clip(self.name.trim(), MAX_NAME_CHARS),
             goal: clip(self.goal.trim(), MAX_GOAL_CHARS),
             notes: clip(self.notes.trim(), MAX_BLOCK_CHARS),
+            code_path: clip(self.code_path.trim(), MAX_CODE_PATH_CHARS),
             speakers: self
                 .speakers
                 .into_iter()
@@ -194,6 +200,22 @@ mod tests {
     fn clip_keeps_short_strings() {
         assert_eq!(clip("abc", 3), "abc");
         assert_eq!(clip("abcd", 3), "ab…");
+    }
+
+    #[test]
+    fn code_path_is_trimmed_and_stays_out_of_the_block() {
+        let c = MeetingContext {
+            name: "Daily".into(),
+            code_path: "  ~/progetti/app  ".into(),
+            ..MeetingContext::default()
+        }
+        .normalized();
+        assert_eq!(c.code_path, "~/progetti/app");
+        let block = c.prompt_block().unwrap();
+        assert!(!block.contains("progetti"), "{block}");
+        let parsed: MeetingContext =
+            serde_json::from_str(r#"{"name":"x","codePath":"/tmp/src"}"#).unwrap();
+        assert_eq!(parsed.code_path, "/tmp/src");
     }
 
     #[test]

@@ -6,6 +6,7 @@ import { AssistPanel } from "@/components/AssistPanel";
 import { AudioPanel } from "@/components/AudioPanel";
 import { History } from "@/components/History";
 import { InsightsPanel } from "@/components/InsightsPanel";
+import { MeetingChat } from "@/components/MeetingChat";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -16,13 +17,14 @@ import { Transcript } from "@/components/Transcript";
 import { Button } from "@/components/ui/button";
 import { onSummaryStatus } from "@/lib/ipc";
 import { useSttBlocker } from "@/lib/readiness";
+import { syncTray } from "@/lib/tray";
 import { useAudioStore } from "@/stores/audio";
 import { useInsightsStore } from "@/stores/insights";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
 export default function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { error, init } = useAudioStore();
   const load = useSettingsStore((s) => s.load);
   const loadModels = useModelsStore((s) => s.load);
@@ -42,6 +44,11 @@ export default function App() {
     const unlisten = onSummaryStatus(useInsightsStore.getState().applyStatus);
     return () => void unlisten.then((stop) => stop());
   }, []);
+
+  // Icona nel menu bar / area di notifica, con le voci nella lingua corrente.
+  useEffect(() => {
+    void syncTray(t, i18n.resolvedLanguage ?? "it");
+  }, [t, i18n.resolvedLanguage]);
 
   const openSummary = (meetingId: number) => {
     // Ancora mostrato in Live (nessuna nuova sessione): basta tornarci.
@@ -113,6 +120,7 @@ export default function App() {
             <div className="flex flex-col gap-4 md:min-h-0">
               <TalkRatio />
               <MeetingContextPanel />
+              <MeetingChat />
               <Transcript />
             </div>
           </div>
