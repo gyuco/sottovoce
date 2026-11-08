@@ -10,11 +10,15 @@ use sv_llm::{Anthropic, LlmProvider, ModelInfo, OpenAiCompatible};
 use crate::secrets;
 use crate::settings::{LlmProvider as Provider, Settings};
 
-/// Client per il provider configurato. Legge la chiave dal Keychain (può
-/// bloccare: va chiamata fuori dal thread principale). `require_key` = errore
-/// se il provider la prevede ma non è salvata (per Custom resta opzionale).
-pub fn client(settings: &Settings, require_key: bool) -> Result<Arc<dyn LlmProvider>> {
-    let provider = settings.llm_provider;
+/// Client per `provider` (l'indirizzo di Custom viene da `settings`). Legge
+/// la chiave dal Keychain (può bloccare: va chiamata fuori dal thread
+/// principale). `require_key` = errore se il provider la prevede ma non è
+/// salvata (per Custom resta opzionale).
+pub fn client(
+    settings: &Settings,
+    provider: Provider,
+    require_key: bool,
+) -> Result<Arc<dyn LlmProvider>> {
     let base_url = provider.base_url(&settings.llm_base_url)?;
     let key = match provider.key_account() {
         Some(account) => secrets::get_api_key(account)?,

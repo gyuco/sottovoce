@@ -9,21 +9,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sv_stt::Language;
 
+/// Motore di trascrizione.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum SttProvider {
+pub enum SttEngineKind {
+    /// Sul computer (VAD + Parakeet): niente audio a terzi, funziona offline.
+    Local,
+    /// Deepgram Nova-3 in streaming (cloud, API key).
     #[default]
     Deepgram,
 }
 
-impl SttProvider {
-    /// Account della API key nel Keychain (vedi `secrets::KNOWN_PROVIDERS`).
-    pub fn id(self) -> &'static str {
-        match self {
-            Self::Deepgram => "deepgram",
-        }
-    }
-}
+/// Account Keychain della API key Deepgram (vedi `secrets::KNOWN_PROVIDERS`).
+pub const DEEPGRAM_KEY: &str = "deepgram";
 
 /// Provider LLM. Tutti OpenAI-compatible tranne `Anthropic` (Messages API).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,8 +80,21 @@ impl LlmProvider {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
-    pub stt_provider: SttProvider,
+    /// Motore scelto; con `local_only` vale comunque quello locale.
+    /// Alias: i file salvati prima del motore locale usavano `sttProvider`.
+    #[serde(alias = "sttProvider")]
+    pub stt_engine: SttEngineKind,
+    /// Modello Deepgram.
     pub stt_model: String,
+    /// Modello del catalogo `sv-models` per il motore locale.
+    pub local_stt_model: String,
+    /// Privacy: STT locale e LLM solo su questa macchina; l'avvio fallisce
+    /// se la configurazione richiederebbe un host esterno.
+    pub local_only: bool,
+    /// Riconoscimento dei parlanti su "Loro" (serve il modello CAM++).
+    pub diarization: bool,
+    /// Altri partecipanti noti (1–8); 0 = automatico.
+    pub their_speakers: u8,
     /// Lingua dell'utente (canale "Io"): monolingua = più accurato.
     pub my_language: Language,
     /// Lingua degli altri partecipanti (canale "Loro").
@@ -96,15 +107,62 @@ pub struct Settings {
     pub llm_base_url: String,
     /// Modello per la traduzione per frase; vuoto = da scegliere.
     pub translation_model: String,
+    /// Provider della traduzione; `None` = `llm_provider`.
+    pub translation_provider: Option<LlmProvider>,
+    /// Traduce da sola ogni frase di "Loro"; spento = solo su richiesta
+    /// (pulsante "Traduci" accanto alla frase).
+    pub auto_translate: bool,
     /// Modello per il live assist; vuoto = da scegliere.
     pub assist_model: String,
+    /// Provider del live assist (e di compressione e riepilogo);
+    /// `None` = `llm_provider`.
+    pub assist_provider: Option<LlmProvider>,
+    /// Genera il riepilogo finale automaticamente allo stop.
+    pub auto_summary: bool,
     /// Lingua in cui tradurre; `None` = la lingua dell'utente.
     pub target_language: Option<Language>,
 }
 
+/// Modello di un compito LLM con il suo provider.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskModel {
+    pub provider: LlmProvider,
+    pub model: String,
+}
+
 impl Settings {
+    /// Traduzione; `None` se il modello non è scelto.
+    pub fn translation_llm(&self) -> Option<TaskModel> {
+        task(
+            self.translation_provider.unwrap_or(self.llm_provider),
+            &self.translation_model,
+        )
+    }
+
+    /// Live assist; `None` se il modello non è scelto.
+    pub fn assist_llm(&self) -> Option<TaskModel> {
+        task(
+            self.assist_provider.unwrap_or(self.llm_provider),
+            &self.assist_model,
+        )
+    }
+
+    /// Compressione e riepilogo: il modello dell'assist, altrimenti quello
+    /// della traduzione.
+    pub fn insight_llm(&self) -> Option<TaskModel> {
+        self.assist_llm().or_else(|| self.translation_llm())
+    }
+
     /// Lingua delle traduzioni. "Automatica" non è una lingua di arrivo:
     /// in quel caso si ripiega sull'italiano.
+    /// Lingua del riepilogo: quella dell'utente; "automatica" → italiano.
+    pub fn summary_language(&self) -> Language {
+        match self.my_language {
+            Language::Multi => Language::It,
+            l => l,
+        }
+    }
+
     pub fn effective_target_language(&self) -> Language {
         match self.target_language.unwrap_or(self.my_language) {
             Language::Multi => Language::It,
@@ -116,8 +174,12 @@ impl Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            stt_provider: SttProvider::Deepgram,
+            stt_engine: SttEngineKind::Deepgram,
             stt_model: "nova-3".into(),
+            local_stt_model: sv_models::PARAKEET_V3.into(),
+            local_only: false,
+            diarization: true,
+            their_speakers: 0,
             my_language: Language::It,
             their_language: Language::Multi,
             mic_device_id: None,
@@ -125,10 +187,22 @@ impl Default for Settings {
             llm_provider: LlmProvider::Ollama,
             llm_base_url: String::new(),
             translation_model: String::new(),
+            translation_provider: None,
+            auto_translate: false,
             assist_model: String::new(),
+            assist_provider: None,
+            auto_summary: true,
             target_language: None,
         }
     }
+}
+
+fn task(provider: LlmProvider, model: &str) -> Option<TaskModel> {
+    let model = model.trim();
+    (!model.is_empty()).then(|| TaskModel {
+        provider,
+        model: model.to_owned(),
+    })
 }
 
 pub struct SettingsStore {
@@ -247,6 +321,25 @@ mod tests {
         let s = SettingsStore::load(path.clone()).get();
         assert_eq!(s.my_language, Language::En);
         assert_eq!(s.llm_provider, LlmProvider::Ollama);
+        assert_eq!(s.stt_engine, SttEngineKind::Deepgram);
+        assert!(!s.local_only);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn stt_engine_and_local_only_patch() {
+        let path = temp_path("engine");
+        let store = SettingsStore::load(path.clone());
+        let s = store
+            .update(json!({"sttEngine": "local", "localOnly": true}))
+            .unwrap();
+        assert_eq!(s.stt_engine, SttEngineKind::Local);
+        assert!(s.local_only);
+        assert_eq!(s.local_stt_model, sv_models::PARAKEET_V3);
+        assert_eq!(SettingsStore::load(path.clone()).get(), s);
+        assert!(store.update(json!({"sttEngine": "whisper"})).is_err());
+        // La vecchia chiave non è più accettata nei patch.
+        assert!(store.update(json!({"sttProvider": "deepgram"})).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
@@ -274,6 +367,30 @@ mod tests {
         let s = store.update(json!({"llmProvider": "openai"})).unwrap();
         assert_eq!(s.llm_provider, LlmProvider::Openai);
         let _ = std::fs::remove_dir_all(temp_path("llm").parent().unwrap());
+    }
+
+    #[test]
+    fn task_providers_default_to_main() {
+        let s = Settings {
+            llm_provider: LlmProvider::Opencode,
+            translation_model: "small".into(),
+            ..Settings::default()
+        };
+        assert!(!s.auto_translate);
+        let tr = s.translation_llm().unwrap();
+        assert_eq!(
+            (tr.provider, tr.model.as_str()),
+            (LlmProvider::Opencode, "small")
+        );
+        assert_eq!(s.assist_llm(), None);
+        assert_eq!(s.insight_llm(), Some(tr));
+        let s = Settings {
+            assist_model: "big".into(),
+            assist_provider: Some(LlmProvider::Anthropic),
+            ..s
+        };
+        assert_eq!(s.insight_llm().unwrap().provider, LlmProvider::Anthropic);
+        assert_eq!(s.translation_llm().unwrap().provider, LlmProvider::Opencode);
     }
 
     #[test]

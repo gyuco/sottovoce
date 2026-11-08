@@ -1,0 +1,19 @@
+[package]
+name = "sv-diar"
+description = "Riconoscimento dei parlanti (CAM++ via sherpa-onnx) sul canale \"Loro\" per Sottovoce"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-audio.workspace = true
+sherpa-onnx = "2.0.1"
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+hound = "3"
+sv-vad.workspace = true
+
+[lints]
+workspace = true

@@ -10,10 +10,12 @@
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "i18n:check": "node scripts/check-i18n.mjs",
     "app:debug": "tauri build --debug && open target/debug/bundle/macos/Sottovoce.app"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "i18next": "^26.7.2",

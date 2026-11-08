@@ -34,7 +34,12 @@
     "title": "Trascrizione",
     "empty": "La trascrizione apparirà qui quando avvii la sessione.",
     "toBottom": "Torna in fondo",
-    "showTranslations": "Mostra traduzioni"
+    "showTranslations": "Mostra traduzioni",
+    "copy": "Copia",
+    "copyAll": "Copia tutta la trascrizione",
+    "copyLine": "Copia frase",
+    "translate": "Traduci",
+    "translateRetry": "Riprova"
   },
   "meeting": {
     "title": "Contesto meeting",
@@ -44,15 +49,37 @@
     "goalPlaceholder": "Obiettivo (es. chiudere il budget Q3)",
     "notes": "Note",
     "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
+    "codePath": "Cartella del codice",
+    "codePathPlaceholder": "Percorso del progetto (es. ~/progetti/app)",
+    "codePathBrowse": "Scegli cartella",
+    "codePathHint": "Facoltativa: il live assist legge il codice per verificare file, API e nomi citati in call.",
+    "codePathChecking": "Verifica della cartella…",
+    "codePathError": "Verifica non riuscita.",
+    "codePathMissing": "Cartella non trovata: controlla il percorso.",
+    "codePathNotDir": "Il percorso non è una cartella.",
+    "codePathOk": "Verificata · {{count}} file",
     "hint": "Modificabile anche durante la sessione: vale dalla richiesta successiva."
   },
+  "chat": {
+    "title": "Chiedi al modello",
+    "subtitle": "una domanda libera durante la call",
+    "empty": "Chiedi qualcosa su quanto detto, sul codice o sul da farsi.",
+    "placeholder": "Scrivi una domanda…",
+    "send": "Invia",
+    "thinking": "Il modello sta rispondendo…"
+  },
   "assist": {
-    "title": "Suggerimenti",
+    "title": "Live assist",
     "empty": "Ogni 20 secondi, se la conversazione va avanti, qui compare cosa potresti dire o chiedere. Scegli il modello in Impostazioni.",
     "say": "Dì",
     "ask": "Chiedi",
     "copy": "Copia",
-    "dismiss": "Chiudi"
+    "dismiss": "Chiudi",
+    "sayTitle": "Dì questo",
+    "askTitle": "Chiedi",
+    "none": "Ancora nessuno.",
+    "markUsed": "Segna come usato",
+    "markUnused": "Segna come non usato"
   },
   "settings": {
     "title": "Impostazioni",
@@ -60,12 +87,31 @@
     "save": "Salva",
     "applyHint": "Le modifiche valgono dalla prossima sessione.",
     "systemAudioHint": "Trascrive anche gli altri partecipanti della call.",
+    "ui": {
+      "title": "Interfaccia",
+      "language": "Lingua dell'interfaccia",
+      "languageHint": "Cambia la lingua dei testi dell'app."
+    },
     "stt": {
-      "title": "Trascrizione cloud · Deepgram",
-      "hint": "La API key resta nel Portachiavi di macOS e non viene mai mostrata. Creala su console.deepgram.com.",
+      "title": "Trascrizione",
+      "engine": "Motore",
+      "engines": {
+        "local": {
+          "name": "Locale · Parakeet",
+          "hint": "Sul tuo Mac: l'audio non esce dalla macchina e funziona offline. Servono i modelli qui sotto."
+        },
+        "deepgram": {
+          "name": "Cloud · Deepgram",
+          "hint": "Bassa latenza e ottimo su audio difficile; l'audio va ai server di Deepgram. La API key resta nel Portachiavi di macOS: creala su console.deepgram.com."
+        }
+      },
+      "lockedByLocalOnly": "Con \"Solo locale\" attivo si usa sempre il motore locale.",
+      "requiredModels": "Modelli necessari",
       "keyLabel": "API key Deepgram",
-      "needKey": "Per trascrivere serve una API key Deepgram.",
-      "openSettings": "Imposta chiave"
+      "needKey": "Per trascrivere con Deepgram serve una API key.",
+      "openSettings": "Imposta chiave",
+      "needModels": "Per trascrivere in locale scarica i modelli nelle Impostazioni.",
+      "openModels": "Scarica modelli"
     },
     "language": {
       "mine": "La tua lingua (Io)",
@@ -120,7 +166,9 @@
       "modelsHidden": "{{count}} modelli compatibili ({{hidden}} non compatibili nascosti)",
       "reload": "Ricarica modelli",
       "translationModel": "Modello per la traduzione",
-      "translationHint": "Piccolo e veloce: traduce ogni frase.",
+      "translationHint": "Piccolo e veloce: traduce le frasi degli altri.",
+      "autoTranslate": "Traduzione automatica",
+      "autoTranslateHint": "Traduce da sola ogni frase degli altri. Spenta: usa il pulsante «Traduci» accanto alla frase.",
       "assistModel": "Modello per i suggerimenti",
       "assistHint": "Medio, con output JSON: ogni 20 secondi.",
       "chooseModel": "Scegli un modello",
@@ -130,7 +178,22 @@
       "targetHint": "Lingua in cui leggi le frasi degli altri.",
       "targetMine": "La tua lingua",
       "test": "Prova connessione",
-      "testOk": "ok in {{ms}} ms · {{model}}"
+      "testOk": "ok in {{ms}} ms · {{model}}",
+      "autoSummary": "Riepilogo finale automatico",
+      "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni.",
+      "sameProvider": "Come sopra ({{name}})"
+    },
+    "localOnly": {
+      "title": "Solo locale",
+      "hint": "Per i meeting riservati: trascrizione sul tuo Mac e modello linguistico solo su Ollama o su un endpoint in localhost. Durante la sessione nessun dato esce dalla macchina.",
+      "violation": "Il modello linguistico scelto è nel cloud: con \"Solo locale\" la sessione non parte. Passa a Ollama o a un endpoint su localhost, oppure togli i modelli di traduzione e suggerimenti."
+    },
+    "speakers": {
+      "title": "Riconosci i parlanti",
+      "hint": "Distingue chi parla tra gli altri partecipanti (Speaker 1, 2…). Funziona in locale e serve il modello CAM++.",
+      "count": "Altri partecipanti",
+      "countHint": "Se sai quanti sono, il riconoscimento è più stabile e corregge le frasi già mostrate.",
+      "auto": "Automatico"
     }
   },
   "permissions": {
@@ -138,6 +201,125 @@
   },
   "errors": {
     "devices": "Impossibile leggere i dispositivi: {{message}}",
-    "start": "Impossibile avviare la sessione: {{message}}"
+    "start": "Impossibile avviare la sessione: {{message}}",
+    "stop": "Errore durante lo stop della sessione: {{message}}"
+  },
+  "common": {
+    "copied": "Copiato",
+    "save": "Salva",
+    "cancel": "Annulla"
+  },
+  "nav": {
+    "label": "Navigazione",
+    "live": "Sessione live",
+    "settings": "Impostazioni",
+    "history": "Storico"
+  },
+  "header": {
+    "untitled": "Nuovo meeting",
+    "startedAt": "Iniziato alle {{time}}",
+    "ready": "Pronto: avvia quando parte la call",
+    "elapsed": "Durata della sessione",
+    "mode": {
+      "local": "Locale",
+      "cloud": "Cloud",
+      "localHint": "Nessun dato esce da questo computer durante la sessione",
+      "cloudHint": "Audio o testo vengono inviati a servizi esterni"
+    }
+  },
+  "audio": {
+    "title": "Audio"
+  },
+  "talk": {
+    "title": "Tempo di parola",
+    "label": "Io {{me}}% · Loro {{them}}%",
+    "empty": "Il tempo di parola apparirà con la trascrizione"
+  },
+  "models": {
+    "title": "Modelli locali",
+    "hint": "Per trascrivere e riconoscere i parlanti senza inviare audio a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
+    "used": "{{size}} occupati",
+    "ready": "pronto",
+    "missing": "non scaricato",
+    "partial": "parziale {{pct}}%",
+    "corrupt": "da riscaricare",
+    "downloading": "download {{pct}}%",
+    "download": "Scarica",
+    "resume": "Riprendi",
+    "redownload": "Riscarica",
+    "cancel": "Annulla",
+    "verify": "Verifica integrità",
+    "delete": "Elimina",
+    "kind": {
+      "vad": "Rilevamento del parlato",
+      "stt": "Trascrizione",
+      "speakerEmbedding": "Riconoscimento parlanti"
+    }
+  },
+  "speakers": {
+    "label": "Speaker {{n}}",
+    "rename": "Rinomina {{name}}",
+    "renameHint": "Clic per dare un nome a questo parlante"
+  },
+  "history": {
+    "title": "Storico",
+    "searchPlaceholder": "Cerca nelle frasi…",
+    "loading": "Caricamento…",
+    "empty": "I meeting trascritti compariranno qui.",
+    "noResults": "Nessun meeting trovato.",
+    "untitled": "Meeting senza nome",
+    "segments": "{{count}} frasi",
+    "range": "{{from}}–{{to}} di {{total}}",
+    "previous": "Precedenti",
+    "next": "Successivi",
+    "select": "Scegli un meeting dall’elenco.",
+    "noSegments": "Nessuna frase salvata.",
+    "duration": "Durata {{duration}}",
+    "delete": "Elimina meeting",
+    "deleteTitle": "Eliminare il meeting?",
+    "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
+    "deleteAction": "Elimina",
+    "rename": "Rinomina meeting",
+    "assists": "Suggerimenti"
+  },
+  "moment": {
+    "objection": "Obiezione",
+    "commitment": "Impegno",
+    "question": "Domanda",
+    "pain_point": "Punto dolente",
+    "decision": "Decisione"
+  },
+  "moments": {
+    "objection": "Obiezione",
+    "commitment": "Impegno",
+    "question": "Domanda",
+    "pain_point": "Punto dolente",
+    "decision": "Decisione"
+  },
+  "insights": {
+    "title": "Riepilogo progressivo",
+    "blocks": "{{count}} blocchi da 5 min",
+    "moments": "Momenti importanti"
+  },
+  "summary": {
+    "title": "Riepilogo finale",
+    "keyPoints": "Punti chiave",
+    "actions": "Azioni",
+    "copy": "Copia",
+    "regenerate": "Rigenera",
+    "language": "Lingua del riepilogo",
+    "missing": "Nessun riepilogo per questo meeting.",
+    "generate": "Genera riepilogo",
+    "generating": "Sto preparando il riepilogo finale…",
+    "generatingHint": "Il meeting è già salvato. Puoi continuare a usare l'app o avviare una nuova sessione: ti avviso quando è pronto.",
+    "ready": "Riepilogo finale pronto",
+    "failed": "Riepilogo non generato: {{message}}. Puoi riprovare dallo Storico.",
+    "open": "Apri riepilogo",
+    "dismiss": "Chiudi avviso"
+  },
+  "tray": {
+    "show": "Mostra Sottovoce",
+    "quit": "Esci da Sottovoce",
+    "tooltip": "Sottovoce — trascrizione live"
   }
 }

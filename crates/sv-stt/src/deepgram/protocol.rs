@@ -86,6 +86,7 @@ impl Utterance {
                 end,
                 confidence: alt.confidence,
                 language: self.language().or_else(|| alt.languages.first().cloned()),
+                speaker: None,
                 ..Segment::default()
             };
             return Some(SttEventKind::Partial(seg));

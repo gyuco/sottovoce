@@ -1,11 +1,12 @@
 import { Mic, Volume2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { LevelMeter } from "@/components/LevelMeter";
 import { Badge } from "@/components/ui/badge";
 import type { ChannelId } from "@/lib/ipc";
-import { FLOOR_DB, useAudioStore } from "@/stores/audio";
+import { useNow } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
+import { useAudioStore } from "@/stores/audio";
 import { useSettingsStore } from "@/stores/settings";
 import { type ConnState, useTranscriptStore } from "@/stores/transcript";
 
@@ -14,22 +15,13 @@ const NO_SIGNAL_MS = 1500;
 
 const CONN_VARIANT: Record<ConnState, "default" | "secondary" | "destructive" | "outline"> = {
   idle: "secondary",
-  connected: "default",
+  connected: "secondary",
   reconnecting: "outline",
   error: "destructive",
   closed: "secondary",
 };
 
-function useNow(enabled: boolean, intervalMs = 250) {
-  const [now, setNow] = useState(() => performance.now());
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => setNow(performance.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [enabled, intervalMs]);
-  return now;
-}
-
+/** Riga compatta di un canale: nome, stato audio/STT e livello. */
 export function ChannelCard({ channel }: { channel: ChannelId }) {
   const { t } = useTranslation();
   const level = useAudioStore((s) => s.levels[channel]);
@@ -58,13 +50,23 @@ export function ChannelCard({ channel }: { channel: ChannelId }) {
           : t("channel.idle");
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
-      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
-        <Icon className="size-4 text-muted-foreground" aria-hidden />
-        {t(`channel.${channel}`)}
-        <span className="text-xs font-normal text-muted-foreground">{t(`channel.${channel}Hint`)}</span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span
+          className={cn(
+            "flex size-6 items-center justify-center rounded-md",
+            channel === "me" ? "bg-me/12 text-me" : "bg-them/12 text-them",
+          )}
+        >
+          <Icon className="size-3.5" aria-hidden />
+        </span>
+        <span className="font-medium">{t(`channel.${channel}`)}</span>
+        <span className="text-xs text-muted-foreground">{t(`channel.${channel}Hint`)}</span>
         <span className="ml-auto flex gap-1">
-          <Badge variant={live ? "default" : noSignal ? "destructive" : "secondary"} className="font-normal">
+          <Badge
+            variant={noSignal ? "destructive" : "secondary"}
+            className={cn("font-normal", live && "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400")}
+          >
             {audioLabel}
           </Badge>
           {running && (
@@ -74,15 +76,13 @@ export function ChannelCard({ channel }: { channel: ChannelId }) {
           )}
         </span>
       </div>
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <LevelMeter rmsDb={level.rmsDb} holdDb={level.holdDb} active={live} label={t(`channel.${channel}`)} />
-        </div>
-        <span className="w-14 pb-4 text-right font-mono text-xs tabular-nums">
-          {live && level.rmsDb > FLOOR_DB ? `${level.rmsDb.toFixed(1)}` : "—"}
-          <span className="ml-0.5 text-muted-foreground">dB</span>
-        </span>
-      </div>
+      <LevelMeter
+        compact
+        rmsDb={level.rmsDb}
+        holdDb={level.holdDb}
+        active={live}
+        label={t(`channel.${channel}`)}
+      />
       {noSignal && <p className="text-xs text-muted-foreground">{t("channel.noSignalHint")}</p>}
       {conn === "error" && connError && <p className="text-xs text-destructive">{connError}</p>}
     </div>

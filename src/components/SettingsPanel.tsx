@@ -1,8 +1,9 @@
-import { KeyRound } from "lucide-react";
+import { AudioLines, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
+import { LocalModels } from "@/components/LocalModels";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,34 +14,136 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import type { Language } from "@/lib/ipc";
+import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
+import type { Language, SttEngine } from "@/lib/ipc";
+import { effectiveEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
+import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
+import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
 const LANGUAGES: Language[] = ["multi", "it", "en"];
+const ENGINES: SttEngine[] = ["local", "deepgram"];
+/** Altri partecipanti: 0 = automatico. */
+const SPEAKER_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
 export function SettingsPanel() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { settings, hasKey, error, update } = useSettingsStore();
   const systemSupported = useAudioStore((s) => s.systemSupported);
 
   if (!settings) return null;
+  const engine = effectiveEngine(settings);
+
+  const currentUiLanguage =
+    UI_LANGUAGES.find((language) => language.code === i18n.resolvedLanguage)?.code ?? "it";
 
   return (
     <div className="flex flex-col gap-4">
+      <Card className={cn(settings.localOnly && "border-emerald-500/50 bg-emerald-500/5")}>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck
+                  className={cn("size-4", settings.localOnly ? "text-emerald-600" : "text-muted-foreground")}
+                  aria-hidden
+                />
+                {t("settings.localOnly.title")}
+              </CardTitle>
+              <CardDescription className="mt-1.5">{t("settings.localOnly.hint")}</CardDescription>
+            </div>
+            <Switch
+              checked={settings.localOnly}
+              onCheckedChange={(localOnly) => void update({ localOnly })}
+              aria-label={t("settings.localOnly.title")}
+            />
+          </div>
+        </CardHeader>
+        {localOnlyViolation(settings) && (
+          <CardContent>
+            <p role="alert" className="flex gap-2 text-sm text-destructive">
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+              {t("settings.localOnly.violation")}
+            </p>
+          </CardContent>
+        )}
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <KeyRound className="size-4 text-muted-foreground" aria-hidden />
-            {t("settings.stt.title")}
-            <Badge variant={hasKey ? "default" : "secondary"} className="ml-auto font-normal">
-              {hasKey ? t("settings.key.saved") : t("settings.key.missing")}
-            </Badge>
+            <Languages className="size-4 text-muted-foreground" aria-hidden />
+            {t("settings.ui.title")}
           </CardTitle>
-          <CardDescription>{t("settings.stt.hint")}</CardDescription>
+          <CardDescription>{t("settings.ui.languageHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>{t("settings.ui.language")}</span>
+            <Select
+              value={currentUiLanguage}
+              onValueChange={(value) => void setUiLanguage(value as UiLanguage)}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {UI_LANGUAGES.map((language) => (
+                  <SelectItem key={language.code} value={language.code}>
+                    {language.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AudioLines className="size-4 text-muted-foreground" aria-hidden />
+            {t("settings.stt.title")}
+          </CardTitle>
+          <CardDescription>{t(`settings.stt.engines.${engine}.hint`)}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <KeyForm provider={settings.sttProvider} label={t("settings.stt.keyLabel")} />
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.stt.engine")}
+              {settings.localOnly && (
+                <span className="block text-xs text-muted-foreground">{t("settings.stt.lockedByLocalOnly")}</span>
+              )}
+            </span>
+            <Select
+              value={engine}
+              disabled={settings.localOnly}
+              onValueChange={(v) => void update({ sttEngine: v as SttEngine })}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ENGINES.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {t(`settings.stt.engines.${e}.name`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+
+          {engine === "deepgram" ? (
+            <div className="flex flex-col gap-2">
+              <Badge variant={hasKey ? "default" : "secondary"} className="self-end font-normal">
+                {hasKey ? t("settings.key.saved") : t("settings.key.missing")}
+              </Badge>
+              <KeyForm provider="deepgram" label={t("settings.stt.keyLabel")} />
+            </div>
+          ) : (
+            <RequiredModels ids={requiredLocalModels(settings)} />
+          )}
 
           <LanguageSelect
             label={t("settings.language.mine")}
@@ -68,10 +171,51 @@ export function SettingsPanel() {
               onCheckedChange={(v) => void update({ systemAudio: v })}
             />
           </label>
+
+          <div className="flex flex-col gap-3 border-t pt-4">
+            <label className="flex items-center justify-between gap-4 text-sm">
+              <span>
+                {t("settings.speakers.title")}
+                <span className="block text-xs text-muted-foreground">{t("settings.speakers.hint")}</span>
+              </span>
+              <Switch
+                checked={settings.diarization}
+                onCheckedChange={(diarization) => void update({ diarization })}
+              />
+            </label>
+            {settings.diarization && (
+              <>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  <span>
+                    {t("settings.speakers.count")}
+                    <span className="block text-xs text-muted-foreground">{t("settings.speakers.countHint")}</span>
+                  </span>
+                  <Select
+                    value={String(settings.theirSpeakers)}
+                    onValueChange={(v) => void update({ theirSpeakers: Number(v) })}
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SPEAKER_COUNTS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n === 0 ? t("settings.speakers.auto") : String(n)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <RequiredModels ids={["campplus-zh-en"]} />
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 
       <LlmSettings />
+
+      <LocalModels />
 
       {error && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -79,6 +223,34 @@ export function SettingsPanel() {
         </p>
       )}
       <p className="text-xs text-muted-foreground">{t("settings.applyHint")}</p>
+    </div>
+  );
+}
+
+/** Stato dei modelli che servono al motore locale (gestiti in "Modelli locali"). */
+function RequiredModels({ ids }: { ids: string[] }) {
+  const { t } = useTranslation();
+  const models = useModelsStore((s) => s.models);
+  return (
+    <div className="flex flex-col gap-1.5 text-sm">
+      <span>{t("settings.stt.requiredModels")}</span>
+      <ul className="flex flex-col gap-1">
+        {ids.map((id) => {
+          const m = models.find((x) => x.id === id);
+          const ready = m?.status.state === "ready";
+          return (
+            <li key={id} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>{m?.name ?? id}</span>
+              <Badge
+                variant="secondary"
+                className={cn("font-normal", ready && "bg-emerald-500/12 text-emerald-700 dark:text-emerald-400")}
+              >
+                {ready ? t("models.ready") : m?.status.state === "corrupt" ? t("models.corrupt") : t("models.missing")}
+              </Badge>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

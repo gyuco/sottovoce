@@ -11,6 +11,8 @@ import {
   systemAudioSupported,
 } from "@/lib/ipc";
 import { useAssistStore } from "@/stores/assist";
+import { useChatStore } from "@/stores/chat";
+import { useInsightsStore } from "@/stores/insights";
 import { useMeetingStore } from "@/stores/meeting";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
@@ -37,6 +39,8 @@ interface AudioState {
   systemSupported: boolean;
   status: Status;
   startedAt: number;
+  /** Ora di inizio (epoch ms) per mostrarla all'utente. */
+  startedWall: number;
   error: { key: string; message: string } | null;
   levels: Record<ChannelId, ChannelLevel>;
   init: () => Promise<void>;
@@ -74,6 +78,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   systemSupported: false,
   status: "idle",
   startedAt: 0,
+  startedWall: 0,
   error: null,
   levels: { me: silent(), them: silent() },
 
@@ -101,6 +106,11 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     transcript.reset();
     const assist = useAssistStore.getState();
     assist.reset();
+    const insights = useInsightsStore.getState();
+    insights.reset();
+    useChatStore.getState().reset();
+    // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
+    useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
     try {
       await startSession(
         (e) => {
@@ -114,9 +124,10 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         transcript.apply,
         transcript.applyTranslation,
         assist.add,
+        insights.addBlock,
         useMeetingStore.getState().context,
       );
-      set({ status: "running", startedAt: performance.now() });
+      set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });
     } catch (e) {
       set({ status: "idle", error: { key: "errors.start", message: errorMessage(e) } });
     }
@@ -125,9 +136,24 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   stop: async () => {
     set({ status: "stopping" });
     try {
-      await stopSession();
+      const result = await stopSession();
+      // Il riepilogo si genera in background: la UI torna subito utilizzabile.
+      if (result.summaryPending) useInsightsStore.getState().setPending(result.meetingId);
+    } catch (e) {
+      set({ error: { key: "errors.stop", message: errorMessage(e) } });
     } finally {
       set({ status: "idle", levels: { me: silent(), them: silent() } });
     }
   },
 }));
+
+/** Microfono scelto: quello salvato se presente, altrimenti il predefinito. */
+export function useSelectedMicId() {
+  const devices = useAudioStore((s) => s.devices);
+  const saved = useSettingsStore((s) => s.settings?.micDeviceId);
+  return (
+    devices.find((d) => d.id === saved)?.id ??
+    devices.find((d) => d.isDefault)?.id ??
+    devices[0]?.id
+  );
+}

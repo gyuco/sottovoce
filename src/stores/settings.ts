@@ -14,7 +14,7 @@ import {
 
 interface SettingsState {
   settings: Settings | null;
-  /** La chiave del provider STT corrente è nel Keychain. */
+  /** La chiave Deepgram è nel Keychain. */
   hasKey: boolean;
   /** Presenza delle chiavi nel Keychain, per account. */
   keys: Partial<Record<KeyProvider, boolean>>;
@@ -30,7 +30,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
   const setKey = (provider: KeyProvider, present: boolean) =>
     set((s) => ({
       keys: { ...s.keys, [provider]: present },
-      hasKey: provider === s.settings?.sttProvider ? present : s.hasKey,
+      hasKey: provider === "deepgram" ? present : s.hasKey,
     }));
 
   return {
@@ -43,7 +43,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       try {
         const settings = await getSettings();
         set({ settings, error: null });
-        await get().refreshKey(settings.sttProvider);
+        await get().refreshKey("deepgram");
         const llm = llmKeyAccount(settings.llmProvider);
         if (llm) await get().refreshKey(llm);
       } catch (e) {

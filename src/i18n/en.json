@@ -34,7 +34,12 @@
     "title": "Transcript",
     "empty": "The transcript will appear here once you start a session.",
     "toBottom": "Jump to latest",
-    "showTranslations": "Show translations"
+    "showTranslations": "Show translations",
+    "copy": "Copy",
+    "copyAll": "Copy the whole transcript",
+    "copyLine": "Copy sentence",
+    "translate": "Translate",
+    "translateRetry": "Retry"
   },
   "meeting": {
     "title": "Meeting context",
@@ -44,15 +49,37 @@
     "goalPlaceholder": "Goal (e.g. close the Q3 budget)",
     "notes": "Notes",
     "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
+    "codePath": "Code folder",
+    "codePathPlaceholder": "Project path (e.g. ~/projects/app)",
+    "codePathBrowse": "Choose folder",
+    "codePathHint": "Optional: live assist reads the code to verify files, APIs and names mentioned in the call.",
+    "codePathChecking": "Checking the folder…",
+    "codePathError": "Check failed.",
+    "codePathMissing": "Folder not found: check the path.",
+    "codePathNotDir": "The path is not a folder.",
+    "codePathOk": "Verified · {{count}} files",
     "hint": "Editable during the session too: applies from the next request."
   },
+  "chat": {
+    "title": "Ask the model",
+    "subtitle": "a free-form question during the call",
+    "empty": "Ask about what was said, the code, or what to do next.",
+    "placeholder": "Type a question…",
+    "send": "Send",
+    "thinking": "The model is answering…"
+  },
   "assist": {
-    "title": "Suggestions",
+    "title": "Live assist",
     "empty": "Every 20 seconds, while the conversation goes on, what you could say or ask shows up here. Pick the model in Settings.",
     "say": "Say",
     "ask": "Ask",
     "copy": "Copy",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "sayTitle": "Say this",
+    "askTitle": "Ask this",
+    "none": "Nothing yet.",
+    "markUsed": "Mark as used",
+    "markUnused": "Mark as unused"
   },
   "settings": {
     "title": "Settings",
@@ -60,12 +87,31 @@
     "save": "Save",
     "applyHint": "Changes apply from the next session.",
     "systemAudioHint": "Also transcribes the other call participants.",
+    "ui": {
+      "title": "Interface",
+      "language": "Interface language",
+      "languageHint": "Changes the language of the app's text."
+    },
     "stt": {
-      "title": "Cloud transcription · Deepgram",
-      "hint": "The API key stays in the macOS Keychain and is never shown. Create one at console.deepgram.com.",
+      "title": "Transcription",
+      "engine": "Engine",
+      "engines": {
+        "local": {
+          "name": "Local · Parakeet",
+          "hint": "On your Mac: audio never leaves the machine and it works offline. Needs the models below."
+        },
+        "deepgram": {
+          "name": "Cloud · Deepgram",
+          "hint": "Low latency and strong on difficult audio; audio is sent to Deepgram's servers. The API key stays in the macOS Keychain: create one at console.deepgram.com."
+        }
+      },
+      "lockedByLocalOnly": "With \"Local only\" on, the local engine is always used.",
+      "requiredModels": "Required models",
       "keyLabel": "Deepgram API key",
-      "needKey": "A Deepgram API key is required to transcribe.",
-      "openSettings": "Set key"
+      "needKey": "A Deepgram API key is required to transcribe with Deepgram.",
+      "openSettings": "Set key",
+      "needModels": "To transcribe locally, download the models in Settings.",
+      "openModels": "Download models"
     },
     "language": {
       "mine": "Your language (Me)",
@@ -120,7 +166,9 @@
       "modelsHidden": "{{count}} compatible models ({{hidden}} incompatible hidden)",
       "reload": "Reload models",
       "translationModel": "Translation model",
-      "translationHint": "Small and fast: translates every sentence.",
+      "translationHint": "Small and fast: translates the others' sentences.",
+      "autoTranslate": "Automatic translation",
+      "autoTranslateHint": "Translates every sentence from the others. Off: use the “Translate” button next to the sentence.",
       "assistModel": "Suggestions model",
       "assistHint": "Medium, JSON output: every 20 seconds.",
       "chooseModel": "Choose a model",
@@ -130,7 +178,22 @@
       "targetHint": "Language you read the others' sentences in.",
       "targetMine": "Your language",
       "test": "Test connection",
-      "testOk": "ok in {{ms}} ms · {{model}}"
+      "testOk": "ok in {{ms}} ms · {{model}}",
+      "autoSummary": "Automatic final summary",
+      "autoSummaryHint": "On stop, generate overview, key points and action items.",
+      "sameProvider": "Same as above ({{name}})"
+    },
+    "localOnly": {
+      "title": "Local only",
+      "hint": "For confidential meetings: transcription on your Mac and a language model only on Ollama or a localhost endpoint. No data leaves the machine during the session.",
+      "violation": "The selected language model runs in the cloud: with \"Local only\" the session won't start. Switch to Ollama or a localhost endpoint, or clear the translation and suggestion models."
+    },
+    "speakers": {
+      "title": "Recognize speakers",
+      "hint": "Tells apart who is speaking among the other participants (Speaker 1, 2…). Runs locally and needs the CAM++ model.",
+      "count": "Other participants",
+      "countHint": "If you know how many there are, recognition is steadier and fixes sentences already shown.",
+      "auto": "Automatic"
     }
   },
   "permissions": {
@@ -138,6 +201,125 @@
   },
   "errors": {
     "devices": "Could not read devices: {{message}}",
-    "start": "Could not start the session: {{message}}"
+    "start": "Could not start the session: {{message}}",
+    "stop": "Error while stopping the session: {{message}}"
+  },
+  "common": {
+    "copied": "Copied",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "nav": {
+    "label": "Navigation",
+    "live": "Live session",
+    "settings": "Settings",
+    "history": "History"
+  },
+  "header": {
+    "untitled": "New meeting",
+    "startedAt": "Started at {{time}}",
+    "ready": "Ready: start when the call begins",
+    "elapsed": "Session duration",
+    "mode": {
+      "local": "Local",
+      "cloud": "Cloud",
+      "localHint": "No data leaves this computer during the session",
+      "cloudHint": "Audio or text is sent to external services"
+    }
+  },
+  "audio": {
+    "title": "Audio"
+  },
+  "talk": {
+    "title": "Talk time",
+    "label": "Me {{me}}% · Them {{them}}%",
+    "empty": "Talk time appears with the transcript"
+  },
+  "models": {
+    "title": "Local models",
+    "hint": "Transcribe and recognize speakers without sending audio to third parties. Models stay on your Mac and work offline once downloaded.",
+    "used": "{{size}} used",
+    "ready": "ready",
+    "missing": "not downloaded",
+    "partial": "partial {{pct}}%",
+    "corrupt": "needs re-download",
+    "downloading": "downloading {{pct}}%",
+    "download": "Download",
+    "resume": "Resume",
+    "redownload": "Re-download",
+    "cancel": "Cancel",
+    "verify": "Verify integrity",
+    "delete": "Delete",
+    "kind": {
+      "vad": "Speech detection",
+      "stt": "Transcription",
+      "speakerEmbedding": "Speaker recognition"
+    }
+  },
+  "speakers": {
+    "label": "Speaker {{n}}",
+    "rename": "Rename {{name}}",
+    "renameHint": "Click to name this speaker"
+  },
+  "history": {
+    "title": "History",
+    "searchPlaceholder": "Search transcripts…",
+    "loading": "Loading…",
+    "empty": "Transcribed meetings will appear here.",
+    "noResults": "No meetings found.",
+    "untitled": "Untitled meeting",
+    "segments": "{{count}} sentences",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "previous": "Previous",
+    "next": "Next",
+    "select": "Pick a meeting from the list.",
+    "noSegments": "No saved sentences.",
+    "duration": "Duration {{duration}}",
+    "delete": "Delete meeting",
+    "deleteTitle": "Delete meeting?",
+    "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
+    "deleteAction": "Delete",
+    "rename": "Rename meeting",
+    "assists": "Suggestions"
+  },
+  "moment": {
+    "objection": "Objection",
+    "commitment": "Commitment",
+    "question": "Question",
+    "pain_point": "Pain point",
+    "decision": "Decision"
+  },
+  "moments": {
+    "objection": "Objection",
+    "commitment": "Commitment",
+    "question": "Question",
+    "pain_point": "Pain point",
+    "decision": "Decision"
+  },
+  "insights": {
+    "title": "Progressive summary",
+    "blocks": "{{count}} five-minute blocks",
+    "moments": "Important moments"
+  },
+  "summary": {
+    "title": "Final summary",
+    "keyPoints": "Key points",
+    "actions": "Action items",
+    "copy": "Copy",
+    "regenerate": "Regenerate",
+    "language": "Summary language",
+    "missing": "No summary for this meeting yet.",
+    "generate": "Generate summary",
+    "generating": "Preparing the final summary…",
+    "generatingHint": "The meeting is already saved. Keep using the app or start a new session: you'll be notified when it's ready.",
+    "ready": "Final summary ready",
+    "failed": "Summary not generated: {{message}}. You can retry from History.",
+    "open": "Open summary",
+    "dismiss": "Dismiss"
+  },
+  "tray": {
+    "show": "Show Sottovoce",
+    "quit": "Quit Sottovoce",
+    "tooltip": "Sottovoce — live transcription"
   }
 }

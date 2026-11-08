@@ -29,6 +29,7 @@ const TIMEOUT: Duration = Duration::from_secs(8);
 const HISTORY: usize = 3;
 
 /// Cosa serve per tradurre, preparato dal comando `start_session`.
+#[derive(Clone)]
 pub struct TranslatorConfig {
     pub llm: Arc<dyn LlmProvider>,
     pub model: String,
@@ -45,6 +46,8 @@ pub struct Job {
     pub text: String,
     /// Lingua rilevata dal motore STT, se c'è.
     pub language: Option<String>,
+    /// Parlante, se riconosciuto (etichetta nel contesto delle frasi).
+    pub speaker: Option<u8>,
 }
 
 /// Traduzione pronta, inviata alla UI.
@@ -98,7 +101,10 @@ async fn run(
         if history.len() == HISTORY {
             history.pop_front();
         }
-        history.push_back(job.text.clone());
+        history.push_back(match job.speaker {
+            Some(_) => format!("{}: {}", context.speaker_label(job.speaker), job.text),
+            None => job.text.clone(),
+        });
         if skip {
             stats.skipped += 1;
             continue;
@@ -129,20 +135,8 @@ async fn translate(
     job: Job,
     emit: &(dyn Fn(TranslationEvent) + Send + Sync),
 ) -> Outcome {
-    let req = ChatRequest::new(
-        cfg.model.clone(),
-        messages(cfg.target, context.as_deref(), previous, &job.text),
-    )
-    .temperature(0.2)
-    .timeout(TIMEOUT);
-    match cfg.llm.chat(req).await {
-        Ok(resp) => {
-            let text = clean(&resp.content);
-            if text.is_empty() {
-                tracing::warn!(segment_id = job.segment_id, "traduzione vuota");
-                return Outcome::Failed;
-            }
-            let latency_ms = u64::try_from(resp.latency.as_millis()).unwrap_or(u64::MAX);
+    match translate_one(cfg, context.as_deref(), previous, &job.text).await {
+        Ok((text, latency_ms)) => {
             emit(TranslationEvent {
                 segment_id: job.segment_id,
                 text,
@@ -155,6 +149,29 @@ async fn translate(
             Outcome::Failed
         }
     }
+}
+
+/// Traduce una frase: (testo, latenza in ms). Usata dal traduttore
+/// automatico e dal pulsante "Traduci".
+pub async fn translate_one(
+    cfg: &TranslatorConfig,
+    context: Option<&str>,
+    previous: &[String],
+    text: &str,
+) -> Result<(String, u64), String> {
+    let req = ChatRequest::new(
+        cfg.model.clone(),
+        messages(cfg.target, context, previous, text),
+    )
+    .temperature(0.2)
+    .timeout(TIMEOUT);
+    let resp = cfg.llm.chat(req).await.map_err(|e| e.to_string())?;
+    let text = clean(&resp.content);
+    if text.is_empty() {
+        return Err("traduzione vuota".into());
+    }
+    let latency_ms = u64::try_from(resp.latency.as_millis()).unwrap_or(u64::MAX);
+    Ok((text, latency_ms))
 }
 
 /// Prompt di traduzione: system con istruzioni, contesto meeting e frasi
@@ -291,6 +308,7 @@ mod tests {
 
     fn job(id: u64, text: &str, language: Option<&str>) -> Job {
         Job {
+            speaker: None,
             segment_id: id,
             text: text.into(),
             language: language.map(Into::into),
@@ -419,6 +437,7 @@ mod tests {
             name: "Release planning".into(),
             goal: "Decide the beta date".into(),
             notes: "QA = quality assurance team".into(),
+            ..MeetingContext::default()
         }
         .prompt_block();
         let previous = vec!["Let's start with the release.".to_owned()];

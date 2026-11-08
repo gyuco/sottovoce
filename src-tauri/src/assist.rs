@@ -19,6 +19,8 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
+use crate::codebase::{self, Codebase};
+use crate::compress::{CompressionLog, MAX_CONTEXT_CHARS};
 use crate::meeting::SharedContext;
 use crate::session::percentiles;
 
@@ -37,9 +39,11 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 
 const SYSTEM_PROMPT: &str = r#"You are a live meeting coach. You receive a rolling 20-second transcript from an ongoing meeting. Your job is to surface helpful nudges for the User.
 
-All assistance must be directed to the "User" (labeled [Io]). Do NOT provide assistance for other participants (labeled [Loro]). Focus exclusively on what the User can say or ask.
+All assistance must be directed to the "User" (labeled [Io]). Do NOT provide assistance for other participants (labeled [Loro], [Speaker N] or by name). Focus exclusively on what the User can say or ask.
 
 You may receive MEETING CONTEXT (name, purpose, notes, goals): keep suggestions aligned with it.
+
+You may also receive CODEBASE content: a file outline and real excerpts read from the user's local project. Treat it as ground truth: when a participant mentions a file, function, API or behavior, check it against the excerpts, use exact names, and never invent code, files or APIs. If the excerpts do not cover a point, say so instead of guessing.
 
 Surface: a way to respond to something said; an opportunity to summarize or steer; a topic to park; a decision to capture; a commitment to acknowledge; a clarifying question; a vague claim to pin down; follow-up questions.
 
@@ -62,6 +66,8 @@ pub struct AssistConfig {
 pub struct AssistLine {
     pub channel: Channel,
     pub text: String,
+    /// Parlante su "Loro", se riconosciuto.
+    pub speaker: Option<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -69,6 +75,16 @@ pub struct AssistLine {
 pub enum AssistKind {
     Say,
     Ask,
+}
+
+impl AssistKind {
+    /// Etichetta salvata nel database (`say`/`ask`).
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::Say => "say",
+            Self::Ask => "ask",
+        }
+    }
 }
 
 /// Suggerimento inviato alla UI. `at` = ms dall'avvio della sessione.
@@ -93,17 +109,21 @@ struct AssistOutput {
 pub fn spawn(
     cfg: AssistConfig,
     context: SharedContext,
+    compressed: Option<CompressionLog>,
     started: Instant,
     on_assist: impl Fn(AssistEvent) + Send + Sync + 'static,
 ) -> (mpsc::Sender<AssistLine>, JoinHandle<()>) {
     let (tx, rx) = mpsc::channel(QUEUE);
-    let task = tokio::spawn(run(cfg, context, started, PERIOD, rx, on_assist));
+    let task = tokio::spawn(run(
+        cfg, context, compressed, started, PERIOD, rx, on_assist,
+    ));
     (tx, task)
 }
 
 async fn run(
     cfg: AssistConfig,
     context: SharedContext,
+    compressed: Option<CompressionLog>,
     started: Instant,
     period: Duration,
     mut rx: mpsc::Receiver<AssistLine>,
@@ -112,6 +132,7 @@ async fn run(
     let mut ticks = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
     ticks.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut state = State::default();
+    let mut code = CodeCache::default();
 
     loop {
         tokio::select! {
@@ -120,7 +141,9 @@ async fn run(
                 None => break,
             },
             _ = ticks.tick() => {
-                let Some(messages) = state.next_prompt(&cfg, context.prompt_block()) else {
+                let Some(messages) =
+                    state.next_prompt(&cfg, &context, compressed.as_ref(), &mut code).await
+                else {
                     state.stats.idle += 1;
                     continue;
                 };
@@ -132,6 +155,49 @@ async fn run(
         }
     }
     state.stats.report();
+}
+
+/// Cartella di codice della sessione, riaperta solo quando il percorso
+/// cambia (l'utente può modificarlo anche a call in corso).
+#[derive(Default)]
+struct CodeCache {
+    path: Option<String>,
+    base: Option<Arc<Codebase>>,
+}
+
+impl CodeCache {
+    /// Blocco `CODEBASE` per il ciclo corrente; `None` senza percorso o se
+    /// la cartella non è leggibile. La lettura dei file sta su un thread
+    /// bloccante: non deve mai fermare il pump STT né il runtime.
+    async fn block_for(&mut self, path: &str, terms: &[String]) -> Option<String> {
+        let path = path.trim();
+        if path.is_empty() {
+            self.path = None;
+            self.base = None;
+            return None;
+        }
+        if self.path.as_deref() != Some(path) {
+            let opened = path.to_owned();
+            self.base = tokio::task::spawn_blocking(move || Codebase::open(&opened))
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .map(Arc::new);
+            self.path = Some(path.to_owned());
+            if self.base.is_none() {
+                tracing::warn!(
+                    path,
+                    "cartella del codice non disponibile: live assist senza CODEBASE"
+                );
+            }
+        }
+        let base = self.base.clone()?;
+        let terms = terms.to_vec();
+        tokio::task::spawn_blocking(move || base.context_block(&terms))
+            .await
+            .ok()
+            .flatten()
+    }
 }
 
 #[derive(Default)]
@@ -154,18 +220,35 @@ impl State {
 
     /// Prompt del ciclo; `None` se non ci sono frasi nuove. Le frasi nuove
     /// passano nel contesto dei cicli successivi.
-    fn next_prompt(&mut self, cfg: &AssistConfig, context: Option<String>) -> Option<Vec<Message>> {
+    async fn next_prompt(
+        &mut self,
+        cfg: &AssistConfig,
+        context: &SharedContext,
+        compressed: Option<&CompressionLog>,
+        code: &mut CodeCache,
+    ) -> Option<Vec<Message>> {
         if self.fresh.is_empty() {
             return None;
         }
         let fresh = std::mem::take(&mut self.fresh);
         let shown_from = self.shown.len().saturating_sub(SHOWN_IN_PROMPT);
+        // Etichette risolte ora: un nome dato a un parlante vale anche per
+        // le sue frasi precedenti.
+        let label = |speaker| context.speaker_label(speaker);
+        let compressed = compressed.and_then(|log| log.prompt_block(MAX_CONTEXT_CHARS));
+        let terms = codebase::extract_terms(fresh.iter().map(|l| l.text.as_str()), 6);
+        let code_block = code.block_for(&context.get().code_path, &terms).await;
         let messages = messages(
             cfg.user_language,
-            context.as_deref(),
+            Blocks {
+                context: context.prompt_block().as_deref(),
+                code: code_block.as_deref(),
+                compressed: compressed.as_deref(),
+            },
             &self.shown[shown_from..],
             self.earlier.make_contiguous(),
             &fresh,
+            &label,
         );
         for line in fresh {
             if self.earlier.len() == EARLIER_LINES {
@@ -235,15 +318,23 @@ impl State {
     }
 }
 
+/// Blocchi opzionali del system prompt.
+struct Blocks<'a> {
+    context: Option<&'a str>,
+    code: Option<&'a str>,
+    compressed: Option<&'a str>,
+}
+
 /// Prompt del live assist: system da `docs/DESIGN.md` §6 più lingua
-/// dell'utente, contesto meeting e suggerimenti già dati; user con la
-/// trascrizione etichettata.
+/// dell'utente, contesto meeting, codice del progetto e suggerimenti già
+/// dati; user con la trascrizione etichettata.
 fn messages(
     user_language: Language,
-    context: Option<&str>,
+    blocks: Blocks<'_>,
     shown: &[String],
     earlier: &[AssistLine],
     fresh: &[AssistLine],
+    label: &dyn Fn(Option<u8>) -> String,
 ) -> Vec<Message> {
     let mut system = String::from(SYSTEM_PROMPT);
     let lang = match user_language {
@@ -251,8 +342,16 @@ fn messages(
         Language::It | Language::Multi => "Italian",
     };
     system.push_str(&format!("\n\nThe User's language is {lang}."));
-    if let Some(block) = context {
+    if let Some(block) = blocks.context {
         system.push_str("\n\n");
+        system.push_str(block);
+    }
+    if let Some(block) = blocks.code {
+        system.push_str("\n\n");
+        system.push_str(block);
+    }
+    if let Some(block) = blocks.compressed {
+        system.push_str("\n\nMEETING SO FAR (compressed, context only):\n");
         system.push_str(block);
     }
     if !shown.is_empty() {
@@ -266,21 +365,24 @@ fn messages(
     let mut user = String::new();
     if !earlier.is_empty() {
         user.push_str("Earlier in the meeting:\n");
-        push_lines(&mut user, earlier);
+        push_lines(&mut user, earlier, label);
         user.push('\n');
     }
     user.push_str("Last 20 seconds:\n");
-    push_lines(&mut user, fresh);
+    push_lines(&mut user, fresh, label);
     vec![Message::system(system), Message::user(user.trim_end())]
 }
 
-fn push_lines(out: &mut String, lines: &[AssistLine]) {
+fn push_lines(out: &mut String, lines: &[AssistLine], label: &dyn Fn(Option<u8>) -> String) {
     for l in lines {
-        let label = match l.channel {
-            Channel::Me => "[Io]",
-            Channel::Them => "[Loro]",
-        };
-        out.push_str(label);
+        match l.channel {
+            Channel::Me => out.push_str("[Io]"),
+            Channel::Them => {
+                out.push('[');
+                out.push_str(&label(l.speaker));
+                out.push(']');
+            }
+        }
         out.push(' ');
         out.push_str(l.text.trim());
         out.push('\n');
@@ -381,6 +483,7 @@ mod tests {
         AssistLine {
             channel,
             text: text.into(),
+            speaker: None,
         }
     }
 
@@ -399,9 +502,15 @@ mod tests {
             model: "m".into(),
             user_language: Language::It,
         };
-        let task = tokio::spawn(run(cfg, context, Instant::now(), PERIOD, rx, move |e| {
-            sink.lock().unwrap().push(e)
-        }));
+        let task = tokio::spawn(run(
+            cfg,
+            context,
+            None,
+            Instant::now(),
+            PERIOD,
+            rx,
+            move |e| sink.lock().unwrap().push(e),
+        ));
         Harness { tx, task, events }
     }
 
@@ -495,6 +604,78 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn prompt_includes_compressed_blocks() {
+        let log = CompressionLog::default();
+        log.add_block(crate::compress::CompressionEvent {
+            index: 1,
+            start: 0,
+            end: 300_000,
+            summary: "vecchio riassunto sul budget".into(),
+            topics: vec!["budget".into()],
+            moments: Vec::new(),
+        });
+        let cfg = AssistConfig {
+            llm: ScriptedLlm::new(&[]),
+            model: "m".into(),
+            user_language: Language::It,
+        };
+        let mut state = State::default();
+        state.push(line(Channel::Them, "novità adesso"));
+        let messages = state
+            .next_prompt(
+                &cfg,
+                &SharedContext::default(),
+                Some(&log),
+                &mut CodeCache::default(),
+            )
+            .await
+            .unwrap();
+        assert!(messages[0].content.contains("MEETING SO FAR"));
+        assert!(messages[0].content.contains("vecchio riassunto sul budget"));
+        assert!(
+            messages[1]
+                .content
+                .ends_with("Last 20 seconds:\n[Loro] novità adesso")
+        );
+    }
+
+    #[tokio::test]
+    async fn codebase_excerpts_reach_the_prompt() {
+        let dir = std::env::temp_dir().join(format!("sv-assist-code-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(
+            dir.join("src/totals.rs"),
+            "pub fn compute_totals(items: &[Item]) -> u64 {\n    items.len() as u64\n}\n",
+        )
+        .unwrap();
+
+        let context = SharedContext::new(MeetingContext {
+            code_path: dir.to_string_lossy().into_owned(),
+            ..MeetingContext::default()
+        });
+        let cfg = AssistConfig {
+            llm: ScriptedLlm::new(&[]),
+            model: "m".into(),
+            user_language: Language::It,
+        };
+        let mut state = State::default();
+        state.push(line(
+            Channel::Them,
+            "We should check compute_totals before shipping.",
+        ));
+        let messages = state
+            .next_prompt(&cfg, &context, None, &mut CodeCache::default())
+            .await
+            .unwrap();
+        let system = &messages[0].content;
+        assert!(system.contains("CODEBASE"), "{system}");
+        assert!(system.contains("src/totals.rs"), "{system}");
+        assert!(system.contains("pub fn compute_totals"), "{system}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn similarity() {
         assert!(similar("Ask about the budget!", "ask about the BUDGET"));
@@ -553,7 +734,15 @@ mod tests {
         ] {
             state.push(line(ch, text));
         }
-        let messages = state.next_prompt(&cfg, context.prompt_block()).unwrap();
+        let messages = state
+            .next_prompt(
+                &cfg,
+                &SharedContext::new(context),
+                None,
+                &mut CodeCache::default(),
+            )
+            .await
+            .unwrap();
         let started = Instant::now();
         let events = state.ask(&cfg, messages, 0).await;
         println!(
