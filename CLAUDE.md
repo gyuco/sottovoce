@@ -22,6 +22,13 @@ Passo 1 fatto. Passo 2 (STT cloud end-to-end) implementato, in verifica con chia
 - Latenza STT: a fine sessione log `riepilogo latenza STT` per canale (primo parziale, p50/p95/max di parziali e final, in ms). I log si vedono lanciando il binario da terminale: `target/debug/bundle/macos/Sottovoce.app/Contents/MacOS/sottovoce`.
 - Comandi: `pnpm tauri dev`, `pnpm app:debug`, `pnpm typecheck`, `pnpm lint`, `cargo clippy --workspace --all-targets`, `cargo fmt --all --check`, `cargo test --workspace`.
 
+## Rilascio (CI)
+
+- `.github/workflows/ci.yml`: su PR verso `main`/`develop` esegue typecheck, lint, i18n, `cargo fmt --check`, clippy (`-D warnings`) e test su runner macOS.
+- `.github/workflows/release.yml`: a ogni merge su `main` compila `Sottovoce.app` + `.dmg` e crea una **release draft** (tag `v<versione>-<sha7>`, versione letta da `tauri.conf.json`). La release non è pubblica finché non la pubblichi a mano; gli asset di un re-run sullo stesso commit vengono sostituiti.
+- Firma: senza `APPLE_CERTIFICATE`/`APPLE_SIGNING_IDENTITY` (e `APPLE_ID`/`APPLE_PASSWORD`/`APPLE_TEAM_ID` per la notarizzazione) la build è ad-hoc; su un altro Mac serve `xattr -dr com.apple.quarantine Sottovoce.app`.
+- Solo arm64 (`macos-latest`): per Mac Intel serve `macos-13` o un build universal.
+
 ## Principi
 
 - Rust fa il lavoro pesante (audio, VAD, STT, LLM, storage) e custodisce i segreti. React = solo UI.

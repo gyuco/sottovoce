@@ -1,0 +1,173 @@
+name: Release macOS
+
+# Ogni merge su main produce una build macOS (.app + .dmg) allegata a una
+# release in stato *draft*: non e' visibile ne' scaricabile da estranei finche'
+# non la pubblichi a mano da GitHub. Senza firma Developer ID l'app e' firmata
+# ad-hoc: su un altro Mac va tolta la quarantena (vedi note della release).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-macos
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  # Se questi secret non esistono il workflow compila comunque (firma ad-hoc)
+  # e salta l'import del certificato. Per abilitare la firma/notarizzazione
+  # basta valorizzarli nei GitHub Secrets.
+  APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+  APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+  APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+  APPLE_ID: ${{ secrets.APPLE_ID }}
+  APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+jobs:
+  build:
+    name: Build & draft release
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "."
+          key: release
+
+      - name: Cache sherpa-onnx prebuilt
+        uses: actions/cache@v4
+        with:
+          path: target/sherpa-onnx-prebuilt
+          key: sherpa-onnx-prebuilt-${{ runner.arch }}-v1
+          restore-keys: |
+            sherpa-onnx-prebuilt-${{ runner.arch }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Import Developer ID certificate (opzionale)
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          KEYCHAIN=build.keychain
+          security create-keychain -p actions "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p actions "$KEYCHAIN"
+          security set-keychain-settings -t 3600 -u "$KEYCHAIN"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security import certificate.p12 -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k actions "$KEYCHAIN"
+          rm -f certificate.p12
+
+      - name: Build
+        run: pnpm tauri build
+
+      - name: Package
+        id: pkg
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          SHA=$(git rev-parse --short=7 HEAD)
+          case "$(uname -m)" in
+            arm64) ARCH=aarch64 ;;
+            *)     ARCH=x86_64 ;;
+          esac
+
+          APP=target/release/bundle/macos/Sottovoce.app
+          shopt -s nullglob
+          DMGS=(target/release/bundle/dmg/*.dmg)
+          if [ ! -d "$APP" ] || [ "${#DMGS[@]}" -eq 0 ]; then
+            echo "Bundle non trovato (app o dmg mancanti)" >&2
+            exit 1
+          fi
+          DMG="${DMGS[0]}"
+          ZIP="Sottovoce_${VERSION}_${ARCH}.zip"
+
+          # zip con ditto: preserva firma, xattr e resource fork della .app
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
+
+          {
+            echo "version=$VERSION"
+            echo "sha=$SHA"
+            echo "arch=$ARCH"
+            echo "tag=v${VERSION}-${SHA}"
+            echo "zip=$ZIP"
+            echo "dmg=$DMG"
+          } >> "$GITHUB_OUTPUT"
+
+          ls -lh "$ZIP" "$DMG"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sottovoce-macos-${{ steps.pkg.outputs.arch }}
+          path: |
+            ${{ steps.pkg.outputs.zip }}
+            ${{ steps.pkg.outputs.dmg }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Crea release draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='${{ steps.pkg.outputs.tag }}'
+          ZIP='${{ steps.pkg.outputs.zip }}'
+          DMG='${{ steps.pkg.outputs.dmg }}'
+
+          cat > release-notes.md <<EOF
+          Build automatica da \`main\` (commit ${{ steps.pkg.outputs.sha }}).
+
+          **App non firmata (ad-hoc).** Su un Mac diverso da quello che l'ha compilata, dopo il download va tolta la quarantena:
+
+          \`\`\`
+          xattr -dr com.apple.quarantine /Applications/Sottovoce.app
+          \`\`\`
+
+          Al primo avvio vanno concessi i permessi microfono e registrazione schermo (dopo il permesso di registrazione va riavviata l'app).
+          EOF
+
+          # Un re-run sullo stesso commit ritrova la release gia' creata.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$DMG" --clobber
+          else
+            gh release create "$TAG" "$ZIP" "$DMG" \
+              --target "$GITHUB_SHA" \
+              --draft \
+              --prerelease \
+              --title "Sottovoce ${{ steps.pkg.outputs.version }} (${{ steps.pkg.outputs.sha }})" \
+              --notes-file release-notes.md
+          fi
+
+      - name: Rimuovi keychain temporaneo
+        if: always() && env.APPLE_CERTIFICATE != ''
+        run: security delete-keychain build.keychain || true
