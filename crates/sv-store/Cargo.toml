@@ -1,6 +1,6 @@
 [package]
 name = "sv-store"
-description = "Persistenza SQLite dei meeting di Sottovoce: frasi, traduzioni, parlanti e assist"
+description = "Persistenza dei meeting di Sottovoce: metadati in SQLite, testi delle trascrizioni su file"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

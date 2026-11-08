@@ -338,7 +338,8 @@ fn spawn_summary(app: AppHandle, db_path: PathBuf, job: SummaryJob) {
 
 // --- Storico meeting ---------------------------------------------------------
 
-/// Pagina dello storico, più recenti prima. `search` filtra con FTS5 sulle frasi.
+/// Pagina dello storico, più recenti prima. `search` filtra sulle frasi lette
+/// dai file di trascrizione (il testo non è nel database).
 #[tauri::command]
 pub async fn list_meetings(
     db: State<'_, Db>,

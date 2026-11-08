@@ -4,13 +4,14 @@
 //! (crash o chiusura forzata dell'app). Le query sono sincrone e pensate per
 //! l'avvio, lo storico e i futuri comandi Tauri.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::error::StoreError;
 use crate::schema;
+use crate::transcript;
 use crate::types::{
     ActionItem, Assist, CompressionBlock, Meeting, MeetingDetails, MeetingPage, MeetingSummary,
     NewCompressionBlock, NewSummary, Segment, SpeakerName, Summary, Translation,
@@ -18,6 +19,8 @@ use crate::types::{
 
 pub struct Store {
     conn: Mutex<Connection>,
+    /// Cartella del database: i file di trascrizione sono relativi a questa.
+    dir: PathBuf,
 }
 
 impl Store {
@@ -27,9 +30,11 @@ impl Store {
     /// una volta all'avvio con [`Store::recover_open_meetings`], così una
     /// lettura durante una call non tocca il meeting in corso.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
-        let conn = schema::open_connection(path.as_ref())?;
+        let path = path.as_ref();
+        let conn = schema::open_connection(path)?;
         Ok(Self {
             conn: Mutex::new(conn),
+            dir: schema::base_dir(path),
         })
     }
 
@@ -44,6 +49,17 @@ impl Store {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Percorso assoluto del file di trascrizione a partire dal riferimento
+    /// salvato in `meetings.transcript_file`. Se il riferimento manca (righe
+    /// create prima della migrazione 4 o DB nuovo) si usa il percorso standard.
+    fn resolve(&self, file: &str, meeting_id: i64) -> PathBuf {
+        if file.is_empty() {
+            self.dir.join(transcript::relative_path(meeting_id))
+        } else {
+            self.dir.join(file)
+        }
+    }
+
     /// Meeting dal più recente.
     pub fn meetings(&self) -> Result<Vec<Meeting>, StoreError> {
         let conn = self.conn();
@@ -56,8 +72,10 @@ impl Store {
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
 
-    /// Pagina dello storico. Con `search` filtra i meeting che contengono
-    /// almeno una frase che soddisfa la ricerca full-text (FTS5).
+    /// Pagina dello storico. Con `search` filtra i meeting il cui file di
+    /// trascrizione contiene tutte le parole (ricerca per prefisso, senza
+    /// distinzione di maiuscole/accenti). La ricerca legge i file, non il DB:
+    /// il testo delle frasi non è più nelle tabelle.
     pub fn list_meetings(
         &self,
         offset: u32,
@@ -68,40 +86,44 @@ impl Store {
         let Some(query) = query else {
             return self.all_meetings(offset, limit);
         };
-        let Some(fts) = fts_query(query) else {
+        let terms = search_terms(query);
+        if terms.is_empty() {
             return Ok(MeetingPage {
                 meetings: Vec::new(),
                 total: 0,
             });
-        };
+        }
         let conn = self.conn();
-        let total: i64 = conn.query_row(
-            "SELECT COUNT(DISTINCT s.meeting_id)
-             FROM segments_fts JOIN segments s ON s.id = segments_fts.rowid
-             WHERE segments_fts MATCH ?1",
-            params![fts],
-            |row| row.get(0),
-        )?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.name, m.goal, m.notes, m.started_at_ms, m.ended_at_ms,
                     m.stt_engine, m.stt_model, m.my_language, m.their_language,
-                    (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id)
+                    (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id),
+                    m.transcript_file
              FROM meetings m
-             WHERE m.id IN (
-                 SELECT s.meeting_id
-                 FROM segments_fts JOIN segments s ON s.id = segments_fts.rowid
-                 WHERE segments_fts MATCH ?1
-             )
-             ORDER BY m.started_at_ms DESC, m.id DESC
-             LIMIT ?2 OFFSET ?3",
+             ORDER BY m.started_at_ms DESC, m.id DESC",
         )?;
-        let rows = stmt.query_map(
-            params![fts, i64::from(limit), i64::from(offset)],
-            meeting_summary_from_row,
-        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((meeting_summary_from_row(row)?, row.get::<_, String>(11)?))
+        })?;
+        let all = rows.collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        drop(conn);
+
+        let mut matched = Vec::new();
+        for (summary, file) in all {
+            let path = self.resolve(&file, summary.meeting.id);
+            if lines_match(&transcript::read_lines(&path)?, &terms) {
+                matched.push(summary);
+            }
+        }
+        let total = u32::try_from(matched.len()).unwrap_or(u32::MAX);
         Ok(MeetingPage {
-            meetings: rows.collect::<Result<Vec<_>, _>>()?,
-            total: u32::try_from(total).unwrap_or(u32::MAX),
+            meetings: matched
+                .into_iter()
+                .skip(offset as usize)
+                .take(limit as usize)
+                .collect(),
+            total,
         })
     }
 
@@ -126,13 +148,33 @@ impl Store {
         })
     }
 
-    /// Elimina meeting, frasi (e indice di ricerca), traduzioni, parlanti e
-    /// assist in cascata.
+    /// Elimina meeting, frasi, traduzioni, parlanti e assist in cascata, più
+    /// il file di trascrizione associato.
     pub fn delete_meeting(&self, id: i64) -> Result<(), StoreError> {
+        let file: Option<String> = {
+            let conn = self.conn();
+            conn.query_row(
+                "SELECT transcript_file FROM meetings WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .optional()?
+        };
         let conn = self.conn();
         let deleted = conn.execute("DELETE FROM meetings WHERE id = ?1", params![id])?;
+        drop(conn);
         if deleted == 0 {
             return Err(StoreError::MeetingNotFound(id));
+        }
+        if let Some(file) = file {
+            let path = self.resolve(&file, id);
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), "file di trascrizione non eliminato: {e}")
+                }
+            }
         }
         Ok(())
     }
@@ -168,11 +210,12 @@ impl Store {
         .ok_or(StoreError::MeetingNotFound(id))
     }
 
-    /// Frasi finali in ordine cronologico.
+    /// Frasi finali in ordine cronologico; il testo è letto dal file.
     pub fn segments(&self, meeting_id: i64) -> Result<Vec<Segment>, StoreError> {
         let conn = self.conn();
+        let lines = transcript::read_lines(&transcript_path(&self.dir, &conn, meeting_id)?)?;
         let mut stmt = conn.prepare(
-            "SELECT id, meeting_id, session_id, channel, speaker, text,
+            "SELECT id, meeting_id, session_id, channel, speaker, text_line,
                     start_ms, end_ms, language, confidence
              FROM segments WHERE meeting_id = ?1 ORDER BY start_ms, id",
         )?;
@@ -183,7 +226,7 @@ impl Store {
                 session_id: row.get::<_, i64>(2)? as u64,
                 channel: row.get(3)?,
                 speaker: row.get::<_, Option<i64>>(4)?.map(|s| s as u8),
-                text: row.get(5)?,
+                text: line_text(&lines, row.get(5)?),
                 start_ms: row.get::<_, i64>(6)? as u64,
                 end_ms: row.get::<_, i64>(7)? as u64,
                 language: row.get(8)?,
@@ -195,8 +238,9 @@ impl Store {
 
     pub fn translations(&self, meeting_id: i64) -> Result<Vec<Translation>, StoreError> {
         let conn = self.conn();
+        let lines = transcript::read_lines(&transcript_path(&self.dir, &conn, meeting_id)?)?;
         let mut stmt = conn.prepare(
-            "SELECT t.id, t.segment_id, s.session_id, t.text, t.language, t.latency_ms
+            "SELECT t.id, t.segment_id, s.session_id, t.text_line, t.language, t.latency_ms
              FROM translations t
              JOIN segments s ON s.id = t.segment_id
              WHERE s.meeting_id = ?1
@@ -207,7 +251,7 @@ impl Store {
                 id: row.get(0)?,
                 segment_id: row.get(1)?,
                 session_id: row.get::<_, i64>(2)? as u64,
-                text: row.get(3)?,
+                text: line_text(&lines, row.get(3)?),
                 language: row.get(4)?,
                 latency_ms: row.get::<_, i64>(5)? as u64,
             })
@@ -436,16 +480,87 @@ fn meeting_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Meeting
     })
 }
 
-/// Query FTS5 tollerante all'input dell'utente: ogni parola diventa un
-/// prefisso tra virgolette (`"parola"*`), così punteggiatura e apostrofi non
-/// fanno fallire la sintassi di MATCH.
-fn fts_query(input: &str) -> Option<String> {
-    let terms: Vec<String> = input
+/// Riferimento al file di trascrizione di un meeting.
+fn transcript_path(dir: &Path, conn: &Connection, meeting_id: i64) -> Result<PathBuf, StoreError> {
+    let file: Option<String> = conn
+        .query_row(
+            "SELECT transcript_file FROM meetings WHERE id = ?1",
+            params![meeting_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let Some(file) = file else {
+        return Err(StoreError::MeetingNotFound(meeting_id));
+    };
+    Ok(if file.is_empty() {
+        dir.join(transcript::relative_path(meeting_id))
+    } else {
+        dir.join(file)
+    })
+}
+
+/// Testo di una riga (1-based); riferimento rotto = stringa vuota.
+fn line_text(lines: &[String], line: Option<i64>) -> String {
+    line.and_then(|line| usize::try_from(line).ok())
+        .and_then(|line| line.checked_sub(1))
+        .and_then(|index| lines.get(index))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// Parole della ricerca, normalizzate (minuscole, senza accenti).
+fn search_terms(input: &str) -> Vec<String> {
+    normalize(input)
         .split(|c: char| !c.is_alphanumeric())
-        .filter(|t| !t.is_empty())
-        .map(|t| format!("\"{}\"*", t.to_lowercase()))
-        .collect();
-    (!terms.is_empty()).then(|| terms.join(" AND "))
+        .filter(|term| !term.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Vero se il file contiene tutte le parole, come prefisso di un token.
+fn lines_match(lines: &[String], terms: &[String]) -> bool {
+    let mut found = vec![false; terms.len()];
+    let mut missing = terms.len();
+    for line in lines {
+        for token in normalize(line)
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|token| !token.is_empty())
+        {
+            for (index, term) in terms.iter().enumerate() {
+                if !found[index] && token.starts_with(term.as_str()) {
+                    found[index] = true;
+                    missing -= 1;
+                }
+            }
+        }
+        if missing == 0 {
+            return true;
+        }
+    }
+    missing == 0
+}
+
+fn normalize(text: &str) -> String {
+    text.chars()
+        .flat_map(char::to_lowercase)
+        .map(fold)
+        .collect()
+}
+
+/// Riduce le lettere accentate latine alla forma semplice, così "città" e
+/// "citta" si trovano a vicenda (come faceva FTS5 con remove_diacritics).
+fn fold(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' | 'ā' | 'ă' | 'ą' => 'a',
+        'ç' | 'ć' | 'č' => 'c',
+        'è' | 'é' | 'ê' | 'ë' | 'ē' | 'ĕ' | 'ė' | 'ę' | 'ě' => 'e',
+        'ì' | 'í' | 'î' | 'ï' | 'ī' | 'ĭ' | 'į' => 'i',
+        'ñ' | 'ń' | 'ň' => 'n',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' | 'ō' | 'ŏ' | 'ő' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' | 'ū' | 'ŭ' | 'ů' | 'ű' | 'ų' => 'u',
+        'ý' | 'ÿ' => 'y',
+        other => other,
+    }
 }
 
 #[cfg(test)]
@@ -479,6 +594,66 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 5);
+        // Il testo non è più una colonna delle tabelle.
+        let text_columns: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('segments') WHERE name = 'text'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(text_columns, 0);
+    }
+
+    #[test]
+    fn v3_database_moves_transcript_text_to_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sottovoce.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            for sql in crate::schema::MIGRATIONS.iter().take(3) {
+                conn.execute_batch(sql).unwrap();
+            }
+            conn.pragma_update(None, "user_version", 3).unwrap();
+            conn.execute(
+                "INSERT INTO meetings (name, started_at_ms, stt_engine, stt_model)
+                 VALUES ('vecchio', 1000, 'deepgram', 'nova-3')",
+                [],
+            )
+            .unwrap();
+            let meeting_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO segments
+                     (meeting_id, session_id, channel, text, start_ms, end_ms, created_at_ms)
+                 VALUES (?1, 1, 'me', 'ciao a tutti', 0, 1000, 0)",
+                params![meeting_id],
+            )
+            .unwrap();
+            let segment_id = conn.last_insert_rowid();
+            conn.execute(
+                "INSERT INTO translations
+                     (segment_id, text, language, latency_ms, created_at_ms)
+                 VALUES (?1, 'hello everyone', 'en', 10, 0)",
+                params![segment_id],
+            )
+            .unwrap();
+        }
+
+        let store = Store::open(&path).unwrap();
+        assert_eq!(user_version(&path), SCHEMA_VERSION);
+        let details = store.details(1).unwrap();
+        assert_eq!(details.segments[0].text, "ciao a tutti");
+        assert_eq!(details.translations[0].text, "hello everyone");
+
+        let file = std::fs::read_to_string(dir.path().join("transcripts/1.txt")).unwrap();
+        assert_eq!(file, "ciao a tutti\nhello everyone\n");
+        drop(store);
+
+        // Il testo non è più nel database né nel WAL: la migrazione fa VACUUM.
+        let db = std::fs::read(&path).unwrap();
+        assert!(!db.windows(7).any(|w| w == b"ciao a "));
+        let wal = std::fs::read(path.with_extension("db-wal")).unwrap_or_default();
+        assert!(!wal.windows(7).any(|w| w == b"ciao a "));
     }
 
     #[test]
@@ -509,8 +684,8 @@ mod tests {
         let id = conn.last_insert_rowid();
         conn.execute(
             "INSERT INTO segments
-                 (meeting_id, session_id, channel, text, start_ms, end_ms, created_at_ms)
-             VALUES (?1, 7, 'them', 'ultima frase', 42_000, 45_000, 0)",
+                 (meeting_id, session_id, channel, text_line, start_ms, end_ms, created_at_ms)
+             VALUES (?1, 7, 'them', 1, 42_000, 45_000, 0)",
             params![id],
         )
         .unwrap();

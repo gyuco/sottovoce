@@ -15,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::error::StoreError;
 use crate::schema;
+use crate::transcript::{self, TranscriptFile};
 use crate::types::{MeetingDraft, NewCompressionBlock, NewSegment, NewSummary};
 
 /// Eventi in attesa oltre i quali si scarta (DB in difficoltà).
@@ -70,13 +71,22 @@ pub struct StoreHandle {
 impl Writer {
     /// Crea il meeting e avvia il thread di scrittura.
     pub fn start(path: impl AsRef<Path>, draft: MeetingDraft) -> Result<Self, StoreError> {
-        let mut conn = schema::open_connection(path.as_ref())?;
+        let path = path.as_ref();
+        let mut conn = schema::open_connection(path)?;
+        let dir = schema::base_dir(path);
         let started_at_ms = now_ms();
         let meeting_id = create_meeting(&mut conn, &draft, started_at_ms)?;
+        // File di testo del meeting (referenziato dal DB, mai testo nelle tabelle).
+        let relative = transcript::relative_path(meeting_id);
+        let file = TranscriptFile::open(&dir.join(&relative))?;
+        conn.execute(
+            "UPDATE meetings SET transcript_file = ?1 WHERE id = ?2",
+            params![relative.to_string_lossy(), meeting_id],
+        )?;
         let (tx, rx) = mpsc::sync_channel(QUEUE);
         let thread = thread::Builder::new()
             .name("sv-store".into())
-            .spawn(move || run(conn, rx, meeting_id, started_at_ms))?;
+            .spawn(move || run(conn, rx, meeting_id, started_at_ms, file))?;
         Ok(Self {
             tx,
             thread: Some(thread),
@@ -207,13 +217,14 @@ fn run(
     rx: Receiver<Command>,
     meeting_id: i64,
     started_at_ms: i64,
+    mut transcript: TranscriptFile,
 ) -> Result<(), StoreError> {
     let mut pending = Vec::with_capacity(64);
     loop {
         match rx.recv_timeout(FLUSH_INTERVAL) {
             Ok(Command::Finish { elapsed_ms, ack }) => {
                 let result = (|| {
-                    flush(&mut conn, meeting_id, &mut pending)?;
+                    flush(&mut conn, meeting_id, &mut pending, &mut transcript)?;
                     finish_meeting(&conn, meeting_id, started_at_ms, elapsed_ms)
                 })();
                 if let Err(e) = &result {
@@ -225,12 +236,14 @@ fn run(
             Ok(command) => {
                 pending.push(command);
                 if pending.len() >= MAX_BATCH {
-                    flush(&mut conn, meeting_id, &mut pending)?;
+                    flush(&mut conn, meeting_id, &mut pending, &mut transcript)?;
                 }
             }
-            Err(RecvTimeoutError::Timeout) => flush(&mut conn, meeting_id, &mut pending)?,
+            Err(RecvTimeoutError::Timeout) => {
+                flush(&mut conn, meeting_id, &mut pending, &mut transcript)?;
+            }
             Err(RecvTimeoutError::Disconnected) => {
-                flush(&mut conn, meeting_id, &mut pending)?;
+                flush(&mut conn, meeting_id, &mut pending, &mut transcript)?;
                 return Ok(());
             }
         }
@@ -241,6 +254,7 @@ fn flush(
     conn: &mut Connection,
     meeting_id: i64,
     pending: &mut Vec<Command>,
+    transcript: &mut TranscriptFile,
 ) -> Result<(), StoreError> {
     if pending.is_empty() {
         return Ok(());
@@ -249,7 +263,7 @@ fn flush(
     let tx = conn.transaction()?;
     let now = now_ms();
     for command in batch {
-        apply(&tx, meeting_id, now, command)?;
+        apply(&tx, meeting_id, now, command, transcript)?;
     }
     tx.commit()?;
     Ok(())
@@ -260,18 +274,29 @@ fn apply(
     meeting_id: i64,
     now_ms: i64,
     command: Command,
+    transcript: &mut TranscriptFile,
 ) -> Result<(), StoreError> {
     match command {
         Command::Segment(segment) => {
+            // Il testo va prima sul file, poi il DB ne salva il riferimento.
+            let line = tx
+                .query_row(
+                    "SELECT text_line FROM segments WHERE meeting_id = ?1 AND session_id = ?2",
+                    params![meeting_id, to_i64(segment.session_id)],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+                .optional()?
+                .flatten();
+            let line = transcript.save(line.map(|l| l as u64), &segment.text)?;
             tx.execute(
                 "INSERT INTO segments
-                     (meeting_id, session_id, channel, speaker, text, start_ms, end_ms,
+                     (meeting_id, session_id, channel, speaker, text_line, start_ms, end_ms,
                       language, confidence, created_at_ms)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(meeting_id, session_id) DO UPDATE SET
                      channel = excluded.channel,
                      speaker = excluded.speaker,
-                     text = excluded.text,
+                     text_line = excluded.text_line,
                      start_ms = excluded.start_ms,
                      end_ms = excluded.end_ms,
                      language = excluded.language,
@@ -281,7 +306,7 @@ fn apply(
                     to_i64(segment.session_id),
                     segment.channel,
                     segment.speaker.map(i64::from),
-                    segment.text,
+                    to_i64(line),
                     to_i64(segment.start_ms),
                     to_i64(segment.end_ms),
                     segment.language,
@@ -307,14 +332,30 @@ fn apply(
                 tracing::warn!(session_id, "traduzione senza frase salvata: scartata");
                 return Ok(());
             };
+            let line = tx
+                .query_row(
+                    "SELECT text_line FROM translations WHERE segment_id = ?1 AND language = ?2",
+                    params![segment_id, language],
+                    |row| row.get::<_, Option<i64>>(0),
+                )
+                .optional()?
+                .flatten();
+            let line = transcript.save(line.map(|l| l as u64), &text)?;
             tx.execute(
-                "INSERT INTO translations (segment_id, text, language, latency_ms, created_at_ms)
+                "INSERT INTO translations
+                     (segment_id, text_line, language, latency_ms, created_at_ms)
                  VALUES (?1, ?2, ?3, ?4, ?5)
                  ON CONFLICT(segment_id, language) DO UPDATE SET
-                     text = excluded.text,
+                     text_line = excluded.text_line,
                      latency_ms = excluded.latency_ms,
                      created_at_ms = excluded.created_at_ms",
-                params![segment_id, text, language, to_i64(latency_ms), now_ms],
+                params![
+                    segment_id,
+                    to_i64(line),
+                    language,
+                    to_i64(latency_ms),
+                    now_ms
+                ],
             )?;
         }
         Command::Relabel(updates) => {
@@ -524,6 +565,40 @@ mod tests {
         assert_eq!(details.assists.len(), 1);
         assert_eq!(details.assists[0].kind, "say");
         assert_eq!(details.assists[0].at_ms, 1500);
+
+        // Il testo vive nel file, una riga per frase/traduzione.
+        let file =
+            std::fs::read_to_string(dir.path().join(format!("transcripts/{meeting_id}.txt")))
+                .unwrap();
+        assert_eq!(file, "frase 1\nfrase 2\nprima frase\n");
+    }
+
+    #[test]
+    fn the_same_session_rewrites_its_line_instead_of_duplicating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sottovoce.db");
+        let writer = Writer::start(&path, draft()).unwrap();
+        let meeting_id = writer.meeting_id();
+        let store = writer.handle();
+        store.segment(NewSegment {
+            text: "prima versione".into(),
+            ..segment(1, Some(0))
+        });
+        store.segment(NewSegment {
+            text: "versione\ncorretta".into(),
+            ..segment(1, Some(0))
+        });
+        writer.finish(2_000).unwrap();
+
+        let file =
+            std::fs::read_to_string(dir.path().join(format!("transcripts/{meeting_id}.txt")))
+                .unwrap();
+        // Gli a capo restano su una riga sola: il riferimento non si sposta.
+        assert_eq!(file, "versione corretta\n");
+        let store = Store::open(&path).unwrap();
+        let details = store.details(meeting_id).unwrap();
+        assert_eq!(details.segments.len(), 1);
+        assert_eq!(details.segments[0].text, "versione corretta");
     }
 
     #[test]
@@ -614,8 +689,13 @@ mod tests {
             store.meeting(meeting_id),
             Err(StoreError::MeetingNotFound(_))
         ));
-        // L'indice non conserva righe orfane.
+        // La ricerca non trova più il testo e il file è stato eliminato.
         assert_eq!(store.list_meetings(0, 20, Some("citta")).unwrap().total, 0);
+        assert!(
+            !dir.path()
+                .join(format!("transcripts/{meeting_id}.txt"))
+                .exists()
+        );
     }
 
     #[test]
