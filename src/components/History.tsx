@@ -3,8 +3,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SummaryPanel } from "@/components/SummaryPanel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDuration } from "@/lib/hooks";
 import {
@@ -38,6 +48,7 @@ export function History(props: { focusId?: number | null }) {
   const [reload, setReload] = useState(0);
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const lastReady = useInsightsStore((s) => s.lastReady);
   const pendingId = useInsightsStore((s) => s.pendingMeetingId);
@@ -109,7 +120,8 @@ export function History(props: { focusId?: number | null }) {
   });
 
   const remove = async () => {
-    if (selected === null || !window.confirm(t("history.deleteConfirm"))) return;
+    if (selected === null) return;
+    setConfirmingDelete(false);
     try {
       await deleteMeeting(selected);
       setSelected(null);
@@ -307,7 +319,7 @@ export function History(props: { focusId?: number | null }) {
                       className="text-destructive hover:text-destructive"
                       aria-label={t("history.delete")}
                       title={t("history.delete")}
-                      onClick={() => void remove()}
+                      onClick={() => setConfirmingDelete(true)}
                     >
                       <Trash2 />
                     </Button>
@@ -433,6 +445,24 @@ export function History(props: { focusId?: number | null }) {
           </>
         )}
       </section>
+
+      <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("history.deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("history.deleteConfirm")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(buttonVariants({ variant: "destructive" }))}
+              onClick={() => void remove()}
+            >
+              {t("history.deleteAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

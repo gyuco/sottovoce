@@ -259,7 +259,9 @@
     "noSegments": "Nessuna frase salvata.",
     "duration": "Durata {{duration}}",
     "delete": "Elimina meeting",
+    "deleteTitle": "Eliminare il meeting?",
     "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
+    "deleteAction": "Elimina",
     "rename": "Rinomina meeting",
     "assists": "Suggerimenti"
   },

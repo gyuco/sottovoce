@@ -259,7 +259,9 @@
     "noSegments": "No hay frases guardadas.",
     "duration": "Duración {{duration}}",
     "delete": "Eliminar reunión",
+    "deleteTitle": "¿Eliminar la reunión?",
     "deleteConfirm": "¿Eliminar esta reunión? Se perderán frases y traducciones.",
+    "deleteAction": "Eliminar",
     "rename": "Renombrar reunión",
     "assists": "Sugerencias"
   },

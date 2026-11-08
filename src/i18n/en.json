@@ -259,7 +259,9 @@
     "noSegments": "No saved sentences.",
     "duration": "Duration {{duration}}",
     "delete": "Delete meeting",
+    "deleteTitle": "Delete meeting?",
     "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
+    "deleteAction": "Delete",
     "rename": "Rename meeting",
     "assists": "Suggestions"
   },
