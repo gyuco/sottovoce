@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { SummaryPanel } from "@/components/SummaryPanel";
+import { ConversationMetrics } from "@/components/TalkRatio";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -110,6 +111,16 @@ export function History(props: { focusId?: number | null }) {
   const detailLoading = selected !== null && details?.meeting.id !== selected;
   const translations = useMemo(
     () => new Map((details?.translations ?? []).map((tr) => [tr.sessionId, tr])),
+    [details],
+  );
+  const metricLines = useMemo(
+    () =>
+      (details?.segments ?? []).map((s) => ({
+        channel: s.channel,
+        text: s.text,
+        start: s.startMs,
+        end: s.endMs,
+      })),
     [details],
   );
   const speakerNames = useMemo(
@@ -411,6 +422,9 @@ export function History(props: { focusId?: number | null }) {
                     </>
                   )}
                 </div>
+              )}
+              {details.segments.length > 0 && (
+                <ConversationMetrics lines={metricLines} className="mx-2 mb-2 shadow-none" />
               )}
               {details.segments.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">

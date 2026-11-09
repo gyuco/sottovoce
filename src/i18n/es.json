@@ -233,7 +233,10 @@
   "talk": {
     "title": "Tiempo de palabra",
     "label": "Yo {{me}}% · Ellos {{them}}%",
-    "empty": "El tiempo de palabra aparecerá con la transcripción"
+    "empty": "El tiempo de palabra aparecerá con la transcripción",
+    "wpm": "Palabras/min",
+    "questions": "Preguntas",
+    "monologue": "Monólogo más largo"
   },
   "models": {
     "title": "Modelos locales",

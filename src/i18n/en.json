@@ -233,7 +233,10 @@
   "talk": {
     "title": "Talk time",
     "label": "Me {{me}}% · Them {{them}}%",
-    "empty": "Talk time appears with the transcript"
+    "empty": "Talk time appears with the transcript",
+    "wpm": "Words/min",
+    "questions": "Questions",
+    "monologue": "Longest monologue"
   },
   "models": {
     "title": "Local models",
