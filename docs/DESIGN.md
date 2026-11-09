@@ -22,7 +22,7 @@ call.md = Electron + React + TS, audio e LLM nel cloud (VideoDB). Non tradurre l
 5. **Riepilogo finale in 3 estrazioni parallele**: overview narrativa, key points per topic attribuiti, action items.
 6. **Persistenza** SQLite + export Markdown.
 7. **Metriche senza LLM**: talk ratio, WPM, domande, monologhi; nudge con cooldown 2 min (es. talk ratio "me" > 0.65 → low, > 0.75 → medium, dopo 60s di call).
-8. Dopo: widget flottante, webhook fine meeting (n8n/Zapier), MCP auto-triggering, calendario.
+8. Dopo: widget flottante, MCP auto-triggering, calendario.
 
 call.md **non traduce**: è il nostro differenziatore.
 
