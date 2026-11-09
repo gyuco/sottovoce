@@ -15,6 +15,8 @@ pub enum ModelKind {
     Stt,
     /// Embedding del parlante (diarization).
     SpeakerEmbedding,
+    /// Embedding del testo (ricerca semantica nello storico).
+    TextEmbedding,
 }
 
 /// Un file di un modello.
@@ -57,11 +59,17 @@ pub const SILERO_VAD: &str = "silero-vad";
 pub const CAMPLUS: &str = "campplus-zh-en";
 /// NVIDIA Parakeet TDT 0.6B v3 int8 (25 lingue europee, italiano incluso).
 pub const PARAKEET_V3: &str = "parakeet-tdt-0.6b-v3-int8";
+/// Google EmbeddingGemma 2, modello di testo (270M) quantizzato q4: ricerca
+/// semantica multilingue nello storico.
+pub const EMBEDDING_GEMMA_2: &str = "embeddinggemma-2-q4";
 
-fn hf(repo: &str, commit: &str, name: &str, size: u64, sha256: &str) -> ModelFile {
+fn hf(repo: &str, commit: &str, path: &str, size: u64, sha256: &str) -> ModelFile {
+    // Su disco conta solo il nome del file: i file di un modello stanno tutti
+    // nella stessa cartella anche se nel repo sono in sottocartelle.
+    let name = path.rsplit('/').next().unwrap_or(path);
     ModelFile {
         name: name.to_owned(),
-        url: format!("https://huggingface.co/{repo}/resolve/{commit}/{name}"),
+        url: format!("https://huggingface.co/{repo}/resolve/{commit}/{path}"),
         size,
         sha256: sha256.to_owned(),
     }
@@ -74,6 +82,8 @@ static CATALOG: LazyLock<Vec<ModelSpec>> = LazyLock::new(|| {
     const SPK_COMMIT: &str = "0743f301363dec56491a490f6d6cbc9d67f9a3bf";
     const PARAKEET_REPO: &str = "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8";
     const PARAKEET_COMMIT: &str = "ed5d745623472f97cfc2e6c2916ee248798fc5a8";
+    const GEMMA_EMB_REPO: &str = "onnx-community/embeddinggemma-2-ONNX";
+    const GEMMA_EMB_COMMIT: &str = "daa72c51243991dfcaf9f9137d2c573d8f7790c0";
 
     vec![
         ModelSpec {
@@ -135,6 +145,34 @@ static CATALOG: LazyLock<Vec<ModelSpec>> = LazyLock::new(|| {
                 "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
             )],
         },
+        ModelSpec {
+            id: EMBEDDING_GEMMA_2.into(),
+            kind: ModelKind::TextEmbedding,
+            name: "EmbeddingGemma 2 (q4)".into(),
+            files: vec![
+                hf(
+                    GEMMA_EMB_REPO,
+                    GEMMA_EMB_COMMIT,
+                    "onnx/model_q4.onnx",
+                    490_742,
+                    "f9eeba97acddf139b8ee2ddf04bc30dceafa88de93fadf74d7644e0d61a477a9",
+                ),
+                hf(
+                    GEMMA_EMB_REPO,
+                    GEMMA_EMB_COMMIT,
+                    "onnx/model_q4.onnx_data",
+                    174_028_800,
+                    "c3975f2d1ab7a1878ae31a7d7a9b7804a827aff3800b60dfceafce21cac3df49",
+                ),
+                hf(
+                    GEMMA_EMB_REPO,
+                    GEMMA_EMB_COMMIT,
+                    "tokenizer.json",
+                    32_170_510,
+                    "4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4",
+                ),
+            ],
+        },
     ]
 });
 
@@ -171,7 +209,7 @@ mod tests {
                 assert!(f.size > 0 && !f.name.contains('/'));
             }
         }
-        for id in [SILERO_VAD, CAMPLUS, PARAKEET_V3] {
+        for id in [SILERO_VAD, CAMPLUS, PARAKEET_V3, EMBEDDING_GEMMA_2] {
             assert!(find(id).is_some(), "{id}");
         }
     }

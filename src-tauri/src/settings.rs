@@ -127,6 +127,9 @@ pub struct Settings {
     /// Avvisi durante la call (parli troppo, monologo, nessuna domanda…),
     /// calcolati dalle metriche senza LLM.
     pub nudges: bool,
+    /// Ricerca per significato nello storico (modello locale di embedding):
+    /// indicizza i meeting in background. Senza il modello resta spenta.
+    pub semantic_search: bool,
 }
 
 /// Modello di un compito LLM con il suo provider.
@@ -201,6 +204,7 @@ impl Default for Settings {
             auto_summary: true,
             target_language: None,
             nudges: true,
+            semantic_search: true,
         }
     }
 }

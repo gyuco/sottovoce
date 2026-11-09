@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
 import { LocalModels } from "@/components/LocalModels";
+import { SearchSettings } from "@/components/SearchSettings";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -233,6 +234,8 @@ export function SettingsPanel() {
       </Card>
 
       <LlmSettings />
+
+      <SearchSettings />
 
       <LocalModels />
 

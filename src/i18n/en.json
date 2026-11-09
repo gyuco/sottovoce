@@ -203,6 +203,16 @@
       "widgetHint": "The widget stays above Teams, Meet or Zoom with translations, suggestions and nudges, and is hidden from screen sharing. Open it from the button at the top, the menu bar icon or with ⌥⌘S.",
       "nudges": "Speaking nudges",
       "nudgesHint": "Warns you if you talk too much or too fast, if a monologue drags on or if you haven't asked any questions yet. At most one every 2 minutes."
+    },
+    "search": {
+      "title": "History search",
+      "hint": "Find meetings by meaning too, in any language: “server costs” finds “la bolletta AWS è troppo alta”. The model runs on your Mac; the index sits next to the transcripts and is deleted with the meeting.",
+      "toggle": "Search by meaning",
+      "toggleHint": "Indexes meetings in the background, at low priority, when they end.",
+      "downloadHint": "Download EmbeddingGemma 2 (about 206 MB): it stays on your Mac and works offline too.",
+      "indexing": "Indexed {{indexed}} of {{total}} · {{pending}} queued",
+      "indexed": "Indexed {{indexed}} of {{total}} meetings",
+      "reindex": "Recheck"
     }
   },
   "permissions": {
@@ -249,7 +259,7 @@
   },
   "models": {
     "title": "Local models",
-    "hint": "Transcribe and recognize speakers without sending audio to third parties. Models stay on your Mac and work offline once downloaded.",
+    "hint": "Transcribe, recognize speakers and search your history without sending data to third parties. Models stay on your Mac and work offline once downloaded.",
     "used": "{{size}} used",
     "ready": "ready",
     "missing": "not downloaded",
@@ -265,7 +275,8 @@
     "kind": {
       "vad": "Speech detection",
       "stt": "Transcription",
-      "speakerEmbedding": "Speaker recognition"
+      "speakerEmbedding": "Speaker recognition",
+      "textEmbedding": "Semantic search"
     }
   },
   "speakers": {
@@ -294,7 +305,21 @@
     "rename": "Rename meeting",
     "assists": "Suggestions",
     "export": "Export to Markdown",
-    "exported": "Saved to {{path}}"
+    "exported": "Saved to {{path}}",
+    "searchPlaceholderSemantic": "Search by words or meaning…",
+    "results": "{{count}} results",
+    "semantic": {
+      "noModel": "Download the model in Settings → History search to also search by meaning.",
+      "indexing": "Indexing: {{indexed}} of {{total}} meetings",
+      "ready": "Search by meaning is on",
+      "wordMatch": "Contains the searched words",
+      "kind": {
+        "block": "5-minute digest",
+        "overview": "Summary",
+        "keyPoints": "Key points",
+        "actionItems": "Action items"
+      }
+    }
   },
   "export": {
     "date": "Date",

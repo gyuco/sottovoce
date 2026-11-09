@@ -1,0 +1,18 @@
+[package]
+name = "sv-embed"
+description = "Embedding di testo locali (EmbeddingGemma 2 via ONNX Runtime) per la ricerca semantica di Sottovoce"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# ONNX Runtime è già collegato staticamente da sherpa-onnx: `ort` ne usa
+# l'API (`alternative-backend`) invece di portarne una seconda copia.
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "alternative-backend", "api-22"] }
+sherpa-onnx = "2.0.1"
+tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

@@ -203,6 +203,16 @@
       "widgetHint": "El widget se queda encima de Teams, Meet o Zoom con traducciones, sugerencias y avisos, y no aparece al compartir pantalla. Ábrelo con el botón de arriba, el icono de la barra de menús o con ⌥⌘S.",
       "nudges": "Avisos sobre cómo hablas",
       "nudgesHint": "Te avisa si hablas demasiado o muy rápido, si el monólogo se alarga o si aún no has hecho preguntas. Como máximo uno cada 2 minutos."
+    },
+    "search": {
+      "title": "Búsqueda en el historial",
+      "hint": "Encuentra reuniones también por significado, en cualquier idioma: “costes de los servidores” encuentra “the AWS bill is too high”. El modelo funciona en tu Mac; el índice está junto a las transcripciones y se borra con la reunión.",
+      "toggle": "Búsqueda por significado",
+      "toggleHint": "Indexa las reuniones en segundo plano, con baja prioridad, cuando terminan.",
+      "downloadHint": "Descarga EmbeddingGemma 2 (unos 206 MB): se queda en tu Mac y funciona también sin conexión.",
+      "indexing": "Indexadas {{indexed}} de {{total}} · {{pending}} en cola",
+      "indexed": "Indexadas {{indexed}} de {{total}} reuniones",
+      "reindex": "Revisar"
     }
   },
   "permissions": {
@@ -249,7 +259,7 @@
   },
   "models": {
     "title": "Modelos locales",
-    "hint": "Para transcribir y reconocer a los hablantes sin enviar audio a terceros. Los modelos se quedan en tu Mac; tras la descarga también funcionan sin conexión.",
+    "hint": "Para transcribir, reconocer a los hablantes y buscar en el historial sin enviar datos a terceros. Los modelos se quedan en tu Mac; tras la descarga también funcionan sin conexión.",
     "used": "{{size}} ocupados",
     "ready": "listo",
     "missing": "no descargado",
@@ -265,7 +275,8 @@
     "kind": {
       "vad": "Detección del habla",
       "stt": "Transcripción",
-      "speakerEmbedding": "Reconocimiento de hablantes"
+      "speakerEmbedding": "Reconocimiento de hablantes",
+      "textEmbedding": "Búsqueda por significado"
     }
   },
   "speakers": {
@@ -294,7 +305,21 @@
     "rename": "Renombrar reunión",
     "assists": "Sugerencias",
     "export": "Exportar a Markdown",
-    "exported": "Guardado en {{path}}"
+    "exported": "Guardado en {{path}}",
+    "searchPlaceholderSemantic": "Busca por palabras o por significado…",
+    "results": "{{count}} resultados",
+    "semantic": {
+      "noModel": "Descarga el modelo en Ajustes → Búsqueda en el historial para buscar también por significado.",
+      "indexing": "Indexando: {{indexed}} de {{total}} reuniones",
+      "ready": "Búsqueda por significado activa",
+      "wordMatch": "Contiene las palabras buscadas",
+      "kind": {
+        "block": "Resumen de 5 minutos",
+        "overview": "Resumen",
+        "keyPoints": "Puntos clave",
+        "actionItems": "Acciones"
+      }
+    }
   },
   "export": {
     "date": "Fecha",

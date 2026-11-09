@@ -9,6 +9,7 @@ mod export;
 mod llm;
 mod meeting;
 mod models;
+mod search;
 mod secrets;
 mod session;
 mod settings;
@@ -28,7 +29,7 @@ pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             EnvFilter::new(
-                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_diar=debug,sv_llm=debug",
+                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_diar=debug,sv_llm=debug,sv_search=debug",
             )
         }))
         .init();
@@ -86,6 +87,12 @@ pub fn run() {
                     "database dei meeting non disponibile, le call non verranno salvate: {e}"
                 ),
             }
+            let data_dir = app.path().app_data_dir()?;
+            app.manage(search::Search::start(
+                app.handle().clone(),
+                data_dir,
+                db_path.clone(),
+            ));
             app.manage(state::Db { path: db_path });
             Ok(())
         })
@@ -98,6 +105,9 @@ pub fn run() {
             commands::stop_session,
             commands::translate_segment,
             commands::list_meetings,
+            commands::search_meetings,
+            commands::semantic_index_status,
+            commands::reindex_meetings,
             commands::get_meeting,
             commands::delete_meeting,
             commands::rename_meeting,

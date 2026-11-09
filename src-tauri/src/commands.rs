@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use serde::Serialize;
 use sv_audio::{InputDevice, LevelEvent};
@@ -17,6 +17,7 @@ use crate::export;
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
+use crate::search::{IndexStatus, Search, SearchResult};
 use crate::secrets;
 use crate::session::{LlmTasks, Outputs};
 use crate::session::{Session, SummaryJob};
@@ -428,6 +429,9 @@ pub async fn stop_session(
         });
     };
     let stopped = session.stop().await;
+    if let Some(id) = stopped.meeting_id {
+        app.state::<Search>().enqueue(id);
+    }
     let summary_pending = stopped.summary.is_some();
     if let Some(job) = stopped.summary {
         spawn_summary(app, db.path.clone(), job);
@@ -444,10 +448,13 @@ fn spawn_summary(app: AppHandle, db_path: PathBuf, job: SummaryJob) {
     tauri::async_runtime::spawn(async move {
         let meeting_id = job.meeting_id;
         let status = match job.run(db_path).await {
-            Ok(summary) => SummaryStatus::Ready {
-                meeting_id,
-                summary,
-            },
+            Ok(summary) => {
+                app.state::<Search>().enqueue(meeting_id);
+                SummaryStatus::Ready {
+                    meeting_id,
+                    summary,
+                }
+            }
             Err(e) => {
                 tracing::warn!(meeting = meeting_id, "riepilogo finale non riuscito: {e:#}");
                 SummaryStatus::Failed {
@@ -491,26 +498,61 @@ pub async fn get_meeting(db: State<'_, Db>, id: i64) -> CmdResult<sv_store::Meet
     blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await
 }
 
+/// Ricerca nello storico per significato e per parole (Reciprocal Rank
+/// Fusion). Senza il modello di embedding restano le sole parole.
 #[tauri::command]
-pub async fn delete_meeting(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+pub async fn search_meetings(
+    search: State<'_, Search>,
+    query: String,
+) -> CmdResult<Vec<SearchResult>> {
+    search.search(query).await.map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub async fn semantic_index_status(search: State<'_, Search>) -> CmdResult<IndexStatus> {
+    let search = search.inner().clone_handle();
+    blocking(move || Ok(search.status())).await
+}
+
+/// Ricontrolla tutti i meeting e indicizza quelli senza indice o cambiati.
+#[tauri::command]
+pub fn reindex_meetings(search: State<'_, Search>) {
+    search.backfill();
+}
+
+#[tauri::command]
+pub async fn delete_meeting(
+    db: State<'_, Db>,
+    search: State<'_, Search>,
+    id: i64,
+) -> CmdResult<()> {
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.delete_meeting(id)?)).await
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_meeting(id)?)).await?;
+    // I vettori permettono di ricostruire parte del testo: vanno via insieme.
+    search.remove(id);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn rename_meeting(
     db: State<'_, Db>,
+    search: State<'_, Search>,
     id: i64,
     name: String,
 ) -> CmdResult<sv_store::Meeting> {
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await
+    let meeting =
+        blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await?;
+    // Il nome è il titolo dei documenti indicizzati.
+    search.enqueue(id);
+    Ok(meeting)
 }
 
 /// Rigenera il riepilogo finale di un meeting salvato (anche in un'altra lingua).
 #[tauri::command]
 pub async fn generate_summary(
     db: State<'_, Db>,
+    search: State<'_, Search>,
     settings: State<'_, SettingsStore>,
     id: i64,
     language: Option<Language>,
@@ -589,7 +631,10 @@ pub async fn generate_summary(
         .await
         .ok_or_else(|| "riepilogo non generato".to_owned())?;
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.save_summary(id, &draft)?)).await
+    let summary =
+        blocking(move || Ok(sv_store::Store::open(path)?.save_summary(id, &draft)?)).await?;
+    search.enqueue(id);
+    Ok(summary)
 }
 
 #[tauri::command]
@@ -649,9 +694,17 @@ pub fn get_settings(settings: State<'_, SettingsStore>) -> Settings {
 #[tauri::command]
 pub fn update_settings(
     settings: State<'_, SettingsStore>,
+    search: State<'_, Search>,
     patch: serde_json::Value,
 ) -> CmdResult<Settings> {
-    settings.update(patch).map_err(|e| format!("{e:#}"))
+    let was = settings.get().semantic_search;
+    let next = settings.update(patch).map_err(|e| format!("{e:#}"))?;
+    if next.semantic_search != was {
+        // Riattivata: recupera i meeting arrivati nel frattempo. Spenta: il
+        // thread svuota la coda. In entrambi i casi la UI riceve lo stato.
+        search.backfill();
+    }
+    Ok(next)
 }
 
 // --- LLM ---------------------------------------------------------------------
@@ -732,6 +785,7 @@ pub fn list_local_models(models: State<'_, Models>) -> Vec<LocalModel> {
 #[tauri::command]
 pub async fn download_local_model(
     models: State<'_, Models>,
+    search: State<'_, Search>,
     id: String,
     on_progress: Channel<sv_models::DownloadProgress>,
 ) -> CmdResult<LocalModel> {
@@ -751,6 +805,9 @@ pub async fn download_local_model(
         .await;
     drop(guard);
     result.map_err(to_msg)?;
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
 }
 
@@ -760,7 +817,11 @@ pub fn cancel_local_model_download(models: State<'_, Models>, id: String) -> boo
 }
 
 #[tauri::command]
-pub async fn delete_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+pub async fn delete_local_model(
+    models: State<'_, Models>,
+    search: State<'_, Search>,
+    id: String,
+) -> CmdResult<LocalModel> {
     let spec = models::spec(&id).map_err(to_msg)?;
     // Il guard impedisce un download concorrente durante l'eliminazione.
     let guard = models
@@ -768,18 +829,28 @@ pub async fn delete_local_model(models: State<'_, Models>, id: String) -> CmdRes
         .ok_or_else(|| format!("download di {id} in corso: annullalo prima"))?;
     models.store().delete(spec).await.map_err(to_msg)?;
     drop(guard);
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
 }
 
 /// Verifica completa (SHA-256 di tutti i file).
 #[tauri::command]
-pub async fn verify_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+pub async fn verify_local_model(
+    models: State<'_, Models>,
+    search: State<'_, Search>,
+    id: String,
+) -> CmdResult<LocalModel> {
     let spec = models::spec(&id).map_err(to_msg)?;
     let guard = models
         .begin(&id)
         .ok_or_else(|| format!("download di {id} in corso"))?;
     models.store().verify(spec).await.map_err(to_msg)?;
     drop(guard);
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
 }
 

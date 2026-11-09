@@ -203,6 +203,16 @@
       "widgetHint": "Il widget resta sopra Teams, Meet o Zoom con traduzioni, suggerimenti e avvisi, e non compare nella condivisione schermo. Aprilo dal pulsante in alto, dall'icona nel menu bar o con ⌥⌘S.",
       "nudges": "Avvisi sul modo di parlare",
       "nudgesHint": "Ti avvisa se parli troppo o troppo in fretta, se il monologo si allunga o se non hai ancora fatto domande. Al massimo uno ogni 2 minuti."
+    },
+    "search": {
+      "title": "Ricerca nello storico",
+      "hint": "Trova i meeting anche per significato, in qualsiasi lingua: “costi dei server” trova “the AWS bill is too high”. Il modello gira sul tuo Mac; l’indice resta accanto alle trascrizioni e si elimina con il meeting.",
+      "toggle": "Ricerca per significato",
+      "toggleHint": "Indicizza i meeting in background, a bassa priorità, quando finiscono.",
+      "downloadHint": "Scarica EmbeddingGemma 2 (circa 206 MB): resta sul tuo Mac e funziona anche offline.",
+      "indexing": "Indicizzati {{indexed}} di {{total}} · {{pending}} in coda",
+      "indexed": "Indicizzati {{indexed}} di {{total}} meeting",
+      "reindex": "Ricontrolla"
     }
   },
   "permissions": {
@@ -249,7 +259,7 @@
   },
   "models": {
     "title": "Modelli locali",
-    "hint": "Per trascrivere e riconoscere i parlanti senza inviare audio a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
+    "hint": "Per trascrivere, riconoscere i parlanti e cercare nello storico senza inviare dati a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
     "used": "{{size}} occupati",
     "ready": "pronto",
     "missing": "non scaricato",
@@ -265,7 +275,8 @@
     "kind": {
       "vad": "Rilevamento del parlato",
       "stt": "Trascrizione",
-      "speakerEmbedding": "Riconoscimento parlanti"
+      "speakerEmbedding": "Riconoscimento parlanti",
+      "textEmbedding": "Ricerca per significato"
     }
   },
   "speakers": {
@@ -294,7 +305,21 @@
     "rename": "Rinomina meeting",
     "assists": "Suggerimenti",
     "export": "Esporta in Markdown",
-    "exported": "Salvato in {{path}}"
+    "exported": "Salvato in {{path}}",
+    "searchPlaceholderSemantic": "Cerca per parole o per significato…",
+    "results": "{{count}} risultati",
+    "semantic": {
+      "noModel": "Scarica il modello in Impostazioni → Ricerca nello storico per cercare anche per significato.",
+      "indexing": "Indicizzazione in corso: {{indexed}} di {{total}} meeting",
+      "ready": "Ricerca per significato attiva",
+      "wordMatch": "Contiene le parole cercate",
+      "kind": {
+        "block": "Sintesi a 5 minuti",
+        "overview": "Riepilogo",
+        "keyPoints": "Punti chiave",
+        "actionItems": "Azioni"
+      }
+    }
   },
   "export": {
     "date": "Data",

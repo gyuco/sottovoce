@@ -69,6 +69,8 @@ export interface Settings {
   targetLanguage: Language | null;
   /** Avvisi durante la call calcolati dalle metriche (senza LLM). */
   nudges: boolean;
+  /** Ricerca per significato nello storico (modello locale di embedding). */
+  semanticSearch: boolean;
 }
 
 export interface ModelInfo {
@@ -330,6 +332,47 @@ export interface MeetingDetails {
 export const listMeetings = (page: number, perPage: number, search?: string) =>
   invoke<MeetingPage>("list_meetings", { page, perPage, search: search?.trim() || null });
 
+export type PassageKind = "transcript" | "block" | "overview" | "keyPoints" | "actionItems";
+
+/** Passaggio trovato dalla ricerca per significato, con il testo attuale. */
+export interface SearchPassage {
+  kind: PassageKind;
+  /** Prima frase del passaggio (solo trascrizione). */
+  segmentId: number | null;
+  startMs: number;
+  text: string;
+  score: number;
+}
+
+export interface SearchResult extends MeetingSummary {
+  score: number;
+  /** Trovato anche dalla ricerca per parole. */
+  lexical: boolean;
+  passages: SearchPassage[];
+}
+
+/** Stato dell'indice della ricerca per significato. */
+export interface IndexStatus {
+  modelReady: boolean;
+  enabled: boolean;
+  indexed: number;
+  total: number;
+  pending: number;
+  error: string | null;
+}
+
+/** Ricerca per significato + per parole (senza modello: solo parole). */
+export const searchMeetings = (query: string) =>
+  invoke<SearchResult[]>("search_meetings", { query });
+
+export const semanticIndexStatus = () => invoke<IndexStatus>("semantic_index_status");
+
+export const reindexMeetings = () => invoke<void>("reindex_meetings");
+
+/** Aggiornamenti dello stato dell'indice (evento `search:status`). */
+export const onIndexStatus = (cb: (status: IndexStatus) => void) =>
+  listen<IndexStatus>("search:status", (e) => cb(e.payload));
+
 export const getMeeting = (id: number) => invoke<MeetingDetails>("get_meeting", { id });
 
 export const deleteMeeting = (id: number) => invoke<void>("delete_meeting", { id });
@@ -400,7 +443,7 @@ export const openReleasePage = (url: string) => invoke<void>("open_release_page"
 
 // --- Modelli locali ---------------------------------------------------------
 
-export type LocalModelKind = "vad" | "stt" | "speakerEmbedding";
+export type LocalModelKind = "vad" | "stt" | "speakerEmbedding" | "textEmbedding";
 
 export type LocalModelStatus =
   | { state: "missing" }

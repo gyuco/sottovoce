@@ -57,7 +57,8 @@ export function LocalModels() {
   );
 }
 
-function ModelRow({ model }: { model: LocalModel }) {
+/** Riga di un modello: stato, download con avanzamento, verifica, eliminazione. */
+export function ModelRow({ model }: { model: LocalModel }) {
   const { t, i18n } = useTranslation();
   const progress = useModelsStore((s) => s.progress[model.id]);
   const error = useModelsStore((s) => s.errors[model.id]);

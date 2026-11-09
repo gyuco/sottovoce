@@ -1,0 +1,19 @@
+[package]
+name = "sv-search"
+description = "Indice e ricerca semantica dei meeting di Sottovoce (blocchi, vettori su file, fusione con la ricerca per parole)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-embed.workspace = true
+sv-store.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
