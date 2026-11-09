@@ -13,16 +13,18 @@ use crate::assist::{AssistConfig, AssistEvent};
 use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
+use crate::diarize::{VoiceEvent, VoiceProfiles};
 use crate::export;
+use crate::history_chat::{self, HistoryAnswer};
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
-use crate::search::{IndexStatus, Search, SearchResult};
+use crate::search::{HistoryFilter, IndexStatus, Search, SearchResult};
 use crate::secrets;
 use crate::session::{LlmTasks, Outputs};
 use crate::session::{Session, SummaryJob};
 use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
-use crate::state::{AppState, Db};
+use crate::state::{AppState, Db, Voices};
 use crate::stt;
 use crate::summary::SummaryConfig;
 use crate::translate::{MeetingLanguage, TranslationEvent, TranslatorConfig};
@@ -81,11 +83,13 @@ pub async fn start_session(
     settings: State<'_, SettingsStore>,
     models: State<'_, Models>,
     db: State<'_, Db>,
+    voices: State<'_, Voices>,
     on_level: Channel<LevelEvent>,
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
     on_assist: Channel<AssistEvent>,
     on_compression: Channel<CompressionEvent>,
+    on_voice: Channel<VoiceEvent>,
     context: Option<MeetingContext>,
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
@@ -131,7 +135,17 @@ pub async fn start_session(
                 None
             }
         };
-    let diarization = stt::diarization(&settings, models.store());
+    let mut diarization = stt::diarization(&settings, models.store());
+    if settings.voice_profiles
+        && let Some(cfg) = diarization.as_mut()
+    {
+        let store = voices.0.clone();
+        let loaded = store.clone();
+        match blocking(move || loaded.known().map_err(anyhow::Error::from)).await {
+            Ok(known) => cfg.voices = Some(VoiceProfiles { store, known }),
+            Err(e) => tracing::warn!("profili vocali non disponibili: {e}"),
+        }
+    }
     let llm = llm_tasks(&settings).await;
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
     let out = Outputs {
@@ -149,6 +163,9 @@ pub async fn start_session(
         }),
         on_compression: Box::new(move |e| {
             let _ = on_compression.send(e);
+        }),
+        on_voice: std::sync::Arc::new(move |e| {
+            let _ = on_voice.send(e);
         }),
     };
     let session = Session::start(&settings, engine, context, llm, diarization, store, out)
@@ -238,6 +255,69 @@ pub async fn ask_model(
         return Err("il modello ha risposto vuoto".into());
     }
     Ok(reply)
+}
+
+/// Domanda sullo storico (RAG): recupera i passaggi dei meeting salvati e
+/// chiede al modello una risposta solo da quelli, con citazioni `[n]`. Senza
+/// passaggi risponde "non trovato" senza chiamare il modello.
+#[tauri::command]
+pub async fn ask_history(
+    search: State<'_, Search>,
+    settings: State<'_, SettingsStore>,
+    question: String,
+    history: Vec<ChatTurn>,
+    filter: Option<HistoryFilter>,
+    utc_offset_min: i32,
+) -> CmdResult<HistoryAnswer> {
+    let settings = settings.get();
+    // "Solo locale" vale anche qui: i passaggi lasciano il Mac solo verso
+    // un LLM locale.
+    stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+    let task = settings.insight_llm().ok_or_else(|| {
+        "nessun modello scelto per la chat: impostane uno nelle Impostazioni".to_owned()
+    })?;
+    let question = question.trim().to_owned();
+    if question.is_empty() {
+        return Err("domanda vuota".into());
+    }
+    // Fuso orario plausibile (±14 h): solo per le date nel contesto.
+    let utc_offset_min = utc_offset_min.clamp(-14 * 60, 14 * 60);
+
+    let query = history_chat::search_query(&question, &history);
+    let retrieved = search
+        .retrieve(query, filter.unwrap_or_default(), utc_offset_min)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    if retrieved.context.sources.is_empty() {
+        return Ok(history_chat::not_found(retrieved.semantic));
+    }
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    let today = sv_search::date(now_ms, utc_offset_min);
+    let messages = history_chat::messages(&question, &history, &retrieved.context.text, &today);
+    let provider = task.provider;
+    let client = {
+        let settings = settings.clone();
+        blocking(move || llm::client(&settings, provider, true)).await?
+    };
+    let request = ChatRequest::new(task.model, messages)
+        .temperature(0.2)
+        .max_tokens(700)
+        .timeout(history_chat::TIMEOUT);
+    let reply = client
+        .chat(request)
+        .await
+        .map_err(|e| format!("risposta del modello non riuscita: {e}"))?;
+    if reply.content.trim().is_empty() {
+        return Err("il modello ha risposto vuoto".into());
+    }
+    Ok(history_chat::answer(
+        &reply.content,
+        &retrieved.context.sources,
+        retrieved.semantic,
+    ))
 }
 
 /// Aggiorna il contesto della sessione attiva: vale dalla prossima chiamata
@@ -705,6 +785,38 @@ pub fn update_settings(
         search.backfill();
     }
     Ok(next)
+}
+
+// --- Profili vocali -----------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_voice_profiles(
+    voices: State<'_, Voices>,
+) -> CmdResult<Vec<sv_diar::voices::VoiceProfile>> {
+    let store = voices.0.clone();
+    blocking(move || store.list().map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn rename_voice_profile(
+    voices: State<'_, Voices>,
+    id: String,
+    name: String,
+) -> CmdResult<sv_diar::voices::VoiceProfile> {
+    let store = voices.0.clone();
+    blocking(move || store.rename(&id, &name).map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn delete_voice_profile(voices: State<'_, Voices>, id: String) -> CmdResult<()> {
+    let store = voices.0.clone();
+    blocking(move || store.delete(&id).map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn delete_all_voice_profiles(voices: State<'_, Voices>) -> CmdResult<()> {
+    let store = voices.0.clone();
+    blocking(move || store.delete_all().map_err(anyhow::Error::from)).await
 }
 
 // --- LLM ---------------------------------------------------------------------

@@ -24,7 +24,7 @@ mod writer;
 
 pub use error::StoreError;
 pub use schema::SCHEMA_VERSION;
-pub use store::Store;
+pub use store::{Store, normalize};
 pub use types::{
     ActionItem, Assist, CompressionBlock, ImportantMoment, KeyPoint, Meeting, MeetingDetails,
     MeetingDraft, MeetingPage, MeetingSummary, NewCompressionBlock, NewSegment, NewSummary,

@@ -18,7 +18,7 @@ use tokio::task::JoinHandle;
 
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
 use crate::compress::{self, CompressConfig, CompressLine, CompressionEvent, CompressionLog};
-use crate::diarize::{self, DiarConfig, DiarJob};
+use crate::diarize::{self, DiarConfig, DiarJob, VoiceEvent, VoiceHooks};
 use crate::echo::EchoGuard;
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
@@ -55,6 +55,14 @@ pub struct Outputs {
     pub on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync>,
     pub on_assist: Box<dyn Fn(AssistEvent) + Send + Sync>,
     pub on_compression: Box<dyn Fn(CompressionEvent) + Send + Sync>,
+    /// Parlanti riconosciuti nei profili vocali.
+    pub on_voice: Arc<dyn Fn(VoiceEvent) + Send + Sync>,
+}
+
+/// Profili vocali da aggiornare a fine sessione con la voce dei parlanti.
+struct VoiceSave {
+    store: sv_diar::VoiceStore,
+    collected: Arc<std::sync::Mutex<Vec<sv_diar::SpeakerVoice>>>,
 }
 
 pub struct Session {
@@ -72,6 +80,7 @@ pub struct Session {
     auto_summary: bool,
     /// Traduzione su richiesta (pulsante "Traduci").
     translation: Option<TranslatorConfig>,
+    voices: Option<VoiceSave>,
 }
 
 /// Cosa serve per tradurre una frase su richiesta durante la sessione.
@@ -98,6 +107,7 @@ impl Session {
             on_translation,
             on_assist,
             on_compression,
+            on_voice,
         } = out;
         let system_audio = settings.system_audio && sv_audio::system::is_supported();
         let mut channels = vec![Channel::Me];
@@ -184,8 +194,21 @@ impl Session {
         let (frames, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
         // Parlanti solo su "Loro" (senza audio di sistema non c'è nessuno).
         let diarizing = diarization.is_some() && system_audio;
-        let diarizer = diarization.filter(|_| system_audio).map(|cfg| {
-            let (tx, task) = diarize::spawn(cfg, frames.subscribe());
+        let mut voices = None;
+        let diarizer = diarization.filter(|_| system_audio).map(|mut cfg| {
+            let hooks = cfg.voices.take().map(|profiles| {
+                let collected = Arc::new(std::sync::Mutex::new(Vec::new()));
+                voices = Some(VoiceSave {
+                    store: profiles.store,
+                    collected: collected.clone(),
+                });
+                VoiceHooks {
+                    known: profiles.known,
+                    on_match: on_voice.clone(),
+                    collected,
+                }
+            });
+            let (tx, task) = diarize::spawn(cfg, frames.subscribe(), hooks);
             tasks.push(task);
             tx
         });
@@ -248,6 +271,7 @@ impl Session {
                     translating_mine = translating && translating_mine,
                     assisting,
                     diarizing,
+                    voice_profiles = voices.is_some(),
                     compressing = compression_log.is_some(),
                     "sessione avviata"
                 );
@@ -261,6 +285,7 @@ impl Session {
                     summary: llm.summary,
                     auto_summary: llm.auto_summary,
                     translation: on_demand,
+                    voices,
                 })
             }
             Err(e) => {
@@ -309,6 +334,7 @@ impl Session {
             summary,
             auto_summary,
             translation: _,
+            voices,
         } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
@@ -325,6 +351,11 @@ impl Session {
             }
         }
         let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+
+        // Dopo i task: la diarization ha lasciato la voce dei parlanti.
+        if let Some(voices) = voices {
+            save_voices(voices, &context.get()).await;
+        }
 
         // Dopo i task (traduzioni, assist e compressione compresi).
         let meeting_id = match store {
@@ -369,6 +400,38 @@ impl Session {
             meeting_id,
             summary: job,
         }
+    }
+}
+
+/// Aggiorna i profili vocali dei parlanti a cui l'utente ha dato un nome;
+/// gli altri non lasciano traccia.
+async fn save_voices(voices: VoiceSave, context: &MeetingContext) {
+    let collected =
+        std::mem::take(&mut *voices.collected.lock().unwrap_or_else(|e| e.into_inner()));
+    let named: Vec<(String, sv_diar::SpeakerVoice)> = collected
+        .into_iter()
+        .filter_map(|v| Some((context.speakers.get(&v.speaker)?.clone(), v)))
+        .collect();
+    if named.is_empty() {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+    let store = voices.store;
+    let saved = tokio::task::spawn_blocking(move || {
+        store.save_session(&named, &sv_diar::MatchThresholds::default(), now)
+    })
+    .await;
+    match saved {
+        Ok(Ok(results)) => {
+            for (_, outcome) in results {
+                // Niente nomi nei log: sono dati personali.
+                tracing::info!(?outcome, "profilo vocale");
+            }
+        }
+        Ok(Err(e)) => tracing::warn!("profili vocali non salvati: {e}"),
+        Err(e) => tracing::warn!("salvataggio dei profili vocali interrotto: {e}"),
     }
 }
 

@@ -112,7 +112,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     useChatStore.getState().reset();
     useNudgeStore.getState().reset();
     // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
-    useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
+    useMeetingStore.getState().resetSpeakers();
     try {
       await startSession(
         (e) => {
@@ -127,6 +127,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         transcript.applyTranslation,
         assist.add,
         insights.addBlock,
+        useMeetingStore.getState().applyVoice,
         useMeetingStore.getState().context,
       );
       set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });

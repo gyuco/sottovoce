@@ -47,6 +47,8 @@ export interface Settings {
   diarization: boolean;
   /** Altri partecipanti noti (1–8); 0 = automatico. */
   theirSpeakers: number;
+  /** Profili vocali (dato biometrico, opt-in): riconosce i parlanti già nominati. */
+  voiceProfiles: boolean;
   myLanguage: Language;
   theirLanguage: Language;
   micDeviceId: string | null;
@@ -216,12 +218,54 @@ export const askModel = (input: {
   context: MeetingContext;
 }) => invoke<string>("ask_model", input);
 
+/** Filtri opzionali delle domande sullo storico (ms epoch). */
+export interface HistoryFilter {
+  fromMs?: number | null;
+  /** Escluso. */
+  toMs?: number | null;
+  meetingId?: number | null;
+}
+
+/** Fonte citata in una risposta sullo storico. */
+export interface HistorySource {
+  n: number;
+  meetingId: number;
+  meetingName: string;
+  startedAtMs: number;
+  kind: PassageKind;
+  segmentId: number | null;
+  startMs: number;
+  text: string;
+}
+
+export interface HistoryAnswer {
+  /** Risposta con citazioni `[n]`; vuota se `found` è falso. */
+  answer: string;
+  /** `false` = nei meeting non c'è la risposta. */
+  found: boolean;
+  /** `false` = solo ricerca per parole (modello di embedding assente). */
+  semantic: boolean;
+  sources: HistorySource[];
+}
+
+/** Domanda su tutti i meeting salvati (RAG); risposta con le fonti citate. */
+export const askHistory = (input: {
+  question: string;
+  history: ChatTurn[];
+  filter: HistoryFilter | null;
+}) =>
+  invoke<HistoryAnswer>("ask_history", {
+    ...input,
+    utcOffsetMin: -new Date().getTimezoneOffset(),
+  });
+
 export function startSession(
   onLevel: (e: LevelEvent) => void,
   onTranscript: (e: SttEvent) => void,
   onTranslation: (e: TranslationEvent) => void,
   onAssist: (e: AssistEvent) => void,
   onCompression: (e: CompressionEvent) => void,
+  onVoice: (e: VoiceEvent) => void,
   context: MeetingContext,
 ) {
   const level = new Channel<LevelEvent>();
@@ -234,15 +278,47 @@ export function startSession(
   assist.onmessage = onAssist;
   const compression = new Channel<CompressionEvent>();
   compression.onmessage = onCompression;
+  const voice = new Channel<VoiceEvent>();
+  voice.onmessage = onVoice;
   return invoke<void>("start_session", {
     onLevel: level,
     onTranscript: transcript,
     onTranslation: translation,
     onAssist: assist,
     onCompression: compression,
+    onVoice: voice,
     context,
   });
 }
+
+/** Parlante di "Loro" riconosciuto in un profilo vocale. */
+export interface VoiceEvent {
+  speaker: number;
+  profileId: string;
+  name: string;
+  similarity: number;
+  /** `assign` = nome usato subito; `suggest` = da confermare. */
+  verdict: "assign" | "suggest";
+}
+
+/** Profilo vocale salvato (l'impronta resta nel backend). */
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  createdMs: number;
+  /** Ultimo meeting in cui è stato aggiornato. */
+  lastSeenMs: number;
+  meetings: number;
+}
+
+export const listVoiceProfiles = () => invoke<VoiceProfile[]>("list_voice_profiles");
+
+export const renameVoiceProfile = (id: string, name: string) =>
+  invoke<VoiceProfile>("rename_voice_profile", { id, name });
+
+export const deleteVoiceProfile = (id: string) => invoke<void>("delete_voice_profile", { id });
+
+export const deleteAllVoiceProfiles = () => invoke<void>("delete_all_voice_profiles");
 
 /** Esito dello stop: il riepilogo, se previsto, arriva dopo con `onSummaryStatus`. */
 export interface StopResult {

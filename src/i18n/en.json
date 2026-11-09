@@ -69,6 +69,22 @@
     "send": "Send",
     "thinking": "The model is answering…"
   },
+  "historyChat": {
+    "title": "Ask your history",
+    "subtitle": "questions about all saved meetings, with sources",
+    "empty": "Ask what was decided, who was supposed to do what, when… Answers come only from your saved meetings, with sources cited.",
+    "placeholder": "E.g. what did we decide with ACME about the renewal?",
+    "send": "Send",
+    "thinking": "Searching your meetings…",
+    "notFound": "Not found in your meetings.",
+    "wordsOnly": "Searched by words only: download the model in Settings → History search to also search by meaning.",
+    "sources": "Sources",
+    "openSource": "Open “{{meeting}}” at the cited point",
+    "from": "From",
+    "to": "To",
+    "onlySelected": "Only the open meeting",
+    "clear": "New conversation"
+  },
   "assist": {
     "title": "Live assist",
     "empty": "Every 20 seconds, while the conversation goes on, what you could say or ask shows up here. Pick the model in Settings.",
@@ -213,6 +229,25 @@
       "indexing": "Indexed {{indexed}} of {{total}} · {{pending}} queued",
       "indexed": "Indexed {{indexed}} of {{total}} meetings",
       "reindex": "Recheck"
+    },
+    "voices": {
+      "title": "Voice profiles",
+      "hint": "Recognizes speakers you have named in later meetings. A voiceprint is biometric data: it stays on this Mac only (even with Deepgram), is never sent over the network, and is saved only for named speakers after at least 20 seconds of speech.",
+      "toggle": "Recognize speakers across meetings",
+      "toggleHint": "Off by default. When the voice is a close match the name is assigned, otherwise it is suggested.",
+      "needsDiarization": "\"Recognize speakers\" must also be on (Transcription card).",
+      "empty": "No saved profiles. Name a speaker during a call to create one.",
+      "meta": "Last meeting: {{date}} · meetings: {{meetings}}",
+      "nameLabel": "Profile name",
+      "rename": "Rename {{name}}",
+      "delete": "Delete {{name}}'s profile",
+      "deleteAll": "Delete all profiles",
+      "deleteAllTitle": "Delete all voice profiles?",
+      "deleteAllConfirm": "The saved voiceprints will be erased from this Mac. This cannot be undone.",
+      "offTitle": "Turn off voice profiles?",
+      "offConfirm": "Do you also want to delete the saved profiles? If you keep them, they stay on this Mac but are not used.",
+      "offKeep": "Turn off and keep",
+      "offDelete": "Turn off and delete"
     }
   },
   "permissions": {
@@ -282,7 +317,16 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rename {{name}}",
-    "renameHint": "Click to name this speaker"
+    "renameHint": "Click to name this speaker",
+    "voice": {
+      "region": "Speakers recognized by voice",
+      "suggest": "sounds like {{name}}?",
+      "accept": "It's {{name}}",
+      "dismiss": "No",
+      "recognized": "recognized as {{name}} from the voice profile",
+      "notThem": "Not {{name}}",
+      "ok": "OK"
+    }
   },
   "history": {
     "title": "History",

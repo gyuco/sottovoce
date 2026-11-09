@@ -5,6 +5,7 @@ import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
 import { LocalModels } from "@/components/LocalModels";
 import { SearchSettings } from "@/components/SearchSettings";
+import { VoiceProfiles } from "@/components/VoiceProfiles";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -213,6 +214,8 @@ export function SettingsPanel() {
           </div>
         </CardContent>
       </Card>
+
+      <VoiceProfiles />
 
       <Card>
         <CardHeader>

@@ -4828,6 +4828,8 @@ name = "sv-diar"
 version = "0.1.0"
 dependencies = [
  "hound",
+ "serde",
+ "serde_json",
  "sherpa-onnx",
  "sv-audio",
  "sv-vad",

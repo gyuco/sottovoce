@@ -2,6 +2,7 @@ import { Check, Clock, FileDown, Loader2, Pencil, Search, Sparkles, Trash2, X } 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { HistoryChat } from "@/components/HistoryChat";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { ConversationMetrics } from "@/components/TalkRatio";
 import {
@@ -51,6 +52,8 @@ export function History(props: { focusId?: number | null }) {
   const [results, setResults] = useState<SearchResult[] | null>(null);
   // Frase da mostrare nel dettaglio dopo il clic su un passaggio.
   const [focusSegment, setFocusSegment] = useState<number | null>(null);
+  // Cambia a ogni apertura: un secondo clic sulla stessa fonte riscorre.
+  const [focusTick, setFocusTick] = useState(0);
   // Aperto da un avviso: parte da quel meeting (il componente si rimonta).
   const [selected, setSelected] = useState<number | null>(props.focusId ?? null);
   const [details, setDetails] = useState<MeetingDetails | null>(null);
@@ -117,12 +120,15 @@ export function History(props: { focusId?: number | null }) {
     document
       .getElementById(`segment-${focusSegment}`)
       ?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [focusSegment, details, selected]);
+  }, [focusSegment, focusTick, details, selected]);
 
-  const openPassage = (meetingId: number, passage: SearchPassage | null) => {
+  const openSegment = (meetingId: number, segmentId: number | null) => {
     setSelected(meetingId);
-    setFocusSegment(passage?.segmentId ?? null);
+    setFocusSegment(segmentId);
+    setFocusTick((n) => n + 1);
   };
+  const openPassage = (meetingId: number, passage: SearchPassage | null) =>
+    openSegment(meetingId, passage?.segmentId ?? null);
 
   useEffect(() => {
     if (selected === null) return;
@@ -228,7 +234,9 @@ export function History(props: { focusId?: number | null }) {
   const to = Math.min((page + 1) * PER_PAGE, total);
 
   return (
-    <div className="grid min-h-0 flex-1 gap-4 px-6 pt-5 pb-6 md:grid-cols-[22rem_minmax(0,1fr)]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-6 pt-5 pb-6">
+      <HistoryChat selectedMeeting={selected} onOpenSource={openSegment} />
+      <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[22rem_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col rounded-2xl border bg-card shadow-xs">
         <header className="flex flex-col gap-2 border-b px-4 py-3">
           <h1 className="text-lg font-semibold tracking-tight">{t("history.title")}</h1>
@@ -553,6 +561,7 @@ export function History(props: { focusId?: number | null }) {
           </>
         )}
       </section>
+      </div>
 
       <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <AlertDialogContent>

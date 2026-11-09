@@ -95,6 +95,10 @@ pub struct Settings {
     pub diarization: bool,
     /// Altri partecipanti noti (1–8); 0 = automatico.
     pub their_speakers: u8,
+    /// Profili vocali (dato biometrico, spento di default): riconosce nei
+    /// meeting successivi i parlanti a cui l'utente ha dato un nome. Solo
+    /// in locale, in `app_data_dir/voices/`.
+    pub voice_profiles: bool,
     /// Lingua dell'utente (canale "Io"): monolingua = più accurato.
     pub my_language: Language,
     /// Lingua degli altri partecipanti (canale "Loro").
@@ -189,6 +193,7 @@ impl Default for Settings {
             local_only: false,
             diarization: true,
             their_speakers: 0,
+            voice_profiles: false,
             my_language: Language::It,
             their_language: Language::Multi,
             mic_device_id: None,

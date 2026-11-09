@@ -206,13 +206,30 @@ impl SemanticIndex {
     /// al massimo `limit`, scartando quelli sotto `best - margin`: i punteggi
     /// assoluti variano molto da query a query, la distanza dal migliore no.
     pub fn search(&self, query: &[f32], limit: usize, margin: f32) -> Vec<PassageHit> {
+        self.search_where(query, limit, margin, |_| true)
+    }
+
+    /// Come [`Self::search`], solo tra i meeting per cui `keep` è vero (il
+    /// margine si calcola sul migliore tra quelli).
+    pub fn search_where(
+        &self,
+        query: &[f32],
+        limit: usize,
+        margin: f32,
+        keep: impl Fn(i64) -> bool,
+    ) -> Vec<PassageHit> {
         if query.len() != self.dim {
             return Vec::new();
         }
         let files: Vec<(i64, Arc<IndexFile>)> = self
             .cache()
             .as_ref()
-            .map(|m| m.iter().map(|(id, f)| (*id, f.clone())).collect())
+            .map(|m| {
+                m.iter()
+                    .filter(|(id, _)| keep(**id))
+                    .map(|(id, f)| (*id, f.clone()))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut hits: Vec<PassageHit> = files
             .iter()

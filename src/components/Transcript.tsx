@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { SpeakerLabel } from "@/components/SpeakerLabel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { VoiceNotices } from "@/components/VoiceNotices";
 import { formatDuration, useCopy } from "@/lib/hooks";
 import { MOMENT_COLORS } from "@/lib/moments";
 import { type TranslationEvent, errorMessage, translateSegment } from "@/lib/ipc";
@@ -103,6 +104,7 @@ export function Transcript() {
           {copied ? t("common.copied") : t("transcript.copy")}
         </Button>
       </header>
+      <VoiceNotices />
       <MomentBar moments={moments} end={rows.reduce((max, r) => Math.max(max, r.end), 0)} />
       <div
         ref={box}

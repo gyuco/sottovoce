@@ -6,6 +6,7 @@ mod compress;
 mod diarize;
 mod echo;
 mod export;
+mod history_chat;
 mod llm;
 mod meeting;
 mod models;
@@ -94,6 +95,9 @@ pub fn run() {
                 db_path.clone(),
             ));
             app.manage(state::Db { path: db_path });
+            app.manage(state::Voices(sv_diar::VoiceStore::new(
+                app.path().app_data_dir()?.join("voices"),
+            )));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -117,6 +121,7 @@ pub fn run() {
             commands::update_meeting_context,
             commands::inspect_code_path,
             commands::ask_model,
+            commands::ask_history,
             commands::set_api_key,
             commands::has_api_key,
             commands::delete_api_key,
@@ -131,6 +136,10 @@ pub fn run() {
             commands::verify_local_model,
             commands::check_update,
             commands::open_release_page,
+            commands::list_voice_profiles,
+            commands::rename_voice_profile,
+            commands::delete_voice_profile,
+            commands::delete_all_voice_profiles,
             commands::toggle_widget,
             commands::close_widget,
         ])

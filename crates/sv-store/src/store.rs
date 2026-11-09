@@ -540,7 +540,8 @@ fn lines_match(lines: &[String], terms: &[String]) -> bool {
     missing == 0
 }
 
-fn normalize(text: &str) -> String {
+/// Minuscole senza accenti latini: la forma usata dalla ricerca per parole.
+pub fn normalize(text: &str) -> String {
     text.chars()
         .flat_map(char::to_lowercase)
         .map(fold)

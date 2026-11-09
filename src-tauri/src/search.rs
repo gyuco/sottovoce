@@ -13,13 +13,13 @@
 //! (backfill dei meeting senza indice o con indice vecchio) e quando il
 //! modello finisce di scaricarsi o la ricerca semantica viene riattivata.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sv_embed::Embedder;
 use sv_models::ModelStore;
 use sv_search::{ChunkRef, SemanticIndex};
@@ -183,9 +183,27 @@ impl Search {
     }
 
     async fn semantic_passages(&self, query: &str) -> Vec<sv_search::PassageHit> {
+        self.semantic_where(query, PASSAGES, MARGIN, |_| true)
+            .await
+            .unwrap_or_default()
+    }
+
+    /// Passaggi semantici tra i meeting accettati da `keep`. `None` se la
+    /// ricerca per significato non è disponibile (spenta, modello assente,
+    /// embedding non riuscito): resta solo quella per parole.
+    async fn semantic_where(
+        &self,
+        query: &str,
+        limit: usize,
+        margin: f32,
+        keep: impl Fn(i64) -> bool,
+    ) -> Option<Vec<sv_search::PassageHit>> {
         let status = self.inner.refresh_status(None);
-        if !status.enabled || !status.model_ready || self.inner.index.indexed().is_empty() {
-            return Vec::new();
+        if !status.enabled || !status.model_ready {
+            return None;
+        }
+        if self.inner.index.indexed().is_empty() {
+            return Some(Vec::new());
         }
         let (tx, rx) = oneshot::channel();
         self.inner.queue().queries.push_back((query.to_owned(), tx));
@@ -194,15 +212,92 @@ impl Search {
             Ok(Ok(Ok(v))) => v,
             Ok(Ok(Err(e))) => {
                 tracing::warn!("embedding della query non riuscito: {e:#}");
-                return Vec::new();
+                return None;
             }
             Ok(Err(_)) | Err(_) => {
                 tracing::warn!("embedding della query scaduto");
-                return Vec::new();
+                return None;
             }
         };
-        self.inner.index.search(&vector, PASSAGES, MARGIN)
+        Some(self.inner.index.search_where(&vector, limit, margin, keep))
     }
+
+    /// Recupero per le domande sullo storico: passaggi semantici e per
+    /// parole (a livello di blocco) fusi con RRF, al massimo
+    /// [`sv_search::PER_MEETING`] per meeting, più riepilogo e action item
+    /// dei meeting trovati, in un contesto numerato entro il budget.
+    pub async fn retrieve(
+        &self,
+        query: String,
+        filter: HistoryFilter,
+        utc_offset_min: i32,
+    ) -> Result<Retrieved> {
+        let db_path = self.inner.db_path.clone();
+        let allowed: Vec<i64> = tauri::async_runtime::spawn_blocking(move || {
+            let meetings = sv_store::Store::open(&db_path)?.meetings()?;
+            anyhow::Ok(
+                meetings
+                    .iter()
+                    .filter(|m| filter.keeps(m))
+                    .map(|m| m.id)
+                    .collect(),
+            )
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))??;
+        if allowed.is_empty() {
+            return Ok(Retrieved::default());
+        }
+        let semantic = {
+            let allowed = allowed.clone();
+            self.semantic_where(&query, RAG_PASSAGES, RAG_MARGIN, move |id| {
+                allowed.contains(&id)
+            })
+            .await
+        };
+        let inner = self.inner.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            inner.retrieve(&query, &allowed, semantic, utc_offset_min)
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))?
+    }
+}
+
+/// Passaggi semantici considerati per una domanda sullo storico.
+const RAG_PASSAGES: usize = 60;
+/// Margine più largo della ricerca: le domande sono frasi lunghe e il
+/// passaggio giusto può stare un po' sotto al migliore.
+const RAG_MARGIN: f32 = 0.08;
+/// Passaggi per parole considerati per una domanda.
+const RAG_LEXICAL: usize = 40;
+
+/// Filtri opzionali delle domande sullo storico.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryFilter {
+    /// Meeting iniziati da questo istante (ms epoch, incluso).
+    pub from_ms: Option<i64>,
+    /// Meeting iniziati prima di questo istante (ms epoch, escluso).
+    pub to_ms: Option<i64>,
+    /// Solo questo meeting.
+    pub meeting_id: Option<i64>,
+}
+
+impl HistoryFilter {
+    fn keeps(&self, m: &sv_store::Meeting) -> bool {
+        self.meeting_id.is_none_or(|id| id == m.id)
+            && self.from_ms.is_none_or(|from| m.started_at_ms >= from)
+            && self.to_ms.is_none_or(|to| m.started_at_ms < to)
+    }
+}
+
+/// Contesto numerato per il modello.
+#[derive(Debug, Default)]
+pub struct Retrieved {
+    pub context: sv_search::Context,
+    /// La ricerca per significato ha partecipato (altrimenti solo parole).
+    pub semantic: bool,
 }
 
 /// Passaggio di un risultato, con il testo riletto dal meeting.
@@ -229,7 +324,7 @@ pub struct SearchResult {
     pub passages: Vec<Passage>,
 }
 
-fn kind_name(source: ChunkRef) -> (&'static str, Option<i64>) {
+pub fn kind_name(source: ChunkRef) -> (&'static str, Option<i64>) {
     match source {
         ChunkRef::Transcript { first, .. } => ("transcript", Some(first)),
         ChunkRef::Block { .. } => ("block", None),
@@ -449,6 +544,54 @@ impl Inner {
         }
     }
 
+    fn retrieve(
+        &self,
+        query: &str,
+        allowed: &[i64],
+        semantic: Option<Vec<sv_search::PassageHit>>,
+        utc_offset_min: i32,
+    ) -> Result<Retrieved> {
+        let store = sv_store::Store::open(&self.db_path)?;
+        let mut meetings = HashMap::new();
+        let mut chunks = Vec::with_capacity(allowed.len());
+        for &id in allowed {
+            match store.details(id) {
+                Ok(details) => {
+                    chunks.push((id, sv_search::chunks(&details)));
+                    meetings.insert(id, details);
+                }
+                // Eliminato nel frattempo.
+                Err(sv_store::StoreError::MeetingNotFound(_)) => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        let lexical = sv_search::lexical_hits(&chunks, &sv_search::query_terms(query), RAG_LEXICAL);
+        let used = semantic.is_some();
+        let candidates = sv_search::fuse_passages(
+            &semantic.unwrap_or_default(),
+            &lexical,
+            sv_search::PER_MEETING,
+            sv_search::MAX_PASSAGES,
+        );
+        let context = sv_search::build_context(
+            &candidates,
+            &meetings,
+            sv_search::CONTEXT_BUDGET,
+            utc_offset_min,
+        );
+        tracing::info!(
+            semantic = used,
+            lexical = lexical.len(),
+            sources = context.sources.len(),
+            chars = context.text.chars().count(),
+            "contesto per la domanda sullo storico"
+        );
+        Ok(Retrieved {
+            context,
+            semantic: used,
+        })
+    }
+
     /// Unisce risultati semantici e per parole e rilegge i testi.
     fn collect(
         &self,
@@ -570,5 +713,35 @@ mod tests {
             ("transcript", Some(4))
         );
         assert_eq!(kind_name(ChunkRef::KeyPoints { n: 1 }), ("keyPoints", None));
+    }
+
+    #[test]
+    fn history_filter_dates_and_meeting() {
+        let m = |id, started| sv_store::Meeting {
+            id,
+            name: String::new(),
+            goal: String::new(),
+            notes: String::new(),
+            started_at_ms: started,
+            ended_at_ms: None,
+            stt_engine: String::new(),
+            stt_model: String::new(),
+            my_language: String::new(),
+            their_language: String::new(),
+        };
+        assert!(HistoryFilter::default().keeps(&m(1, 0)));
+        let range = HistoryFilter {
+            from_ms: Some(100),
+            to_ms: Some(200),
+            meeting_id: None,
+        };
+        assert!(!range.keeps(&m(1, 99)));
+        assert!(range.keeps(&m(1, 100)));
+        assert!(!range.keeps(&m(1, 200)));
+        let one = HistoryFilter {
+            meeting_id: Some(2),
+            ..HistoryFilter::default()
+        };
+        assert!(one.keeps(&m(2, 0)) && !one.keeps(&m(3, 0)));
     }
 }

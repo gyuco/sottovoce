@@ -135,6 +135,7 @@ pub fn diarization(settings: &Settings, models: &ModelStore) -> Option<DiarConfi
         Ok(dir) => Some(DiarConfig {
             model: dir.join(&spec.files[0].name),
             speakers: settings.their_speakers,
+            voices: None,
         }),
         Err(e) => {
             tracing::info!("riconoscimento dei parlanti disattivato: {e:#}");

@@ -69,6 +69,22 @@
     "send": "Enviar",
     "thinking": "El modelo está respondiendo…"
   },
+  "historyChat": {
+    "title": "Pregunta al historial",
+    "subtitle": "preguntas sobre todas las reuniones guardadas, con fuentes",
+    "empty": "Pregunta qué se decidió, quién tenía que hacer qué, cuándo… Las respuestas salen solo de tus reuniones guardadas, con las fuentes citadas.",
+    "placeholder": "P. ej. ¿qué decidimos con ACME sobre la renovación?",
+    "send": "Enviar",
+    "thinking": "Buscando en las reuniones…",
+    "notFound": "No encontrado en las reuniones.",
+    "wordsOnly": "Búsqueda solo por palabras: descarga el modelo en Ajustes → Búsqueda en el historial para buscar también por significado.",
+    "sources": "Fuentes",
+    "openSource": "Abrir «{{meeting}}» en el punto citado",
+    "from": "Desde",
+    "to": "Hasta",
+    "onlySelected": "Solo la reunión abierta",
+    "clear": "Nueva conversación"
+  },
   "assist": {
     "title": "Asistencia en vivo",
     "empty": "Cada 20 segundos, mientras la conversación avanza, aquí aparecerá lo que podrías decir o preguntar. Elige el modelo en Ajustes.",
@@ -213,6 +229,25 @@
       "indexing": "Indexadas {{indexed}} de {{total}} · {{pending}} en cola",
       "indexed": "Indexadas {{indexed}} de {{total}} reuniones",
       "reindex": "Revisar"
+    },
+    "voices": {
+      "title": "Perfiles de voz",
+      "hint": "Reconoce en reuniones posteriores a los hablantes a los que diste un nombre. Una huella de voz es un dato biométrico: se queda solo en este Mac (también con Deepgram), nunca se envía por la red y solo se guarda para hablantes con nombre, tras al menos 20 segundos de habla.",
+      "toggle": "Reconocer a los hablantes entre reuniones",
+      "toggleHint": "Desactivado por defecto. Si la voz es muy parecida se asigna el nombre; si no, se sugiere.",
+      "needsDiarization": "También debe estar activado \"Reconocer a los hablantes\" (tarjeta Transcripción).",
+      "empty": "No hay perfiles guardados. Pon nombre a un hablante durante una llamada para crear uno.",
+      "meta": "Última reunión: {{date}} · reuniones: {{meetings}}",
+      "nameLabel": "Nombre del perfil",
+      "rename": "Renombrar {{name}}",
+      "delete": "Eliminar el perfil de {{name}}",
+      "deleteAll": "Eliminar todos los perfiles",
+      "deleteAllTitle": "¿Eliminar todos los perfiles de voz?",
+      "deleteAllConfirm": "Las huellas de voz guardadas se borrarán de este Mac. No se puede deshacer.",
+      "offTitle": "¿Desactivar los perfiles de voz?",
+      "offConfirm": "¿Quieres eliminar también los perfiles guardados? Si los conservas, se quedan en este Mac pero no se usan.",
+      "offKeep": "Desactivar y conservar",
+      "offDelete": "Desactivar y eliminar"
     }
   },
   "permissions": {
@@ -282,7 +317,16 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Renombrar a {{name}}",
-    "renameHint": "Haz clic para poner nombre a este hablante"
+    "renameHint": "Haz clic para poner nombre a este hablante",
+    "voice": {
+      "region": "Hablantes reconocidos por la voz",
+      "suggest": "¿parece {{name}}?",
+      "accept": "Es {{name}}",
+      "dismiss": "No",
+      "recognized": "reconocido como {{name}} por el perfil de voz",
+      "notThem": "No es {{name}}",
+      "ok": "OK"
+    }
   },
   "history": {
     "title": "Historial",

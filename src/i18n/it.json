@@ -69,6 +69,22 @@
     "send": "Invia",
     "thinking": "Il modello sta rispondendo…"
   },
+  "historyChat": {
+    "title": "Chiedi allo storico",
+    "subtitle": "domande su tutti i meeting salvati, con le fonti",
+    "empty": "Chiedi cosa si è deciso, chi doveva fare cosa, quando… Le risposte arrivano solo dai meeting salvati, con le fonti citate.",
+    "placeholder": "Es. cosa avevamo deciso con ACME sul rinnovo?",
+    "send": "Invia",
+    "thinking": "Cerco nei meeting…",
+    "notFound": "Non trovato nei meeting.",
+    "wordsOnly": "Cercato solo per parole: scarica il modello in Impostazioni → Ricerca nello storico per cercare anche per significato.",
+    "sources": "Fonti",
+    "openSource": "Apri «{{meeting}}» al punto citato",
+    "from": "Dal",
+    "to": "Al",
+    "onlySelected": "Solo il meeting aperto",
+    "clear": "Nuova conversazione"
+  },
   "assist": {
     "title": "Live assist",
     "empty": "Ogni 20 secondi, se la conversazione va avanti, qui compare cosa potresti dire o chiedere. Scegli il modello in Impostazioni.",
@@ -213,6 +229,25 @@
       "indexing": "Indicizzati {{indexed}} di {{total}} · {{pending}} in coda",
       "indexed": "Indicizzati {{indexed}} di {{total}} meeting",
       "reindex": "Ricontrolla"
+    },
+    "voices": {
+      "title": "Profili vocali",
+      "hint": "Riconosce nei meeting successivi i parlanti a cui hai dato un nome. Un'impronta vocale è un dato biometrico: resta solo su questo Mac (anche con Deepgram), non viene mai inviata in rete e si salva solo per i parlanti con un nome, dopo almeno 20 secondi di parlato.",
+      "toggle": "Riconosci i parlanti tra un meeting e l'altro",
+      "toggleHint": "Spento di default. Con voce molto simile il nome viene assegnato, altrimenti ti viene suggerito.",
+      "needsDiarization": "Serve anche \"Riconosci i parlanti\" attivo (scheda Trascrizione).",
+      "empty": "Nessun profilo salvato. Dai un nome a un parlante durante una call per crearne uno.",
+      "meta": "Ultimo meeting: {{date}} · meeting: {{meetings}}",
+      "nameLabel": "Nome del profilo",
+      "rename": "Rinomina {{name}}",
+      "delete": "Elimina il profilo di {{name}}",
+      "deleteAll": "Elimina tutti i profili",
+      "deleteAllTitle": "Eliminare tutti i profili vocali?",
+      "deleteAllConfirm": "Le impronte vocali salvate verranno cancellate da questo Mac. Non si può annullare.",
+      "offTitle": "Disattivare i profili vocali?",
+      "offConfirm": "Vuoi anche eliminare i profili già salvati? Se li conservi, restano su questo Mac ma non vengono usati.",
+      "offKeep": "Disattiva e conserva",
+      "offDelete": "Disattiva ed elimina"
     }
   },
   "permissions": {
@@ -282,7 +317,16 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rinomina {{name}}",
-    "renameHint": "Clic per dare un nome a questo parlante"
+    "renameHint": "Clic per dare un nome a questo parlante",
+    "voice": {
+      "region": "Parlanti riconosciuti dalla voce",
+      "suggest": "sembra {{name}}?",
+      "accept": "È {{name}}",
+      "dismiss": "No",
+      "recognized": "riconosciuto come {{name}} dal profilo vocale",
+      "notThem": "Non è {{name}}",
+      "ok": "OK"
+    }
   },
   "history": {
     "title": "Storico",
