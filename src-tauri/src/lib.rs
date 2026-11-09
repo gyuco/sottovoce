@@ -17,6 +17,7 @@ mod stt;
 mod summary;
 mod translate;
 mod update;
+mod widget;
 
 use tauri::Manager;
 
@@ -34,8 +35,37 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Ricorda posizione e dimensione del solo widget: la finestra
+        // principale si apre sempre con le misure di `tauri.conf.json`.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&["main"])
+                .build(),
+        )
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed
+                        && let Err(e) = widget::toggle(app)
+                    {
+                        tracing::warn!("widget non aperto dalla scorciatoia: {e}");
+                    }
+                })
+                .build(),
+        )
         .manage(state::AppState::default())
         .setup(|app| {
+            // Registrata qui e non nel plugin: se un'altra app la occupa,
+            // Sottovoce parte comunque (il widget resta apribile da tray e header).
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                if let Err(e) = app.global_shortcut().register(widget::SHORTCUT) {
+                    tracing::warn!(
+                        shortcut = widget::SHORTCUT,
+                        "scorciatoia del widget non registrata: {e}"
+                    );
+                }
+            }
             let path = app.path().app_config_dir()?.join("settings.json");
             app.manage(settings::SettingsStore::load(path));
             let models_dir = app.path().app_data_dir()?.join("models");
@@ -91,7 +121,15 @@ pub fn run() {
             commands::verify_local_model,
             commands::check_update,
             commands::open_release_page,
+            commands::toggle_widget,
+            commands::close_widget,
         ])
+        .on_window_event(|window, event| {
+            // Senza la finestra principale il widget non riceve più dati.
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                widget::close(window.app_handle());
+            }
+        })
         .run(tauri::generate_context!())
         .expect("errore durante l'avvio di Sottovoce");
 }

@@ -26,6 +26,7 @@ use crate::stt;
 use crate::summary::SummaryConfig;
 use crate::translate::{TranslationEvent, TranslatorConfig};
 use crate::update;
+use crate::widget;
 
 /// Errore restituito al frontend come stringa leggibile.
 type CmdResult<T> = Result<T, String>;
@@ -54,6 +55,19 @@ pub fn js_error(message: String) {
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
     app.exit(0);
+}
+
+/// Mostra o nasconde il widget overlay; ritorna `true` se ora è aperto.
+/// Async: su Windows creare una finestra da un comando sincrono blocca.
+#[tauri::command]
+pub async fn toggle_widget(app: AppHandle) -> CmdResult<bool> {
+    widget::toggle(&app).map_err(to_msg)
+}
+
+/// Chiude il widget (pulsante nel widget stesso).
+#[tauri::command]
+pub async fn close_widget(app: AppHandle) {
+    widget::close(&app);
 }
 
 /// Avvia una sessione (ferma quella eventualmente attiva) con le impostazioni

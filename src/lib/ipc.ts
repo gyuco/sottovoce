@@ -65,6 +65,8 @@ export interface Settings {
   autoSummary: boolean;
   /** `null` = la lingua dell'utente. */
   targetLanguage: Language | null;
+  /** Avvisi durante la call calcolati dalle metriche (senza LLM). */
+  nudges: boolean;
 }
 
 export interface ModelInfo {
@@ -431,3 +433,8 @@ export const cancelLocalModelDownload = (id: string) =>
 export const deleteLocalModel = (id: string) => invoke<LocalModel>("delete_local_model", { id });
 
 export const verifyLocalModel = (id: string) => invoke<LocalModel>("verify_local_model", { id });
+
+/** Mostra o nasconde il widget overlay; `true` se ora è aperto. */
+export const toggleWidget = () => invoke<boolean>("toggle_widget");
+
+export const closeWidget = () => invoke<void>("close_widget");

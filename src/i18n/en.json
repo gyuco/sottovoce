@@ -194,6 +194,12 @@
       "count": "Other participants",
       "countHint": "If you know how many there are, recognition is steadier and fixes sentences already shown.",
       "auto": "Automatic"
+    },
+    "duringCall": {
+      "title": "During the call",
+      "widgetHint": "The widget stays above Teams, Meet or Zoom with translations, suggestions and nudges, and is hidden from screen sharing. Open it from the button at the top, the menu bar icon or with ⌥⌘S.",
+      "nudges": "Speaking nudges",
+      "nudgesHint": "Warns you if you talk too much or too fast, if a monologue drags on or if you haven't asked any questions yet. At most one every 2 minutes."
     }
   },
   "permissions": {
@@ -340,6 +346,38 @@
   "tray": {
     "show": "Show Sottovoce",
     "quit": "Quit Sottovoce",
-    "tooltip": "Sottovoce — live transcription"
+    "tooltip": "Sottovoce — live transcription",
+    "widget": "Show/hide widget"
+  },
+  "widget": {
+    "toggle": "Widget",
+    "toggleHint": "Show or hide the widget above the call (⌥⌘S)",
+    "openMain": "Open Sottovoce",
+    "close": "Close widget",
+    "idle": "No active session. Start one from the Sottovoce window.",
+    "noLines": "What the other participants say will appear here."
+  },
+  "nudge": {
+    "dismiss": "Dismiss nudge",
+    "monologue": {
+      "title": "You've been talking for {{minutes}}:{{seconds}} without a break",
+      "hint": "Pause and give others room: ask for their view or whether it's clear."
+    },
+    "talkTooMuch": {
+      "title": "You've talked {{value}}% of the time in the last few minutes",
+      "hint": "Try listening more: ask an open question."
+    },
+    "tooFast": {
+      "title": "You're speaking fast: {{value}} words/min",
+      "hint": "Slow down a little and take a few pauses."
+    },
+    "listenLong": {
+      "title": "The others have been talking for {{minutes}}:{{seconds}}",
+      "hint": "Good moment to summarize what you understood or ask a question."
+    },
+    "noQuestions": {
+      "title": "No questions in {{value}} minutes",
+      "hint": "A question helps you understand what the others really need."
+    }
   }
 }

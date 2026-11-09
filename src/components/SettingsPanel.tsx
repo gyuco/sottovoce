@@ -1,4 +1,4 @@
-import { AudioLines, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AudioLines, BellRing, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { KeyForm } from "@/components/KeyForm";
@@ -210,6 +210,25 @@ export function SettingsPanel() {
               </>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BellRing className="size-4 text-muted-foreground" aria-hidden />
+            {t("settings.duringCall.title")}
+          </CardTitle>
+          <CardDescription>{t("settings.duringCall.widgetHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.duringCall.nudges")}
+              <span className="block text-xs text-muted-foreground">{t("settings.duringCall.nudgesHint")}</span>
+            </span>
+            <Switch checked={settings.nudges} onCheckedChange={(nudges) => void update({ nudges })} />
+          </label>
         </CardContent>
       </Card>
 

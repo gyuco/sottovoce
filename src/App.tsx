@@ -8,6 +8,7 @@ import { History } from "@/components/History";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { MeetingChat } from "@/components/MeetingChat";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
+import { NudgeCard } from "@/components/NudgeCard";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SummaryNotice } from "@/components/SummaryNotice";
@@ -19,15 +20,19 @@ import { Button } from "@/components/ui/button";
 import { onSummaryStatus } from "@/lib/ipc";
 import { useSttBlocker } from "@/lib/readiness";
 import { syncTray } from "@/lib/tray";
+import { useWidgetSync } from "@/lib/widget";
 import { useAudioStore } from "@/stores/audio";
 import { useInsightsStore } from "@/stores/insights";
 import { useModelsStore } from "@/stores/models";
+import { useNudgeEngine, useNudgeStore } from "@/stores/nudges";
 import { useSettingsStore } from "@/stores/settings";
 import { useUpdateStore } from "@/stores/update";
 
 export default function App() {
   const { t, i18n } = useTranslation();
-  const { error, init } = useAudioStore();
+  const { error, init, status, startedAt } = useAudioStore();
+  const nudge = useNudgeStore((s) => s.active);
+  const dismissNudge = useNudgeStore((s) => s.dismiss);
   const load = useSettingsStore((s) => s.load);
   const loadModels = useModelsStore((s) => s.load);
   const checkUpdate = useUpdateStore((s) => s.check);
@@ -53,6 +58,9 @@ export default function App() {
   useEffect(() => {
     void syncTray(t, i18n.resolvedLanguage ?? "it");
   }, [t, i18n.resolvedLanguage]);
+
+  useNudgeEngine(status === "running", startedAt);
+  useWidgetSync();
 
   const openSummary = (meetingId: number) => {
     // Ancora mostrato in Live (nessuna nuova sessione): basta tornarci.
@@ -91,6 +99,12 @@ export default function App() {
         ) : (
           <main className="flex min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
             <SessionHeader />
+
+            {nudge && (
+              <div className="px-6 pb-3">
+                <NudgeCard nudge={nudge} onDismiss={dismissNudge} />
+              </div>
+            )}
 
             {blocker || error ? (
               <div className="flex flex-col gap-2 px-6 pb-3">

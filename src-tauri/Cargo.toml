@@ -15,8 +15,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "tray-icon"] }
+tauri = { version = "2", features = ["image-png", "tray-icon", "macos-private-api"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-window-state = "2"
 reqwest = { version = "0.13", default-features = false, features = ["json", "http2", "rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 sv-audio.workspace = true
@@ -35,6 +37,9 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 keyring = "4"
 keyring-core = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSWindow", "NSGraphics"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

@@ -121,6 +121,9 @@ pub struct Settings {
     pub auto_summary: bool,
     /// Lingua in cui tradurre; `None` = la lingua dell'utente.
     pub target_language: Option<Language>,
+    /// Avvisi durante la call (parli troppo, monologo, nessuna domanda…),
+    /// calcolati dalle metriche senza LLM.
+    pub nudges: bool,
 }
 
 /// Modello di un compito LLM con il suo provider.
@@ -193,6 +196,7 @@ impl Default for Settings {
             assist_provider: None,
             auto_summary: true,
             target_language: None,
+            nudges: true,
         }
     }
 }
@@ -323,6 +327,7 @@ mod tests {
         assert_eq!(s.llm_provider, LlmProvider::Ollama);
         assert_eq!(s.stt_engine, SttEngineKind::Deepgram);
         assert!(!s.local_only);
+        assert!(s.nudges);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

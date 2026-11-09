@@ -134,3 +134,9 @@
     @apply bg-background text-foreground;
     }
 }
+/* Widget overlay: finestra trasparente, il bordo arrotondato lo disegna la card. */
+html.widget,
+html.widget body {
+  background: transparent;
+  overflow: hidden;
+}

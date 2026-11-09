@@ -14,6 +14,7 @@ import { useAssistStore } from "@/stores/assist";
 import { useChatStore } from "@/stores/chat";
 import { useInsightsStore } from "@/stores/insights";
 import { useMeetingStore } from "@/stores/meeting";
+import { useNudgeStore } from "@/stores/nudges";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
 
@@ -109,6 +110,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     const insights = useInsightsStore.getState();
     insights.reset();
     useChatStore.getState().reset();
+    useNudgeStore.getState().reset();
     // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
     useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
     try {
@@ -143,6 +145,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       set({ error: { key: "errors.stop", message: errorMessage(e) } });
     } finally {
       set({ status: "idle", levels: { me: silent(), them: silent() } });
+      useNudgeStore.getState().dismiss();
     }
   },
 }));

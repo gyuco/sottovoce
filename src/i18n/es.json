@@ -194,6 +194,12 @@
       "count": "Otros participantes",
       "countHint": "Si sabes cuántos son, el reconocimiento es más estable y corrige las frases ya mostradas.",
       "auto": "Automático"
+    },
+    "duringCall": {
+      "title": "Durante la llamada",
+      "widgetHint": "El widget se queda encima de Teams, Meet o Zoom con traducciones, sugerencias y avisos, y no aparece al compartir pantalla. Ábrelo con el botón de arriba, el icono de la barra de menús o con ⌥⌘S.",
+      "nudges": "Avisos sobre cómo hablas",
+      "nudgesHint": "Te avisa si hablas demasiado o muy rápido, si el monólogo se alarga o si aún no has hecho preguntas. Como máximo uno cada 2 minutos."
     }
   },
   "permissions": {
@@ -340,6 +346,38 @@
   "tray": {
     "show": "Mostrar Sottovoce",
     "quit": "Salir de Sottovoce",
-    "tooltip": "Sottovoce — transcripción en vivo"
+    "tooltip": "Sottovoce — transcripción en vivo",
+    "widget": "Mostrar/ocultar widget"
+  },
+  "widget": {
+    "toggle": "Widget",
+    "toggleHint": "Muestra u oculta el widget encima de la llamada (⌥⌘S)",
+    "openMain": "Abrir Sottovoce",
+    "close": "Cerrar widget",
+    "idle": "No hay ninguna sesión activa. Iníciala desde la ventana de Sottovoce.",
+    "noLines": "Aquí aparecerán las frases de los demás participantes."
+  },
+  "nudge": {
+    "dismiss": "Cerrar aviso",
+    "monologue": {
+      "title": "Llevas {{minutes}}:{{seconds}} hablando sin pausa",
+      "hint": "Para y deja espacio: pide su opinión o pregunta si está claro."
+    },
+    "talkTooMuch": {
+      "title": "En los últimos minutos has hablado tú el {{value}}% del tiempo",
+      "hint": "Intenta escuchar más: haz una pregunta abierta."
+    },
+    "tooFast": {
+      "title": "Hablas rápido: {{value}} palabras/min",
+      "hint": "Baja un poco el ritmo y haz alguna pausa."
+    },
+    "listenLong": {
+      "title": "Los demás llevan {{minutes}}:{{seconds}} hablando",
+      "hint": "Buen momento para resumir lo que has entendido o hacer una pregunta."
+    },
+    "noQuestions": {
+      "title": "Ninguna pregunta en {{value}} minutos",
+      "hint": "Una pregunta ayuda a entender qué necesitan de verdad los demás."
+    }
   }
 }

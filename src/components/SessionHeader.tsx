@@ -1,9 +1,10 @@
-import { Clock, Cloud, Loader2, Play, ShieldCheck, Square } from "lucide-react";
+import { Clock, Cloud, Loader2, PictureInPicture2, Play, ShieldCheck, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDuration, useNow } from "@/lib/hooks";
+import { toggleWidget } from "@/lib/ipc";
 import { isLocalSession } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,17 @@ export function SessionHeader() {
           <span className="font-mono text-2xl font-medium tabular-nums">{formatDuration(now - startedAt)}</span>
         </div>
       )}
+
+      <Button
+        variant="outline"
+        size="icon-lg"
+        className="rounded-xl"
+        aria-label={t("widget.toggle")}
+        title={t("widget.toggleHint")}
+        onClick={() => void toggleWidget()}
+      >
+        <PictureInPicture2 />
+      </Button>
 
       {running || status === "stopping" ? (
         <Button

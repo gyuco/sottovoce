@@ -194,6 +194,12 @@
       "count": "Altri partecipanti",
       "countHint": "Se sai quanti sono, il riconoscimento è più stabile e corregge le frasi già mostrate.",
       "auto": "Automatico"
+    },
+    "duringCall": {
+      "title": "Durante la call",
+      "widgetHint": "Il widget resta sopra Teams, Meet o Zoom con traduzioni, suggerimenti e avvisi, e non compare nella condivisione schermo. Aprilo dal pulsante in alto, dall'icona nel menu bar o con ⌥⌘S.",
+      "nudges": "Avvisi sul modo di parlare",
+      "nudgesHint": "Ti avvisa se parli troppo o troppo in fretta, se il monologo si allunga o se non hai ancora fatto domande. Al massimo uno ogni 2 minuti."
     }
   },
   "permissions": {
@@ -340,6 +346,38 @@
   "tray": {
     "show": "Mostra Sottovoce",
     "quit": "Esci da Sottovoce",
-    "tooltip": "Sottovoce — trascrizione live"
+    "tooltip": "Sottovoce — trascrizione live",
+    "widget": "Mostra/nascondi widget"
+  },
+  "widget": {
+    "toggle": "Widget",
+    "toggleHint": "Mostra o nascondi il widget sopra la call (⌥⌘S)",
+    "openMain": "Apri Sottovoce",
+    "close": "Chiudi widget",
+    "idle": "Nessuna sessione attiva. Avviala dalla finestra di Sottovoce.",
+    "noLines": "Le frasi degli altri partecipanti appariranno qui."
+  },
+  "nudge": {
+    "dismiss": "Chiudi avviso",
+    "monologue": {
+      "title": "Parli da {{minutes}}:{{seconds}} senza pause",
+      "hint": "Fermati e lascia spazio: chiedi un parere o se è tutto chiaro."
+    },
+    "talkTooMuch": {
+      "title": "Negli ultimi minuti hai parlato tu il {{value}}% del tempo",
+      "hint": "Prova ad ascoltare di più: fai una domanda aperta."
+    },
+    "tooFast": {
+      "title": "Stai parlando veloce: {{value}} parole/min",
+      "hint": "Rallenta un po' e fai qualche pausa."
+    },
+    "listenLong": {
+      "title": "Gli altri parlano da {{minutes}}:{{seconds}}",
+      "hint": "Buon momento per riassumere cosa hai capito o fare una domanda."
+    },
+    "noQuestions": {
+      "title": "Nessuna domanda in {{value}} minuti",
+      "hint": "Una domanda aiuta a capire cosa serve davvero agli altri."
+    }
   }
 }
