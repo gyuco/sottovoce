@@ -23,7 +23,7 @@ use crate::echo::EchoGuard;
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
 use crate::summary::{self, SummaryConfig};
-use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
+use crate::translate::{self, Job, MeetingLanguage, TranslationEvent, TranslatorConfig};
 
 /// Capacità del bus audio: ~16 s di frame da ~64 ms per canale.
 const FRAME_BUS_CAPACITY: usize = 512;
@@ -121,14 +121,13 @@ impl Session {
             }
             transcript_sink(event);
         });
-        let target_language = settings.effective_target_language().code();
         let translation_store = store_sink.clone();
         let on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync> = Box::new(move |event| {
             if let Some(store) = &translation_store {
                 store.translation(
                     event.segment_id,
                     &event.text,
-                    target_language,
+                    &event.language,
                     event.latency_ms,
                 );
             }
@@ -158,8 +157,12 @@ impl Session {
         });
 
         let on_demand = llm.translation.clone();
-        let translating = llm.translation.is_some() && llm.auto_translate && system_audio;
-        // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
+        // La lingua del meeting si impara dalle frasi di "Loro".
+        let meeting_language = llm.translation.as_ref().map(|cfg| cfg.meeting.clone());
+        let translating_mine = settings.translate_mine;
+        // "Loro" nella lingua dell'utente, "Io" (se richiesto) in quella del meeting.
+        let translating =
+            llm.translation.is_some() && llm.auto_translate && (system_audio || translating_mine);
         let translator = llm.translation.filter(|_| translating).map(|cfg| {
             let (tx, task) = translate::spawn(cfg, context.clone(), on_translation);
             tasks.push(task);
@@ -197,9 +200,13 @@ impl Session {
                 Channel::Them => settings.their_language,
             };
             let stream = engine.start(channel, language);
-            let (translate, diarize) = match channel {
-                Channel::Them => (translator.clone(), diarizer.clone()),
-                Channel::Me => (None, None),
+            let (translate, diarize, meeting) = match channel {
+                Channel::Them => (
+                    translator.clone(),
+                    diarizer.clone(),
+                    meeting_language.clone(),
+                ),
+                Channel::Me => (translator.clone().filter(|_| translating_mine), None, None),
             };
             let sink = on_transcript.clone();
             tasks.extend(spawn_channel(
@@ -213,6 +220,7 @@ impl Session {
                     diarize,
                     compress: compressor.clone(),
                     echo: echo.clone(),
+                    meeting,
                 },
                 move |e| sink(e),
             ));
@@ -237,6 +245,7 @@ impl Session {
                     system_audio,
                     with_context = context.prompt_block().is_some(),
                     translating,
+                    translating_mine = translating && translating_mine,
                     assisting,
                     diarizing,
                     compressing = compression_log.is_some(),
@@ -441,6 +450,8 @@ struct Followers {
     compress: Option<mpsc::Sender<CompressLine>>,
     /// Anti-eco: "Loro" registra le frasi, "Io" scarta quelle ripetute.
     echo: Option<Arc<EchoGuard>>,
+    /// "Loro": lingue rilevate → lingua del meeting (arrivo per "Io").
+    meeting: Option<MeetingLanguage>,
 }
 
 /// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
@@ -460,6 +471,7 @@ fn spawn_channel(
         diarize,
         compress,
         echo,
+        meeting,
     } = followers;
     let SttStream {
         channel,
@@ -551,8 +563,12 @@ fn spawn_channel(
                     {
                         tracing::warn!(?channel, "coda compressione piena: frase scartata");
                     }
+                    if let (Some(meeting), Some(language)) = (&meeting, &seg.language) {
+                        meeting.observe(language);
+                    }
                     translate.as_ref().map(|_| Job {
                         segment_id: seg.id,
+                        channel,
                         text: seg.text.clone(),
                         language: seg.language.clone(),
                         speaker: seg.speaker,
@@ -767,6 +783,7 @@ mod tests {
                 diarize: None,
                 compress: None,
                 echo: None,
+                meeting: None,
             },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {
@@ -784,6 +801,7 @@ mod tests {
         assert_eq!(*finals.lock().unwrap(), [5, 6]);
         let mut sent = Vec::new();
         while let Some(job) = jobs.recv().await {
+            assert_eq!(job.channel, Channel::Them);
             sent.push((job.segment_id, job.text));
         }
         // Il canale si chiude con il pump: il traduttore termina.

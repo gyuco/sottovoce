@@ -24,7 +24,7 @@ use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
 use crate::state::{AppState, Db};
 use crate::stt;
 use crate::summary::SummaryConfig;
-use crate::translate::{TranslationEvent, TranslatorConfig};
+use crate::translate::{MeetingLanguage, TranslationEvent, TranslatorConfig};
 use crate::update;
 use crate::widget;
 
@@ -298,6 +298,8 @@ async fn llm_tasks(settings: &Settings) -> LlmTasks {
             model,
             target: language,
             source_hint: Some(settings.their_language).filter(|l| *l != Language::Multi),
+            my_hint: Some(settings.my_language).filter(|l| *l != Language::Multi),
+            meeting: MeetingLanguage::new(settings.their_language),
         }),
         auto_translate: settings.auto_translate,
         assist: client_for(&assist).map(|(llm, model)| AssistConfig {
@@ -326,9 +328,15 @@ pub async fn translate_segment(
     state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
     segment_id: u64,
+    channel: String,
     text: String,
     previous: Vec<String>,
 ) -> CmdResult<TranslationEvent> {
+    let channel = match channel.as_str() {
+        "me" => sv_audio::Channel::Me,
+        "them" => sv_audio::Channel::Them,
+        other => return Err(format!("canale sconosciuto: {other}")),
+    };
     let active = state
         .session
         .lock()
@@ -353,20 +361,31 @@ pub async fn translate_segment(
                     model: task.model,
                     target: settings.effective_target_language(),
                     source_hint: None,
+                    my_hint: None,
+                    // Senza sessione la lingua del meeting è nota solo se impostata.
+                    meeting: MeetingLanguage::new(settings.their_language),
                 },
                 context: None,
                 store: None,
             }
         }
     };
-    let (translated, latency_ms) =
-        crate::translate::translate_one(&job.cfg, job.context.as_deref(), &previous, &text).await?;
+    let target = job.cfg.target_for(channel)?;
+    let (translated, latency_ms) = crate::translate::translate_one(
+        &job.cfg,
+        &target,
+        job.context.as_deref(),
+        &previous,
+        &text,
+    )
+    .await?;
     if let Some(store) = &job.store {
-        store.translation(segment_id, &translated, job.cfg.target.code(), latency_ms);
+        store.translation(segment_id, &translated, &target, latency_ms);
     }
     Ok(TranslationEvent {
         segment_id,
         text: translated,
+        language: target,
         latency_ms,
     })
 }

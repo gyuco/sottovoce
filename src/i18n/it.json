@@ -39,7 +39,8 @@
     "copyAll": "Copia tutta la trascrizione",
     "copyLine": "Copia frase",
     "translate": "Traduci",
-    "translateRetry": "Riprova"
+    "translateRetry": "Riprova",
+    "mineTranslation": "La tua frase nella lingua del meeting"
   },
   "meeting": {
     "title": "Contesto meeting",
@@ -181,7 +182,9 @@
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Riepilogo finale automatico",
       "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni.",
-      "sameProvider": "Come sopra ({{name}})"
+      "sameProvider": "Come sopra ({{name}})",
+      "translateMine": "Traduci anche le mie frasi",
+      "translateMineHint": "Mostra sotto ogni tua frase come dirla nella lingua degli altri (quella impostata o riconosciuta dalle loro frasi)."
     },
     "localOnly": {
       "title": "Solo locale",

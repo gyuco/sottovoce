@@ -58,6 +58,8 @@ export interface Settings {
   translationProvider: LlmProvider | null;
   /** Traduce da sola ogni frase di "Loro"; spento = pulsante "Traduci". */
   autoTranslate: boolean;
+  /** Con la traduzione automatica traduce anche "Io" nella lingua del meeting. */
+  translateMine: boolean;
   assistModel: string;
   /** `null` = stesso provider di `llmProvider` (vale anche per compressione e riepilogo). */
   assistProvider: LlmProvider | null;
@@ -114,6 +116,8 @@ export interface AssistEvent {
 export interface TranslationEvent {
   segmentId: number;
   text: string;
+  /** Lingua della traduzione (es. "en"). */
+  language: string;
   latencyMs: number;
 }
 
@@ -367,8 +371,9 @@ export const testLlm = (model?: string, provider?: LlmProvider) =>
   invoke<LlmTestResult>("test_llm", { model, provider });
 
 /** Traduce su richiesta una frase finale; `previous` = frasi precedenti (contesto). */
-export const translateSegment = (segmentId: number, text: string, previous: string[]) =>
-  invoke<TranslationEvent>("translate_segment", { segmentId, text, previous });
+/** "Loro" → lingua dell'utente; "Io" → lingua del meeting. */
+export const translateSegment = (segmentId: number, channel: ChannelId, text: string, previous: string[]) =>
+  invoke<TranslationEvent>("translate_segment", { segmentId, channel, text, previous });
 
 export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);

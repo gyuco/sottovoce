@@ -15,7 +15,7 @@ import { type Line, useTranscriptStore } from "@/stores/transcript";
 
 /** Distanza dal fondo (px) entro cui l'autoscroll resta agganciato. */
 const STICK_PX = 48;
-/** Frasi precedenti di "Loro" passate come contesto alla traduzione su richiesta. */
+/** Frasi precedenti passate come contesto alla traduzione su richiesta. */
 const TRANSLATE_HISTORY = 3;
 
 export function Transcript() {
@@ -57,10 +57,10 @@ export function Transcript() {
   /** Traduce su richiesta; lancia l'errore al chiamante (mostrato sulla riga). */
   const translate = async (line: Line) => {
     const previous = lines
-      .filter((l) => l.channel === "them" && l.start < line.start)
+      .filter((l) => l.start < line.start)
       .slice(-TRANSLATE_HISTORY)
-      .map((l) => l.text);
-    applyTranslation(await translateSegment(line.id, line.text, previous));
+      .map((l) => `${speakerName(l.channel, l.speaker)}: ${l.text}`);
+    applyTranslation(await translateSegment(line.id, line.channel, line.text, previous));
     setShowTranslations(true);
   };
 
@@ -121,7 +121,7 @@ export function Transcript() {
                 line={r}
                 translation={showTranslations && r.id !== 0 ? translations[r.id] : undefined}
                 onTranslate={
-                  r.id !== 0 && r.channel === "them" && !translations[r.id]
+                  r.id !== 0 && !translations[r.id]
                     ? () => translate(r)
                     : undefined
                 }
@@ -190,7 +190,17 @@ function TranscriptRow(props: {
       <span className={cn("leading-relaxed select-text", partial && "text-muted-foreground italic")}>
         {line.text}
         {translation?.text && (
-          <span className="mt-0.5 block text-muted-foreground">{translation.text}</span>
+          <span className="mt-0.5 block text-muted-foreground">
+            {line.channel === "me" && (
+              <span
+                className="mr-1.5 rounded bg-muted px-1 py-px align-middle font-mono text-[10px] uppercase"
+                title={t("transcript.mineTranslation")}
+              >
+                {translation.language}
+              </span>
+            )}
+            {translation.text}
+          </span>
         )}
       </span>
       {props.onTranslate ? <TranslateButton onTranslate={props.onTranslate} /> : <span />}

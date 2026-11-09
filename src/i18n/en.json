@@ -39,7 +39,8 @@
     "copyAll": "Copy the whole transcript",
     "copyLine": "Copy sentence",
     "translate": "Translate",
-    "translateRetry": "Retry"
+    "translateRetry": "Retry",
+    "mineTranslation": "Your sentence in the meeting language"
   },
   "meeting": {
     "title": "Meeting context",
@@ -181,7 +182,9 @@
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Automatic final summary",
       "autoSummaryHint": "On stop, generate overview, key points and action items.",
-      "sameProvider": "Same as above ({{name}})"
+      "sameProvider": "Same as above ({{name}})",
+      "translateMine": "Translate my sentences too",
+      "translateMineHint": "Shows under each of your sentences how to say it in the others' language (the one set or detected from what they say)."
     },
     "localOnly": {
       "title": "Local only",

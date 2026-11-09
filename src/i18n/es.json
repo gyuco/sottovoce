@@ -39,7 +39,8 @@
     "copyAll": "Copiar toda la transcripción",
     "copyLine": "Copiar frase",
     "translate": "Traducir",
-    "translateRetry": "Reintentar"
+    "translateRetry": "Reintentar",
+    "mineTranslation": "Tu frase en el idioma de la reunión"
   },
   "meeting": {
     "title": "Contexto de la reunión",
@@ -181,7 +182,9 @@
       "testOk": "ok en {{ms}} ms · {{model}}",
       "autoSummary": "Resumen final automático",
       "autoSummaryHint": "Al detener, genera resumen, puntos clave y acciones.",
-      "sameProvider": "Igual que arriba ({{name}})"
+      "sameProvider": "Igual que arriba ({{name}})",
+      "translateMine": "Traducir también mis frases",
+      "translateMineHint": "Muestra debajo de cada frase tuya cómo decirla en el idioma de los demás (el configurado o el detectado en sus frases)."
     },
     "localOnly": {
       "title": "Solo local",

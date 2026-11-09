@@ -112,6 +112,9 @@ pub struct Settings {
     /// Traduce da sola ogni frase di "Loro"; spento = solo su richiesta
     /// (pulsante "Traduci" accanto alla frase).
     pub auto_translate: bool,
+    /// Con la traduzione automatica traduce anche le frasi di "Io" nella
+    /// lingua del meeting (quella di "Loro").
+    pub translate_mine: bool,
     /// Modello per il live assist; vuoto = da scegliere.
     pub assist_model: String,
     /// Provider del live assist (e di compressione e riepilogo);
@@ -192,6 +195,7 @@ impl Default for Settings {
             translation_model: String::new(),
             translation_provider: None,
             auto_translate: false,
+            translate_mine: true,
             assist_model: String::new(),
             assist_provider: None,
             auto_summary: true,
