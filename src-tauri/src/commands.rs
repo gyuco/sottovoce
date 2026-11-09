@@ -13,6 +13,7 @@ use crate::assist::{AssistConfig, AssistEvent};
 use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
+use crate::export;
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
@@ -570,6 +571,17 @@ pub async fn update_summary_checklist(
 
 // --- API key (Keychain) ---------------------------------------------------
 // Il Keychain può bloccare (prompt di accesso): mai sul thread principale.
+
+/// Salva un meeting in Markdown nel file scelto dall'utente; `None` se annulla.
+#[tauri::command]
+pub async fn export_meeting_markdown(
+    app: AppHandle,
+    file_name: String,
+    contents: String,
+) -> CmdResult<Option<String>> {
+    let path = export::save_markdown(&app, &file_name, &contents).await?;
+    Ok(path.map(|p| p.display().to_string()))
+}
 
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> anyhow::Result<T> + Send + 'static,

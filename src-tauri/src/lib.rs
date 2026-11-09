@@ -5,6 +5,7 @@ mod commands;
 mod compress;
 mod diarize;
 mod echo;
+mod export;
 mod llm;
 mod meeting;
 mod models;
@@ -72,6 +73,7 @@ pub fn run() {
             commands::rename_meeting,
             commands::generate_summary,
             commands::update_summary_checklist,
+            commands::export_meeting_markdown,
             commands::update_meeting_context,
             commands::inspect_code_path,
             commands::ask_model,

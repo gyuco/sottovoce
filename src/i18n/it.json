@@ -280,7 +280,18 @@
     "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
     "deleteAction": "Elimina",
     "rename": "Rinomina meeting",
-    "assists": "Suggerimenti"
+    "assists": "Suggerimenti",
+    "export": "Esporta in Markdown",
+    "exported": "Salvato in {{path}}"
+  },
+  "export": {
+    "date": "Data",
+    "duration": "Durata",
+    "engine": "Trascrizione",
+    "participants": "Partecipanti",
+    "goal": "Obiettivo",
+    "notes": "Note",
+    "transcript": "Trascrizione"
   },
   "moment": {
     "objection": "Obiezione",

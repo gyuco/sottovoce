@@ -280,7 +280,18 @@
     "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
     "deleteAction": "Delete",
     "rename": "Rename meeting",
-    "assists": "Suggestions"
+    "assists": "Suggestions",
+    "export": "Export to Markdown",
+    "exported": "Saved to {{path}}"
+  },
+  "export": {
+    "date": "Date",
+    "duration": "Duration",
+    "engine": "Transcription",
+    "participants": "Participants",
+    "goal": "Goal",
+    "notes": "Notes",
+    "transcript": "Transcript"
   },
   "moment": {
     "objection": "Objection",

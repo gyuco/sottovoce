@@ -280,7 +280,18 @@
     "deleteConfirm": "¿Eliminar esta reunión? Se perderán frases y traducciones.",
     "deleteAction": "Eliminar",
     "rename": "Renombrar reunión",
-    "assists": "Sugerencias"
+    "assists": "Sugerencias",
+    "export": "Exportar a Markdown",
+    "exported": "Guardado en {{path}}"
+  },
+  "export": {
+    "date": "Fecha",
+    "duration": "Duración",
+    "engine": "Transcripción",
+    "participants": "Participantes",
+    "goal": "Objetivo",
+    "notes": "Notas",
+    "transcript": "Transcripción"
   },
   "moment": {
     "objection": "Objeción",

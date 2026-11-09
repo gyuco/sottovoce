@@ -1,4 +1,4 @@
-import { Check, Clock, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
+import { Check, Clock, FileDown, Loader2, Pencil, Search, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,11 +22,13 @@ import {
   type MeetingSummary,
   deleteMeeting,
   errorMessage,
+  exportMeetingMarkdown,
   generateSummary,
   getMeeting,
   listMeetings,
   renameMeeting,
 } from "@/lib/ipc";
+import { meetingMarkdown } from "@/lib/markdown";
 import { speakerColor } from "@/lib/speakers";
 import { cn } from "@/lib/utils";
 import { useInsightsStore } from "@/stores/insights";
@@ -50,6 +52,7 @@ export function History(props: { focusId?: number | null }) {
   const [nameDraft, setNameDraft] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [exported, setExported] = useState<{ id: number; path: string } | null>(null);
   const lastReady = useInsightsStore((s) => s.lastReady);
   const pendingId = useInsightsStore((s) => s.pendingMeetingId);
 
@@ -156,6 +159,19 @@ export function History(props: { focusId?: number | null }) {
       setError(errorMessage(e));
     } finally {
       setGeneratingSummary(false);
+    }
+  };
+
+  const exportMarkdown = async () => {
+    if (!details) return;
+    try {
+      const contents = meetingMarkdown(details, summary, t, i18n.language);
+      const day = new Date(details.meeting.startedAtMs).toISOString().slice(0, 10);
+      const name = `${day} ${details.meeting.name || t("history.untitled")}`;
+      const path = await exportMeetingMarkdown(name, contents);
+      if (path) setExported({ id: details.meeting.id, path });
+    } catch (e) {
+      setError(errorMessage(e));
     }
   };
 
@@ -316,6 +332,15 @@ export function History(props: { focusId?: number | null }) {
                     <Button
                       size="icon-sm"
                       variant="ghost"
+                      aria-label={t("history.export")}
+                      title={t("history.export")}
+                      onClick={() => void exportMarkdown()}
+                    >
+                      <FileDown />
+                    </Button>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
                       className="text-destructive hover:text-destructive"
                       aria-label={t("history.delete")}
                       title={t("history.delete")}
@@ -342,6 +367,15 @@ export function History(props: { focusId?: number | null }) {
               {(meeting.goal || meeting.notes) && (
                 <p className="line-clamp-2 text-xs text-muted-foreground">
                   {[meeting.goal, meeting.notes].filter(Boolean).join(" · ")}
+                </p>
+              )}
+              {exported?.id === meeting.id && (
+                <p
+                  role="status"
+                  className="truncate text-xs text-muted-foreground"
+                  title={exported.path}
+                >
+                  {t("history.exported", { path: exported.path })}
                 </p>
               )}
             </header>

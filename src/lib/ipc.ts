@@ -334,6 +334,10 @@ export const renameMeeting = (id: number, name: string) =>
 export const generateSummary = (id: number, language?: Language) =>
   invoke<Summary>("generate_summary", { id, language: language ?? null });
 
+/** Salva il meeting in Markdown nel file scelto dall'utente; `null` se annulla. */
+export const exportMeetingMarkdown = (fileName: string, contents: string) =>
+  invoke<string | null>("export_meeting_markdown", { fileName, contents });
+
 export const updateSummaryChecklist = (id: number, items: ActionItem[]) =>
   invoke<Summary>("update_summary_checklist", { id, items });
 

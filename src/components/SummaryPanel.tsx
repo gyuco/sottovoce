@@ -18,6 +18,7 @@ import {
   errorMessage,
   updateSummaryChecklist,
 } from "@/lib/ipc";
+import { summaryMarkdown } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 
 /** Riepilogo finale: overview, key points, checklist spuntabile e copia. */
@@ -56,7 +57,7 @@ export function SummaryPanel(props: {
     }
   };
 
-  const copyAll = () => copy(markdown(props.summary, t));
+  const copyAll = () => copy(summaryMarkdown(props.summary, t));
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-xs">
@@ -152,23 +153,4 @@ export function SummaryPanel(props: {
       )}
     </section>
   );
-}
-
-function markdown(summary: Summary, t: (key: string) => string): string {
-  const lines: string[] = [`## ${t("summary.title")}`];
-  if (summary.overview) lines.push("", summary.overview);
-  if (summary.keyPoints.length > 0) {
-    lines.push("", `### ${t("summary.keyPoints")}`);
-    for (const topic of summary.keyPoints) {
-      lines.push("", `**${topic.topic}**`);
-      for (const point of topic.points) lines.push(`- ${point}`);
-    }
-  }
-  if (summary.actionItems.length > 0) {
-    lines.push("", `### ${t("summary.actions")}`);
-    for (const item of summary.actionItems) {
-      lines.push(`- [${item.done ? "x" : " "}] ${item.text}`);
-    }
-  }
-  return lines.join("\n");
 }
