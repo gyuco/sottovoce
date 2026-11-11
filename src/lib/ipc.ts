@@ -75,6 +75,8 @@ export interface Settings {
   nudges: boolean;
   /** Suggerimenti del live assist (cosa dire/chiedere); spenti di default. */
   liveAssist: boolean;
+  /** Cancellazione d'eco sul microfono (serve l'audio di sistema). */
+  echoCancellation: boolean;
   /** Ricerca per significato nello storico (modello locale di embedding). */
   semanticSearch: boolean;
 }
@@ -569,3 +571,15 @@ export const verifyLocalModel = (id: string) => invoke<LocalModel>("verify_local
 export const toggleWidget = () => invoke<boolean>("toggle_widget");
 
 export const closeWidget = () => invoke<void>("close_widget");
+
+/** Versione e build in esecuzione. */
+export interface AppInfo {
+  version: string;
+  /** Sha corto del commit; `-dirty` = modifiche non committate. */
+  commit: string;
+  /** Ora del build (RFC 3339 UTC). */
+  builtAt: string;
+  debug: boolean;
+}
+
+export const appInfo = () => invoke<AppInfo>("app_info");

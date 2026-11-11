@@ -1,4 +1,5 @@
 import { AudioLines, BellRing, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KeyForm } from "@/components/KeyForm";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
-import { CONCRETE_LANGUAGES, type Language, type SttEngine } from "@/lib/ipc";
+import { type AppInfo, CONCRETE_LANGUAGES, type Language, type SttEngine, appInfo } from "@/lib/ipc";
 import { effectiveEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
@@ -174,6 +175,18 @@ export function SettingsPanel() {
             />
           </label>
 
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.echoCancellation")}
+              <span className="block text-xs text-muted-foreground">{t("settings.echoCancellationHint")}</span>
+            </span>
+            <Switch
+              checked={settings.echoCancellation}
+              disabled={!settings.systemAudio || !systemSupported}
+              onCheckedChange={(echoCancellation) => void update({ echoCancellation })}
+            />
+          </label>
+
           <div className="flex flex-col gap-3 border-t pt-4">
             <label className="flex items-center justify-between gap-4 text-sm">
               <span>
@@ -258,7 +271,29 @@ export function SettingsPanel() {
         </p>
       )}
       <p className="text-xs text-muted-foreground">{t("settings.applyHint")}</p>
+      <AboutLine />
     </div>
+  );
+}
+
+/** Versione, commit e ora del build: per verificare quale build è in uso. */
+function AboutLine() {
+  const { t, i18n } = useTranslation();
+  const [info, setInfo] = useState<AppInfo | null>(null);
+  useEffect(() => {
+    appInfo()
+      .then(setInfo)
+      .catch(() => setInfo(null));
+  }, []);
+  if (!info) return null;
+  const built = info.builtAt
+    ? new Date(info.builtAt).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" })
+    : "";
+  return (
+    <p className="text-xs text-muted-foreground tabular-nums select-text">
+      {t("settings.about.line", { version: info.version, commit: info.commit || "—", built })}
+      {info.debug && ` · ${t("settings.about.debug")}`}
+    </p>
   );
 }
 

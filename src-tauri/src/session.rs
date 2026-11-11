@@ -229,10 +229,17 @@ impl Session {
                 guard.close();
             }));
         }
+        // Cancellazione d'eco: "Io" arriva allo STT già ripulito dalla voce
+        // degli altri risentita dalle casse (riferimento = audio di sistema).
+        let clean_mic = (system_audio && settings.echo_cancellation)
+            .then(|| spawn_echo_canceller(frames.subscribe()));
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
-            let bus = frames.subscribe();
+            let bus = match (channel, &clean_mic) {
+                (Channel::Me, Some(clean)) => clean.subscribe(),
+                _ => frames.subscribe(),
+            };
             let language = match channel {
                 Channel::Me => settings.my_language,
                 Channel::Them => settings.their_language,
@@ -517,6 +524,43 @@ fn millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
+/// Thread dell'AEC: legge il bus audio (sistema = riferimento, mic = da
+/// ripulire) e pubblica il microfono pulito su un bus proprio, che si chiude
+/// quando si chiude quello di cattura.
+fn spawn_echo_canceller(mut bus: broadcast::Receiver<AudioFrame>) -> broadcast::Sender<AudioFrame> {
+    let (clean, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
+    let out = clean.clone();
+    let spawned = std::thread::Builder::new()
+        .name("sv-aec".into())
+        .spawn(move || {
+            let mut aec = sv_audio::EchoCanceller::new();
+            loop {
+                match bus.blocking_recv() {
+                    Ok(f) => match f.channel {
+                        Channel::Them => aec.push_render(&f),
+                        Channel::Me => {
+                            if let Some(f) = aec.push_capture(&f) {
+                                let _ = out.send(f);
+                            }
+                        }
+                    },
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(n, "cancellazione d'eco in ritardo: frame persi");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            if let Some(f) = aec.flush() {
+                let _ = out.send(f);
+            }
+            tracing::debug!("cancellazione d'eco fermata");
+        });
+    if let Err(e) = spawned {
+        tracing::error!("thread di cancellazione d'eco non avviato: {e}");
+    }
+    clean
+}
+
 /// Task che ricevono le frasi finali di un canale.
 #[derive(Default)]
 struct Followers {
@@ -705,6 +749,7 @@ async fn speaker_of(
         segment_id: seg.id,
         start: seg.start,
         end: seg.end,
+        speaker: seg.speaker,
         reply,
     };
     if let Err(TrySendError::Full(_)) = tx.try_send(job) {

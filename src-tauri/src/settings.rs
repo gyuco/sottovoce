@@ -134,6 +134,9 @@ pub struct Settings {
     /// Suggerimenti del live assist (cosa dire/chiedere). Spenti di default:
     /// si accendono e spengono anche a call in corso.
     pub live_assist: bool,
+    /// Cancellazione d'eco sul microfono (AEC3): senza cuffie toglie da "Io"
+    /// la voce degli altri risentita dalle casse. Serve l'audio di sistema.
+    pub echo_cancellation: bool,
     /// Ricerca per significato nello storico (modello locale di embedding):
     /// indicizza i meeting in background. Senza il modello resta spenta.
     pub semantic_search: bool,
@@ -213,6 +216,7 @@ impl Default for Settings {
             target_language: None,
             nudges: true,
             live_assist: false,
+            echo_cancellation: true,
             semantic_search: true,
         }
     }

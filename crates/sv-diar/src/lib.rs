@@ -178,6 +178,46 @@ impl<E: Embed> Diarizer<E> {
         found
     }
 
+    /// Frase il cui parlante è già noto (diarization del motore STT, es.
+    /// Deepgram): l'impronta serve solo alla voce del parlante e ai profili
+    /// vocali. A numero di parlanti fissato l'etichetta viene restituita così.
+    pub fn assign_labeled(&mut self, samples: &[f32], speaker: Speaker) -> Assignment {
+        let duration = samples.len() as f32 / sv_audio::TARGET_SAMPLE_RATE as f32;
+        let mut found = Assignment {
+            speaker: Some(speaker),
+            ..Assignment::default()
+        };
+        let Mode::Auto { sums, .. } = &mut self.mode else {
+            return found;
+        };
+        if duration < voices::MIN_SEGMENT_S {
+            return found;
+        }
+        let Some(v) = self
+            .embedder
+            .embed(samples)
+            .as_deref()
+            .and_then(tracker::normalized)
+        else {
+            return found;
+        };
+        let i = usize::from(speaker);
+        if sums.len() <= i {
+            sums.resize(i + 1, (vec![0.0; v.len()], 0.0));
+        }
+        let (sum, seconds) = &mut sums[i];
+        if sum.len() == v.len() {
+            accumulate(sum, seconds, &v, duration);
+        }
+        if self.recognizer.is_some() {
+            let current = self.voices();
+            if let Some(r) = &mut self.recognizer {
+                found.voices = r.update(&current);
+            }
+        }
+        found
+    }
+
     fn place(&mut self, segment_id: u64, vector: Option<Vec<f32>>, duration: f32) -> Assignment {
         match &mut self.mode {
             Mode::Auto { tracker, sums } => {

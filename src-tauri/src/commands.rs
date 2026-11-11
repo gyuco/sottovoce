@@ -50,6 +50,28 @@ pub fn system_audio_supported() -> bool {
     sv_audio::system::is_supported()
 }
 
+/// Versione e build in esecuzione (Impostazioni → Informazioni).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    version: String,
+    /// Sha corto del commit; `-dirty` = modifiche non committate.
+    commit: &'static str,
+    /// Ora del build, RFC 3339 UTC.
+    built_at: &'static str,
+    debug: bool,
+}
+
+#[tauri::command]
+pub fn app_info(app: AppHandle) -> AppInfo {
+    AppInfo {
+        version: app.package_info().version.to_string(),
+        commit: env!("SV_INFO_COMMIT"),
+        built_at: env!("SV_INFO_BUILT"),
+        debug: cfg!(debug_assertions),
+    }
+}
+
 /// TEMPORANEO: log degli errori JS del webview.
 #[tauri::command]
 pub fn js_error(message: String) {

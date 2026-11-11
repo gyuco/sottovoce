@@ -255,6 +255,12 @@
       "offConfirm": "Do you also want to delete the saved profiles? If you keep them, they stay on this Mac but are not used.",
       "offKeep": "Turn off and keep",
       "offDelete": "Turn off and delete"
+    },
+    "echoCancellation": "Echo cancellation",
+    "echoCancellationHint": "Without headphones the microphone picks up the others' voices from the speakers: this removes them before transcription, so their sentences don't end up under \"Me\". Not needed with headphones, but harmless.",
+    "about": {
+      "line": "Sottovoce {{version}} · build {{commit}} · built {{built}}",
+      "debug": "debug"
     }
   },
   "permissions": {

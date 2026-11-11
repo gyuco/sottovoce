@@ -255,6 +255,12 @@
       "offConfirm": "¿Quieres eliminar también los perfiles guardados? Si los conservas, se quedan en este Mac pero no se usan.",
       "offKeep": "Desactivar y conservar",
       "offDelete": "Desactivar y eliminar"
+    },
+    "echoCancellation": "Cancelación de eco",
+    "echoCancellationHint": "Sin auriculares el micrófono capta las voces de los demás desde los altavoces: las elimina antes de la transcripción, así sus frases no acaban en \"Yo\". Con auriculares no hace falta, pero no molesta.",
+    "about": {
+      "line": "Sottovoce {{version}} · build {{commit}} · compilada el {{built}}",
+      "debug": "debug"
     }
   },
   "permissions": {

@@ -72,6 +72,9 @@ pub struct DiarJob {
     pub segment_id: u64,
     pub start: Duration,
     pub end: Duration,
+    /// Parlante già deciso dal motore STT (Deepgram): niente attribuzione,
+    /// l'impronta alimenta solo i profili vocali.
+    pub speaker: Option<u8>,
     pub reply: oneshot::Sender<Assignment>,
 }
 
@@ -148,7 +151,10 @@ async fn run<E: Embed + Send + 'static>(
                 let mut d = diarizer.take().expect("diarizer presente fuori dal calcolo");
                 let id = job.segment_id;
                 let Ok((back, result)) = tokio::task::spawn_blocking(move || {
-                    let r = d.assign(id, &samples);
+                    let r = match job.speaker {
+                        Some(s) => d.assign_labeled(&samples, s),
+                        None => d.assign(id, &samples),
+                    };
                     (d, r)
                 })
                 .await
@@ -223,6 +229,7 @@ mod tests {
             segment_id: id,
             start: Duration::from_millis(from_ms),
             end: Duration::from_millis(to_ms),
+            speaker: None,
             reply,
         })
         .await
@@ -251,6 +258,27 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn engine_speaker_is_kept() {
+        let (bus, _) = broadcast::channel(256);
+        let (tx, rx) = mpsc::channel(4);
+        tokio::spawn(run(Diarizer::new(ByLevel, 0), bus.subscribe(), rx, None));
+        for i in 0..25u64 {
+            bus.send(frame(Channel::Them, i * 100, 1.0)).unwrap();
+        }
+        let (reply, got) = oneshot::channel();
+        tx.send(DiarJob {
+            segment_id: 1,
+            start: Duration::ZERO,
+            end: Duration::from_millis(2400),
+            speaker: Some(3),
+            reply,
+        })
+        .await
+        .unwrap();
+        assert_eq!(got.await.unwrap().speaker, Some(3));
     }
 
     #[tokio::test]

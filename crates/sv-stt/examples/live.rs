@@ -26,6 +26,7 @@ async fn main() {
         api_key,
         model: "nova-3".into(),
         endpoint: None,
+        diarize: true,
     })
     .expect("config deepgram");
 

@@ -28,6 +28,9 @@ pub enum EngineSpec {
     Deepgram {
         api_key: String,
         model: String,
+        /// Parlanti di "Loro" da Deepgram (numero libero). Con un numero di
+        /// parlanti fissato resta CAM++ con il raggruppamento a k fisso.
+        diarize: bool,
     },
 }
 
@@ -51,10 +54,15 @@ impl EngineSpec {
                     num_threads: inference_threads(),
                 }))
             }
-            Self::Deepgram { api_key, model } => Box::new(Deepgram::new(DeepgramConfig {
+            Self::Deepgram {
+                api_key,
+                model,
+                diarize,
+            } => Box::new(Deepgram::new(DeepgramConfig {
                 api_key,
                 model,
                 endpoint: None,
+                diarize,
             })?),
         })
     }
@@ -90,6 +98,7 @@ pub fn resolve(
             Ok(EngineSpec::Deepgram {
                 api_key,
                 model: settings.stt_model.clone(),
+                diarize: settings.diarization && settings.their_speakers == 0,
             })
         }
         SttEngineKind::Local => {
@@ -227,7 +236,8 @@ mod tests {
             spec,
             EngineSpec::Deepgram {
                 api_key: "k".into(),
-                model: "nova-3".into()
+                model: "nova-3".into(),
+                diarize: s.diarization && s.their_speakers == 0,
             }
         );
     }

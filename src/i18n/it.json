@@ -255,6 +255,12 @@
       "offConfirm": "Vuoi anche eliminare i profili già salvati? Se li conservi, restano su questo Mac ma non vengono usati.",
       "offKeep": "Disattiva e conserva",
       "offDelete": "Disattiva ed elimina"
+    },
+    "echoCancellation": "Cancellazione d'eco",
+    "echoCancellationHint": "Senza cuffie il microfono risente la voce degli altri dalle casse: la toglie prima della trascrizione, così le loro frasi non finiscono su \"Io\". Con le cuffie non serve ma non disturba.",
+    "about": {
+      "line": "Sottovoce {{version}} · build {{commit}} · compilata il {{built}}",
+      "debug": "debug"
     }
   },
   "permissions": {

@@ -9,6 +9,8 @@ license.workspace = true
 cpal = "0.18"
 ringbuf = "0.6"
 rubato = "5"
+# Cancellazione d'eco (WebRTC AEC3), Rust puro.
+sonora = "=0.3.0"
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

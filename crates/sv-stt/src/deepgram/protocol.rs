@@ -7,6 +7,10 @@
 //!
 //! [`Utterance`] unisce le porzioni definitive fino alla fine frase, così a
 //! valle (UI, traduzione) arrivano frasi intere e non spezzoni.
+//!
+//! Con `diarize=true` ogni parola ha il suo parlante: la frase si chiude
+//! anche quando il parlante cambia, così due voci non finiscono nella stessa
+//! frase, e il `Final` porta il parlante di Deepgram.
 
 use std::time::Duration;
 
@@ -50,6 +54,73 @@ pub struct Alternative {
     /// Lingue rilevate (solo con `language=multi`), la prevalente per prima.
     #[serde(default)]
     pub languages: Vec<String>,
+    #[serde(default)]
+    pub words: Vec<Word>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Word {
+    #[serde(default)]
+    pub word: String,
+    /// Con `smart_format`/`punctuate`: parola con maiuscole e punteggiatura.
+    #[serde(default)]
+    pub punctuated_word: Option<String>,
+    #[serde(default)]
+    pub start: f64,
+    #[serde(default)]
+    pub end: f64,
+    /// Solo con `diarize=true`.
+    #[serde(default)]
+    pub speaker: Option<u32>,
+}
+
+/// Tratto di una porzione detto da un solo parlante.
+struct Run {
+    speaker: Option<u8>,
+    text: String,
+    words: usize,
+    start: f64,
+    end: f64,
+}
+
+/// Divide la porzione per parlante. Senza parlanti (diarization spenta) è
+/// un solo tratto con i tempi della porzione. Un cambio di una sola parola
+/// in mezzo a un altro parlante è quasi sempre un errore: resta al tratto
+/// precedente.
+fn runs(r: &Results, alt: &Alternative, piece: &str) -> Vec<Run> {
+    let whole = || Run {
+        speaker: None,
+        text: piece.to_owned(),
+        words: piece.split_whitespace().count(),
+        start: r.start,
+        end: r.start + r.duration,
+    };
+    if alt.words.is_empty() || alt.words.iter().all(|w| w.speaker.is_none()) {
+        return vec![whole()];
+    }
+    let mut out: Vec<Run> = Vec::new();
+    for (i, w) in alt.words.iter().enumerate() {
+        let text = w.punctuated_word.as_deref().unwrap_or(&w.word);
+        let speaker = w.speaker.and_then(|s| u8::try_from(s).ok());
+        let next = alt.words.get(i + 1).map(|n| n.speaker);
+        let isolated = out.last().is_some_and(|l| l.speaker != speaker)
+            && next.is_some_and(|n| n.and_then(|s| u8::try_from(s).ok()) != speaker);
+        match out.last_mut() {
+            Some(last) if last.speaker == speaker || isolated => {
+                last.text = join(&last.text, text);
+                last.words += 1;
+                last.end = w.end;
+            }
+            _ => out.push(Run {
+                speaker,
+                text: text.to_owned(),
+                words: 1,
+                start: w.start,
+                end: w.end,
+            }),
+        }
+    }
+    out
 }
 
 pub fn parse(text: &str) -> Result<ServerMessage, serde_json::Error> {
@@ -65,20 +136,25 @@ pub struct Utterance {
     confidence: Option<f32>,
     /// Parole per lingua rilevata nelle porzioni definitive.
     language_words: Vec<(String, usize)>,
+    /// Parlante (diarization di Deepgram), se attiva.
+    speaker: Option<u8>,
 }
 
 impl Utterance {
     /// Applica un `Results`. `origin` = tempo di cattura del primo frame
     /// inviato su questa connessione (i tempi Deepgram sono relativi a esso).
-    pub fn on_results(&mut self, r: &Results, origin: Duration) -> Option<SttEventKind> {
-        let alt = r.channel.alternatives.first()?;
+    /// Più eventi se il parlante cambia nella porzione.
+    pub fn on_results(&mut self, r: &Results, origin: Duration) -> Vec<SttEventKind> {
+        let Some(alt) = r.channel.alternatives.first() else {
+            return Vec::new();
+        };
         let piece = alt.transcript.trim();
         let start = origin + secs(r.start);
         let end = origin + secs(r.start + r.duration);
 
         if !r.is_final {
             if piece.is_empty() {
-                return None;
+                return Vec::new();
             }
             let seg = Segment {
                 text: join(&self.text, piece),
@@ -89,27 +165,40 @@ impl Utterance {
                 speaker: None,
                 ..Segment::default()
             };
-            return Some(SttEventKind::Partial(seg));
+            return vec![SttEventKind::Partial(seg)];
         }
 
+        let mut out = Vec::new();
         if !piece.is_empty() {
-            self.text = join(&self.text, piece);
-            self.start.get_or_insert(start);
-            self.end = end;
-            self.confidence = min_conf(self.confidence, alt.confidence);
-            if let Some(lang) = alt.languages.first() {
-                let words = piece.split_whitespace().count();
-                match self.language_words.iter_mut().find(|(l, _)| l == lang) {
-                    Some((_, n)) => *n += words,
-                    None => self.language_words.push((lang.clone(), words)),
+            for run in runs(r, alt, piece) {
+                // Cambio di parlante: la frase precedente si chiude qui.
+                if !self.text.is_empty()
+                    && run.speaker.is_some()
+                    && self.speaker.is_some()
+                    && run.speaker != self.speaker
+                {
+                    out.extend(self.flush());
+                }
+                self.text = join(&self.text, &run.text);
+                self.start.get_or_insert(origin + secs(run.start));
+                self.end = origin + secs(run.end);
+                self.speaker = run.speaker.or(self.speaker);
+                self.confidence = min_conf(self.confidence, alt.confidence);
+                if let Some(lang) = alt.languages.first() {
+                    match self.language_words.iter_mut().find(|(l, _)| l == lang) {
+                        Some((_, n)) => *n += run.words,
+                        None => self.language_words.push((lang.clone(), run.words)),
+                    }
                 }
             }
         }
         if r.speech_final {
-            return self.flush();
+            out.extend(self.flush());
+        } else if !piece.is_empty() {
+            // Porzione definitiva a metà frase: la mostriamo come parziale.
+            out.push(SttEventKind::Partial(self.segment()));
         }
-        // Porzione definitiva a metà frase: la mostriamo come parziale.
-        (!piece.is_empty()).then(|| SttEventKind::Partial(self.segment()))
+        out
     }
 
     /// Chiude la frase corrente, se c'è (UtteranceEnd, fine stream, riconnessione).
@@ -130,6 +219,7 @@ impl Utterance {
             end: self.end,
             confidence: self.confidence,
             language: self.language(),
+            speaker: self.speaker,
             ..Segment::default()
         }
     }
@@ -186,6 +276,86 @@ mod tests {
 
     const O: Duration = Duration::from_secs(10);
 
+    /// Al più un evento (porzioni senza cambio di parlante).
+    fn one(u: &mut Utterance, r: &Results) -> Option<SttEventKind> {
+        let mut out = u.on_results(r, O);
+        assert!(out.len() <= 1, "{out:?}");
+        out.pop()
+    }
+
+    /// Porzione definitiva con parole e parlanti (`diarize=true`).
+    fn diarized(words: &[(&str, f64, u32)], speech_final: bool) -> Results {
+        let list: Vec<String> = words
+            .iter()
+            .map(|(w, t, s)| {
+                format!(
+                    r#"{{"word":"{w}","punctuated_word":"{w}","start":{t},"end":{},"speaker":{s}}}"#,
+                    t + 0.3
+                )
+            })
+            .collect();
+        let text: Vec<&str> = words.iter().map(|(w, _, _)| *w).collect();
+        let start = words.first().map_or(0.0, |w| w.1);
+        let json = format!(
+            r#"{{"type":"Results","duration":3.0,"start":{start},"is_final":true,
+            "speech_final":{speech_final},"channel":{{"alternatives":[{{"transcript":"{}",
+            "words":[{}]}}]}}}}"#,
+            text.join(" "),
+            list.join(",")
+        );
+        match parse(&json).unwrap() {
+            ServerMessage::Results(r) => r,
+            other => panic!("atteso Results, trovato {other:?}"),
+        }
+    }
+
+    fn finals(events: &[SttEventKind]) -> Vec<(&str, Option<u8>)> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                SttEventKind::Final(s) => Some((s.text.as_str(), s.speaker)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn speaker_change_splits_the_sentence() {
+        let mut u = Utterance::default();
+        let out = u.on_results(
+            &diarized(
+                &[
+                    ("Hola", 0.0, 0),
+                    ("Raúl.", 0.4, 0),
+                    ("Buen", 1.0, 1),
+                    ("día.", 1.3, 1),
+                ],
+                false,
+            ),
+            O,
+        );
+        assert_eq!(finals(&out), vec![("Hola Raúl.", Some(0))]);
+        let out = u.on_results(&diarized(&[("¿Cómo", 2.0, 1), ("estás?", 2.3, 1)], true), O);
+        assert_eq!(finals(&out), vec![("Buen día. ¿Cómo estás?", Some(1))]);
+    }
+
+    #[test]
+    fn isolated_word_does_not_split() {
+        let mut u = Utterance::default();
+        let out = u.on_results(
+            &diarized(&[("uno", 0.0, 0), ("dos", 0.4, 1), ("tres", 0.8, 0)], true),
+            O,
+        );
+        assert_eq!(finals(&out), vec![("uno dos tres", Some(0))]);
+    }
+
+    #[test]
+    fn without_diarization_speaker_is_none() {
+        let mut u = Utterance::default();
+        let f = one(&mut u, &results(0.0, 1.0, "ciao", true, true));
+        assert!(matches!(f, Some(SttEventKind::Final(s)) if s.speaker.is_none()));
+    }
+
     fn results_lang(text: &str, langs: &str, speech_final: bool) -> Results {
         let json = format!(
             r#"{{"type":"Results","duration":1.0,"start":0.0,"is_final":true,
@@ -201,12 +371,12 @@ mod tests {
     #[test]
     fn final_language_is_the_dominant_one() {
         let mut u = Utterance::default();
-        u.on_results(&results_lang("ok allora", r#"["it"]"#, false), O);
-        u.on_results(
+        one(&mut u, &results_lang("ok allora", r#"["it"]"#, false));
+        one(
+            &mut u,
             &results_lang("we should ship it next week", r#"["en","it"]"#, false),
-            O,
         );
-        let f = u.on_results(&results_lang("", "[]", true), O);
+        let f = one(&mut u, &results_lang("", "[]", true));
         let Some(SttEventKind::Final(s)) = f else {
             panic!("atteso Final")
         };
@@ -217,7 +387,7 @@ mod tests {
     #[test]
     fn no_language_without_detection() {
         let mut u = Utterance::default();
-        let f = u.on_results(&results_lang("ciao", "[]", true), O);
+        let f = one(&mut u, &results_lang("ciao", "[]", true));
         assert!(matches!(f, Some(SttEventKind::Final(s)) if s.language.is_none()));
     }
 
@@ -240,17 +410,17 @@ mod tests {
     #[test]
     fn interim_pieces_and_speech_final_build_one_sentence() {
         let mut u = Utterance::default();
-        let p = u.on_results(&results(0.0, 1.0, "ciao a", false, false), O);
+        let p = one(&mut u, &results(0.0, 1.0, "ciao a", false, false));
         assert!(matches!(p, Some(SttEventKind::Partial(s)) if s.text == "ciao a"));
 
-        let p = u.on_results(&results(0.0, 1.5, "ciao a tutti", true, false), O);
+        let p = one(&mut u, &results(0.0, 1.5, "ciao a tutti", true, false));
         assert!(matches!(&p, Some(SttEventKind::Partial(s)) if s.text == "ciao a tutti"));
 
-        let p = u.on_results(&results(1.5, 0.5, "come", false, false), O);
+        let p = one(&mut u, &results(1.5, 0.5, "come", false, false));
         assert!(matches!(&p, Some(SttEventKind::Partial(s))
             if s.text == "ciao a tutti come" && s.start == O));
 
-        let f = u.on_results(&results(1.5, 1.0, "come state?", true, true), O);
+        let f = one(&mut u, &results(1.5, 1.0, "come state?", true, true));
         let Some(SttEventKind::Final(s)) = f else {
             panic!("atteso Final")
         };
@@ -263,9 +433,9 @@ mod tests {
     #[test]
     fn empty_results_are_ignored_and_utterance_end_flushes() {
         let mut u = Utterance::default();
-        assert_eq!(u.on_results(&results(0.0, 1.0, "", false, false), O), None);
-        assert_eq!(u.on_results(&results(0.0, 1.0, "", true, true), O), None);
-        u.on_results(&results(1.0, 1.0, "hello", true, false), O);
+        assert_eq!(one(&mut u, &results(0.0, 1.0, "", false, false)), None);
+        assert_eq!(one(&mut u, &results(0.0, 1.0, "", true, true)), None);
+        one(&mut u, &results(1.0, 1.0, "hello", true, false));
         assert!(matches!(u.flush(), Some(SttEventKind::Final(s)) if s.text == "hello"));
         assert_eq!(u.flush(), None);
     }
