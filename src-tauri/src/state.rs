@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use tokio::sync::Mutex;
 
@@ -8,6 +10,9 @@ use crate::session::Session;
 pub struct AppState {
     /// Sessione attiva. Mutex async: start/stop attendono la rete.
     pub session: Mutex<Option<Session>>,
+    /// Setting `liveAssist`, letto dal task dell'assist a ogni giro: cambia
+    /// anche a call in corso.
+    pub assist_on: Arc<AtomicBool>,
 }
 
 /// Profili vocali (`app_data_dir/voices/`), usati solo se attivati.

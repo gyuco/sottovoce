@@ -214,6 +214,21 @@ impl Session {
         });
         // Anti-eco: serve solo se c'è "Loro" da confrontare.
         let echo = system_audio.then(|| Arc::new(EchoGuard::default()));
+        if let Some(guard) = &echo {
+            // Il filtro misura sull'audio quando "Loro" ha voce.
+            let guard = guard.clone();
+            let mut bus = frames.subscribe();
+            tasks.push(tokio::spawn(async move {
+                loop {
+                    match bus.recv().await {
+                        Ok(f) if f.channel == Channel::Them => guard.them_audio(&f),
+                        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+                guard.close();
+            }));
+        }
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
@@ -578,9 +593,12 @@ fn spawn_channel(
             }
             if let Some(guard) = &echo {
                 match (&event.kind, channel) {
-                    (SttEventKind::Partial(_), Channel::Them) => guard.them_activity(),
-                    (SttEventKind::Final(seg), Channel::Them) => guard.them_final(&seg.text),
-                    (SttEventKind::Final(seg), Channel::Me) if guard.is_echo(&seg.text).await => {
+                    (SttEventKind::Final(seg), Channel::Them) => {
+                        guard.them_final(&seg.text, seg.start, seg.end);
+                    }
+                    (SttEventKind::Final(seg), Channel::Me)
+                        if guard.is_echo(&seg.text, seg.start, seg.end).await =>
+                    {
                         tracing::debug!(text = %seg.text, "eco di \"Loro\" sul microfono: frase scartata");
                         // Toglie il parziale rimasto in UI.
                         on_transcript(SttEvent {

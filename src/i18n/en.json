@@ -96,7 +96,9 @@
     "askTitle": "Ask this",
     "none": "Nothing yet.",
     "markUsed": "Mark as used",
-    "markUnused": "Mark as unused"
+    "markUnused": "Mark as unused",
+    "toggle": "Suggestions",
+    "off": "Off. Turn them on to get what to say and what to ask during the call."
   },
   "settings": {
     "title": "Settings",
@@ -134,10 +136,13 @@
       "mine": "Your language (Me)",
       "mineHint": "A fixed language is more accurate than automatic.",
       "theirs": "Others' language (Them)",
-      "theirsHint": "Automatic: favours Italian and English, also handles language switching.",
+      "theirsHint": "Automatic: favours Italian, English, Spanish, French and German, also handles language switching.",
       "multi": "Automatic (multilingual)",
       "it": "Italian",
-      "en": "English"
+      "en": "English",
+      "es": "Spanish",
+      "fr": "French",
+      "de": "German"
     },
     "key": {
       "placeholder": "Paste the API key",
@@ -218,7 +223,9 @@
       "title": "During the call",
       "widgetHint": "The widget stays above Teams, Meet or Zoom with translations, suggestions and nudges, and is hidden from screen sharing. Open it from the button at the top, the menu bar icon or with ⌥⌘S.",
       "nudges": "Speaking nudges",
-      "nudgesHint": "Warns you if you talk too much or too fast, if a monologue drags on or if you haven't asked any questions yet. At most one every 2 minutes."
+      "nudgesHint": "Warns you if you talk too much or too fast, if a monologue drags on or if you haven't asked any questions yet. At most one every 2 minutes.",
+      "liveAssist": "In-call suggestions",
+      "liveAssistHint": "What to say and what to ask, generated every 20 s from the conversation (live assist). You can turn them on and off during the call too."
     },
     "search": {
       "title": "History search",
@@ -451,5 +458,9 @@
       "title": "No questions in {{value}} minutes",
       "hint": "A question helps you understand what the others really need."
     }
+  },
+  "startDialog": {
+    "title": "What language is the call in?",
+    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language."
   }
 }

@@ -87,7 +87,7 @@ export function Transcript() {
   return (
     <section className="relative flex min-h-80 flex-1 flex-col rounded-2xl border bg-card shadow-xs md:min-h-0">
       <header className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
-        <ScrollText className="size-4 text-primary" aria-hidden />
+        <ScrollText className="size-5 text-primary" aria-hidden />
         <h2 className="text-sm font-semibold">{t("transcript.title")}</h2>
         <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           {t("transcript.showTranslations")}
@@ -186,7 +186,7 @@ function TranscriptRow(props: {
   const partial = line.id === 0;
 
   return (
-    <li className="group grid grid-cols-[2.75rem_6rem_1fr_auto_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
+    <li className="group grid grid-cols-[2.75rem_6rem_1fr_auto_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-[15px] hover:bg-muted/60">
       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatDuration(line.start)}</span>
       <SpeakerLabel channel={line.channel} speaker={line.speaker} editable={!partial} />
       <span className={cn("leading-relaxed select-text", partial && "text-muted-foreground italic")}>

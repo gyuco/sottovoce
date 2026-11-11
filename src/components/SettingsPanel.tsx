@@ -17,14 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
-import type { Language, SttEngine } from "@/lib/ipc";
+import { CONCRETE_LANGUAGES, type Language, type SttEngine } from "@/lib/ipc";
 import { effectiveEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
-const LANGUAGES: Language[] = ["multi", "it", "en"];
+const LANGUAGES: Language[] = ["multi", ...CONCRETE_LANGUAGES];
 const ENGINES: SttEngine[] = ["local", "deepgram"];
 /** Altri partecipanti: 0 = automatico. */
 const SPEAKER_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -232,6 +232,16 @@ export function SettingsPanel() {
               <span className="block text-xs text-muted-foreground">{t("settings.duringCall.nudgesHint")}</span>
             </span>
             <Switch checked={settings.nudges} onCheckedChange={(nudges) => void update({ nudges })} />
+          </label>
+          <label className="mt-4 flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.duringCall.liveAssist")}
+              <span className="block text-xs text-muted-foreground">{t("settings.duringCall.liveAssistHint")}</span>
+            </span>
+            <Switch
+              checked={settings.liveAssist}
+              onCheckedChange={(liveAssist) => void update({ liveAssist })}
+            />
           </label>
         </CardContent>
       </Card>

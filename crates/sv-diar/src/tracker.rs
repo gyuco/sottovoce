@@ -7,6 +7,11 @@ pub struct TrackerConfig {
     /// Similarità coseno minima per "stesso parlante". Con CAM++ la stessa
     /// voce su frasi da 1 s sta sopra 0.46, voci diverse sotto 0.35.
     pub threshold: f32,
+    /// Sotto questa similarità con tutti i profili nasce un parlante nuovo.
+    /// Tra `new_speaker` e `threshold` la frase va al profilo più vicino
+    /// senza aggiornarlo: con l'audio compresso delle call la stessa voce
+    /// scende spesso sotto `threshold`, e dividerla è peggio che unire.
+    pub new_speaker: f32,
     /// Sotto questa durata (s) la soglia scende di `short_bonus`: una parola
     /// isolata non crea un parlante fantasma.
     pub short_utterance: f32,
@@ -21,6 +26,7 @@ impl Default for TrackerConfig {
     fn default() -> Self {
         Self {
             threshold: 0.45,
+            new_speaker: 0.35,
             short_utterance: 1.2,
             short_bonus: 0.05,
             min_update: 0.4,
@@ -64,12 +70,19 @@ impl SpeakerTracker {
             .map(|(i, c)| (i, dot(&v, c)))
             .max_by(|a, b| a.1.total_cmp(&b.1));
 
-        let mut threshold = self.config.threshold;
+        let (mut threshold, mut new_speaker) = (self.config.threshold, self.config.new_speaker);
         if duration < self.config.short_utterance {
             threshold -= self.config.short_bonus;
+            new_speaker -= self.config.short_bonus;
         }
         let index = match best {
             Some((i, sim)) if sim >= threshold => i,
+            // Zona grigia: profilo più vicino, ma l'impronta non lo sporca.
+            Some((i, sim)) if sim >= new_speaker => {
+                let speaker = Speaker::try_from(i).ok();
+                self.last = speaker;
+                return speaker;
+            }
             _ if duration < NEW_SPEAKER_MIN_S => return self.last,
             _ if self.centroids.len() < self.config.max_speakers => {
                 self.centroids.push(v.clone());
@@ -146,6 +159,20 @@ mod tests {
         // Senza impronta (audio troppo corto o muto): eredita.
         assert_eq!(t.assign(None, 0.2), Some(0));
         assert_eq!(t.assign(Some(&[0.0; 16]), 2.0), Some(0));
+    }
+
+    #[test]
+    fn grey_zone_joins_closest_without_new_speaker() {
+        let mut t = SpeakerTracker::new(TrackerConfig::default());
+        let a = voice(0, 0.0, 1);
+        assert_eq!(t.assign(Some(&a), 3.0), Some(0));
+        // Similarità ~0.40: sotto `threshold`, sopra `new_speaker`.
+        let mut b = vec![0.0; a.len()];
+        b[0] = 0.4;
+        b[1] = (1.0f32 - 0.16).sqrt();
+        assert!((dot(&normalized(&b).unwrap(), &normalized(&a).unwrap()) - 0.4).abs() < 0.05);
+        assert_eq!(t.assign(Some(&b), 3.0), Some(0));
+        assert_eq!(t.speakers(), 1);
     }
 
     #[test]

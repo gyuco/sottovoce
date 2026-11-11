@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -91,6 +93,7 @@ pub async fn start_session(
     on_compression: Channel<CompressionEvent>,
     on_voice: Channel<VoiceEvent>,
     context: Option<MeetingContext>,
+    language: Option<Language>,
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
     if let Some(old) = slot.take() {
@@ -100,7 +103,14 @@ pub async fn start_session(
             spawn_summary(app.clone(), db.path.clone(), job);
         }
     }
-    let settings = settings.get();
+    let mut settings = settings.get();
+    // Lingua della call scelta all'avvio: la parlano tutti, quindi vale per
+    // il rilevamento di "Loro" e di "Io". La lingua dell'utente resta quella
+    // di arrivo di traduzioni e riepilogo.
+    if let Some(language) = language {
+        settings.their_language = language;
+    }
+    let my_spoken = language.unwrap_or(settings.my_language);
     // Prima di qualsiasi connessione: "solo locale" non ammette LLM esterni.
     stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
     let api_key = match stt::engine_kind(&settings) {
@@ -121,7 +131,7 @@ pub async fn start_session(
             SttEngineKind::Deepgram => settings.stt_model.clone(),
             SttEngineKind::Local => settings.local_stt_model.clone(),
         },
-        my_language: settings.my_language.code().into(),
+        my_language: my_spoken.code().into(),
         their_language: settings.their_language.code().into(),
         speakers: context.speakers.clone(),
     };
@@ -146,7 +156,35 @@ pub async fn start_session(
             Err(e) => tracing::warn!("profili vocali non disponibili: {e}"),
         }
     }
-    let llm = llm_tasks(&settings).await;
+    let mut llm = llm_tasks(&settings).await;
+    if language.is_some() {
+        // Dopo `llm_tasks`: le traduzioni restano nella lingua dell'utente;
+        // da qui `my_language` è solo la lingua parlata da "Io".
+        if let Some(t) = llm.translation.as_mut() {
+            t.my_hint = Some(my_spoken).filter(|l| *l != Language::Multi);
+        }
+        settings.my_language = my_spoken;
+    }
+    // Interruttore condiviso: `update_settings` lo cambia a call in corso.
+    state
+        .assist_on
+        .store(settings.live_assist, Ordering::Relaxed);
+    if let Some(a) = llm.assist.as_mut() {
+        a.enabled = state.assist_on.clone();
+    }
+    // Lingua della call fissa: suggerimenti, riepilogo progressivo e finale
+    // nella lingua della call. "Automatica" = lingua dell'utente.
+    if let Some(call) = language.filter(|l| *l != Language::Multi) {
+        if let Some(a) = llm.assist.as_mut() {
+            a.user_language = call;
+        }
+        if let Some(c) = llm.compression.as_mut() {
+            c.language = call;
+        }
+        if let Some(s) = llm.summary.as_mut() {
+            s.language = call;
+        }
+    }
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
     let out = Outputs {
         on_level: Box::new(move |e| {
@@ -223,10 +261,7 @@ pub async fn ask_model(
         .map_err(to_msg)?
     };
 
-    let language = match settings.summary_language() {
-        Language::En => "English",
-        _ => "Italian",
-    };
+    let language = crate::compress::language_name(settings.summary_language());
     let messages = chat::messages(
         &context,
         ChatInput {
@@ -387,6 +422,7 @@ async fn llm_tasks(settings: &Settings) -> LlmTasks {
             llm,
             model,
             user_language: language,
+            enabled: Arc::new(AtomicBool::new(settings.live_assist)),
         }),
         compression: client_for(&insight).map(|(llm, model)| CompressConfig {
             llm,
@@ -643,8 +679,8 @@ pub async fn generate_summary(
         .insight_llm()
         .ok_or_else(|| "scegli un modello per il live assist o la traduzione".to_owned())?;
     let language = match language.unwrap_or(settings.summary_language()) {
-        Language::En => Language::En,
-        _ => Language::It,
+        Language::Multi => Language::It,
+        l => l,
     };
     let path = db.path.clone();
     let details = blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await?;
@@ -773,12 +809,14 @@ pub fn get_settings(settings: State<'_, SettingsStore>) -> Settings {
 }
 #[tauri::command]
 pub fn update_settings(
+    state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
     search: State<'_, Search>,
     patch: serde_json::Value,
 ) -> CmdResult<Settings> {
     let was = settings.get().semantic_search;
     let next = settings.update(patch).map_err(|e| format!("{e:#}"))?;
+    state.assist_on.store(next.live_assist, Ordering::Relaxed);
     if next.semantic_search != was {
         // Riattivata: recupera i meeting arrivati nel frattempo. Spenta: il
         // thread svuota la coda. In entrambi i casi la UI riceve lo stato.

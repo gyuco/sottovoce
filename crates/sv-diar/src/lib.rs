@@ -42,7 +42,9 @@ pub type Speaker = u8;
 pub const MAX_SPEAKERS: usize = 8;
 
 /// Frasi più corte non creano nuovi parlanti: ereditano o restano vuote.
-pub const NEW_SPEAKER_MIN_S: f32 = 1.0;
+/// Sotto i 2 s l'impronta CAM++ di una voce compressa (Teams, Meet) varia
+/// troppo e una sola frase basta a creare un parlante fantasma.
+pub const NEW_SPEAKER_MIN_S: f32 = 2.0;
 
 /// Impronte conservate per il raggruppamento a numero fissato.
 const MAX_HISTORY: usize = 1000;

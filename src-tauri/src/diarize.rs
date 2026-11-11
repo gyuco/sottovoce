@@ -235,14 +235,15 @@ mod tests {
         let (bus, _) = broadcast::channel(256);
         let (tx, rx) = mpsc::channel(4);
         let task = tokio::spawn(run(Diarizer::new(ByLevel, 0), bus.subscribe(), rx, None));
-        // 0-2 s voce A, 2-4 s voce B su "Loro"; "Io" ignorato.
-        for i in 0..40u64 {
-            let value = if i < 20 { 1.0 } else { 2.0 };
+        // 0-2.5 s voce A, 2.5-5 s voce B su "Loro"; "Io" ignorato. Un
+        // parlante nuovo nasce solo da frasi ≥ 2 s.
+        for i in 0..50u64 {
+            let value = if i < 25 { 1.0 } else { 2.0 };
             bus.send(frame(Channel::Them, i * 100, value)).unwrap();
             bus.send(frame(Channel::Me, i * 100, 2.0)).unwrap();
         }
-        assert_eq!(ask(&tx, 1, 0, 1900).await.speaker, Some(0));
-        assert_eq!(ask(&tx, 2, 2000, 3900).await.speaker, Some(1));
+        assert_eq!(ask(&tx, 1, 0, 2400).await.speaker, Some(0));
+        assert_eq!(ask(&tx, 2, 2500, 4900).await.speaker, Some(1));
         assert_eq!(ask(&tx, 3, 100, 1500).await.speaker, Some(0));
         drop(tx);
         drop(bus);
@@ -261,11 +262,11 @@ mod tests {
         let sender = bus.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            for i in 0..20u64 {
+            for i in 0..25u64 {
                 sender.send(frame(Channel::Them, i * 100, 2.0)).unwrap();
             }
         });
-        let got = ask(&tx, 1, 0, 1900).await;
+        let got = ask(&tx, 1, 0, 2400).await;
         assert_eq!(got.speaker, Some(0));
     }
 }

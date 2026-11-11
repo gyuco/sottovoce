@@ -131,6 +131,9 @@ pub struct Settings {
     /// Avvisi durante la call (parli troppo, monologo, nessuna domanda…),
     /// calcolati dalle metriche senza LLM.
     pub nudges: bool,
+    /// Suggerimenti del live assist (cosa dire/chiedere). Spenti di default:
+    /// si accendono e spengono anche a call in corso.
+    pub live_assist: bool,
     /// Ricerca per significato nello storico (modello locale di embedding):
     /// indicizza i meeting in background. Senza il modello resta spenta.
     pub semantic_search: bool,
@@ -209,6 +212,7 @@ impl Default for Settings {
             auto_summary: true,
             target_language: None,
             nudges: true,
+            live_assist: false,
             semantic_search: true,
         }
     }

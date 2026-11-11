@@ -306,7 +306,9 @@ mod tests {
         let url = listen_url(&cfg, Language::Multi);
         assert!(url.starts_with("wss://api.deepgram.com/v1/listen?model=nova-3&language=multi&"));
         assert!(url.contains("interim_results=true"));
-        assert!(url.contains("&language_hint=it&language_hint=en"));
+        assert!(url.contains(
+            "&language_hint=it&language_hint=en&language_hint=es&language_hint=fr&language_hint=de"
+        ));
         let mono = listen_url(&cfg, Language::It);
         assert!(mono.contains("language=it&") && !mono.contains("language_hint"));
         assert!(!url.contains("SECRET"), "la chiave va solo nell'header");

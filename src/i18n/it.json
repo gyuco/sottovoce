@@ -96,7 +96,9 @@
     "askTitle": "Chiedi",
     "none": "Ancora nessuno.",
     "markUsed": "Segna come usato",
-    "markUnused": "Segna come non usato"
+    "markUnused": "Segna come non usato",
+    "toggle": "Suggerimenti",
+    "off": "Spenti. Accendili per ricevere cosa dire e cosa chiedere durante la call."
   },
   "settings": {
     "title": "Impostazioni",
@@ -134,10 +136,13 @@
       "mine": "La tua lingua (Io)",
       "mineHint": "Una lingua fissa è più accurata dell'automatica.",
       "theirs": "Lingua degli altri (Loro)",
-      "theirsHint": "Automatica: privilegia italiano e inglese, riconosce anche il cambio di lingua.",
+      "theirsHint": "Automatica: privilegia italiano, inglese, spagnolo, francese e tedesco, riconosce anche il cambio di lingua.",
       "multi": "Automatica (multilingua)",
       "it": "Italiano",
-      "en": "Inglese"
+      "en": "Inglese",
+      "es": "Spagnolo",
+      "fr": "Francese",
+      "de": "Tedesco"
     },
     "key": {
       "placeholder": "Incolla la API key",
@@ -218,7 +223,9 @@
       "title": "Durante la call",
       "widgetHint": "Il widget resta sopra Teams, Meet o Zoom con traduzioni, suggerimenti e avvisi, e non compare nella condivisione schermo. Aprilo dal pulsante in alto, dall'icona nel menu bar o con ⌥⌘S.",
       "nudges": "Avvisi sul modo di parlare",
-      "nudgesHint": "Ti avvisa se parli troppo o troppo in fretta, se il monologo si allunga o se non hai ancora fatto domande. Al massimo uno ogni 2 minuti."
+      "nudgesHint": "Ti avvisa se parli troppo o troppo in fretta, se il monologo si allunga o se non hai ancora fatto domande. Al massimo uno ogni 2 minuti.",
+      "liveAssist": "Suggerimenti in call",
+      "liveAssistHint": "Cosa dire e cosa chiedere, generati ogni 20 s dalla conversazione (live assist). Si possono accendere e spegnere anche durante la call."
     },
     "search": {
       "title": "Ricerca nello storico",
@@ -451,5 +458,9 @@
       "title": "Nessuna domanda in {{value}} minuti",
       "hint": "Una domanda aiuta a capire cosa serve davvero agli altri."
     }
+  },
+  "startDialog": {
+    "title": "In che lingua si svolge la call?",
+    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua."
   }
 }

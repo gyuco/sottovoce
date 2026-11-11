@@ -132,17 +132,19 @@ export default function App() {
               </div>
             ) : null}
 
-            <div className="grid flex-1 gap-4 px-6 pb-6 md:min-h-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-              <div className="flex flex-col gap-4 md:min-h-0">
-                <AssistPanel />
-                <InsightsPanel />
-                <AudioPanel />
+            {/* La trascrizione è il contenuto principale; il resto sta in una
+                colonna laterale che scorre da sola (niente pannelli schiacciati). */}
+            <div className="grid flex-1 gap-4 px-6 pb-6 md:min-h-0 md:grid-cols-[minmax(0,1.7fr)_minmax(20rem,1fr)]">
+              <div className="flex flex-col md:min-h-0">
+                <Transcript />
               </div>
-              <div className="flex flex-col gap-4 md:min-h-0">
+              <div className="flex flex-col gap-4 md:min-h-0 md:overflow-y-auto md:pr-1 [&>*]:shrink-0">
                 <TalkRatio />
+                <InsightsPanel />
                 <MeetingContextPanel />
                 <MeetingChat />
-                <Transcript />
+                <AssistPanel />
+                <AudioPanel />
               </div>
             </div>
           </main>

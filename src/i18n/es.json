@@ -96,7 +96,9 @@
     "askTitle": "Pregunta esto",
     "none": "Aún nada.",
     "markUsed": "Marcar como usado",
-    "markUnused": "Marcar como no usado"
+    "markUnused": "Marcar como no usado",
+    "toggle": "Sugerencias",
+    "off": "Desactivadas. Actívalas para recibir qué decir y qué preguntar durante la llamada."
   },
   "settings": {
     "title": "Ajustes",
@@ -134,10 +136,13 @@
       "mine": "Tu idioma (Yo)",
       "mineHint": "Un idioma fijo es más preciso que el automático.",
       "theirs": "Idioma de los demás (Ellos)",
-      "theirsHint": "Automático: prioriza italiano e inglés y también reconoce el cambio de idioma.",
+      "theirsHint": "Automático: prioriza italiano, inglés, español, francés y alemán y también reconoce el cambio de idioma.",
       "multi": "Automático (multilingüe)",
       "it": "Italiano",
-      "en": "Inglés"
+      "en": "Inglés",
+      "es": "Español",
+      "fr": "Francés",
+      "de": "Alemán"
     },
     "key": {
       "placeholder": "Pega la API key",
@@ -218,7 +223,9 @@
       "title": "Durante la llamada",
       "widgetHint": "El widget se queda encima de Teams, Meet o Zoom con traducciones, sugerencias y avisos, y no aparece al compartir pantalla. Ábrelo con el botón de arriba, el icono de la barra de menús o con ⌥⌘S.",
       "nudges": "Avisos sobre cómo hablas",
-      "nudgesHint": "Te avisa si hablas demasiado o muy rápido, si el monólogo se alarga o si aún no has hecho preguntas. Como máximo uno cada 2 minutos."
+      "nudgesHint": "Te avisa si hablas demasiado o muy rápido, si el monólogo se alarga o si aún no has hecho preguntas. Como máximo uno cada 2 minutos.",
+      "liveAssist": "Sugerencias en la llamada",
+      "liveAssistHint": "Qué decir y qué preguntar, generadas cada 20 s a partir de la conversación (live assist). Se pueden activar y desactivar también durante la llamada."
     },
     "search": {
       "title": "Búsqueda en el historial",
@@ -451,5 +458,9 @@
       "title": "Ninguna pregunta en {{value}} minutos",
       "hint": "Una pregunta ayuda a entender qué necesitan de verdad los demás."
     }
+  },
+  "startDialog": {
+    "title": "¿En qué idioma será la llamada?",
+    "description": "Un idioma fijo hace más precisa la transcripción de ambos canales. Elige “Automático” si se hablan varios idiomas. Las traducciones y el resumen siguen en tu idioma."
   }
 }

@@ -15,7 +15,9 @@ export interface LevelEvent {
   peakDb: number;
 }
 
-export type Language = "multi" | "it" | "en";
+export type Language = "multi" | "it" | "en" | "es" | "fr" | "de";
+/** Lingue concrete (STT, traduzione, riepilogo). */
+export const CONCRETE_LANGUAGES = ["it", "en", "es", "fr", "de"] as const satisfies Language[];
 /** Motore di trascrizione. */
 export type SttEngine = "local" | "deepgram";
 export type LlmProvider =
@@ -71,6 +73,8 @@ export interface Settings {
   targetLanguage: Language | null;
   /** Avvisi durante la call calcolati dalle metriche (senza LLM). */
   nudges: boolean;
+  /** Suggerimenti del live assist (cosa dire/chiedere); spenti di default. */
+  liveAssist: boolean;
   /** Ricerca per significato nello storico (modello locale di embedding). */
   semanticSearch: boolean;
 }
@@ -267,6 +271,8 @@ export function startSession(
   onCompression: (e: CompressionEvent) => void,
   onVoice: (e: VoiceEvent) => void,
   context: MeetingContext,
+  /** Lingua della call: rilevamento di entrambi i canali. */
+  language: Language,
 ) {
   const level = new Channel<LevelEvent>();
   level.onmessage = onLevel;
@@ -288,6 +294,7 @@ export function startSession(
     onCompression: compression,
     onVoice: voice,
     context,
+    language,
   });
 }
 

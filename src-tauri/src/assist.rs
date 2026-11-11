@@ -9,6 +9,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,9 @@ pub struct AssistConfig {
     pub model: String,
     /// Lingua dell'utente, per l'eventuale traduzione dei suggerimenti.
     pub user_language: Language,
+    /// Suggerimenti accesi (setting `liveAssist`): spenti, il task continua
+    /// a raccogliere le frasi ma non chiama il modello.
+    pub enabled: Arc<AtomicBool>,
 }
 
 /// Frase finale passata dal pump della sessione.
@@ -141,6 +145,9 @@ async fn run(
                 None => break,
             },
             _ = ticks.tick() => {
+                if !cfg.enabled.load(Ordering::Relaxed) {
+                    continue;
+                }
                 let Some(messages) =
                     state.next_prompt(&cfg, &context, compressed.as_ref(), &mut code).await
                 else {
@@ -337,10 +344,7 @@ fn messages(
     label: &dyn Fn(Option<u8>) -> String,
 ) -> Vec<Message> {
     let mut system = String::from(SYSTEM_PROMPT);
-    let lang = match user_language {
-        Language::En => "English",
-        Language::It | Language::Multi => "Italian",
-    };
+    let lang = user_language.english_name().unwrap_or("Italian");
     system.push_str(&format!("\n\nThe User's language is {lang}."));
     if let Some(block) = blocks.context {
         system.push_str("\n\n");
@@ -501,6 +505,7 @@ mod tests {
             llm,
             model: "m".into(),
             user_language: Language::It,
+            enabled: Arc::new(AtomicBool::new(true)),
         };
         let task = tokio::spawn(run(
             cfg,
@@ -619,6 +624,7 @@ mod tests {
             llm: ScriptedLlm::new(&[]),
             model: "m".into(),
             user_language: Language::It,
+            enabled: Arc::new(AtomicBool::new(true)),
         };
         let mut state = State::default();
         state.push(line(Channel::Them, "novità adesso"));
@@ -659,6 +665,7 @@ mod tests {
             llm: ScriptedLlm::new(&[]),
             model: "m".into(),
             user_language: Language::It,
+            enabled: Arc::new(AtomicBool::new(true)),
         };
         let mut state = State::default();
         state.push(line(
@@ -698,6 +705,7 @@ mod tests {
             llm,
             model: "m".into(),
             user_language: Language::It,
+            enabled: Arc::new(AtomicBool::new(true)),
         };
         let mut state = State::default();
         let events = state.ask(&cfg, vec![Message::user("x")], 0).await;
@@ -717,6 +725,7 @@ mod tests {
             llm: Arc::new(sv_llm::OpenAiCompatible::new("http://localhost:11434/v1")),
             model,
             user_language: Language::It,
+            enabled: Arc::new(AtomicBool::new(true)),
         };
         let context = MeetingContext {
             name: "Release planning".into(),

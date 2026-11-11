@@ -13,6 +13,7 @@ import {
 import { useCopy } from "@/lib/hooks";
 import {
   type ActionItem,
+  CONCRETE_LANGUAGES,
   type Language,
   type Summary,
   errorMessage,
@@ -66,12 +67,15 @@ export function SummaryPanel(props: {
         {props.onRegenerate && (
           <>
             <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
-              <SelectTrigger size="sm" className="w-24" aria-label={t("summary.language")}>
+              <SelectTrigger size="sm" className="w-28" aria-label={t("summary.language")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="it">{t("settings.language.it")}</SelectItem>
-                <SelectItem value="en">{t("settings.language.en")}</SelectItem>
+                {CONCRETE_LANGUAGES.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {t(`settings.language.${l}`)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button

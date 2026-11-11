@@ -3,6 +3,7 @@ import { create } from "zustand";
 import {
   type ChannelId,
   type InputDevice,
+  type Language,
   type LevelEvent,
   errorMessage,
   listInputDevices,
@@ -44,9 +45,12 @@ interface AudioState {
   startedWall: number;
   error: { key: string; message: string } | null;
   levels: Record<ChannelId, ChannelLevel>;
+  /** Lingua della call scelta all'avvio (vale anche al riavvio per cambio microfono). */
+  language: Language;
   init: () => Promise<void>;
   setMic: (id: string) => Promise<void>;
-  start: () => Promise<void>;
+  /** Avvia la sessione; senza `language` usa quella della call in corso. */
+  start: (language?: Language) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -82,6 +86,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   startedWall: 0,
   error: null,
   levels: { me: silent(), them: silent() },
+  language: "multi",
 
   init: async () => {
     try {
@@ -101,8 +106,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     if (get().status === "running") await get().start();
   },
 
-  start: async () => {
-    set({ status: "starting", error: null, levels: { me: silent(), them: silent() } });
+  start: async (language = get().language) => {
+    set({ status: "starting", error: null, language, levels: { me: silent(), them: silent() } });
     const transcript = useTranscriptStore.getState();
     transcript.reset();
     const assist = useAssistStore.getState();
@@ -129,6 +134,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         insights.addBlock,
         useMeetingStore.getState().applyVoice,
         useMeetingStore.getState().context,
+        language,
       );
       set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });
     } catch (e) {
