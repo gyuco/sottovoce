@@ -111,7 +111,7 @@ impl EchoCanceller {
     fn feed_render_samples(&mut self, samples: &[f32]) {
         self.render.extend_from_slice(samples);
         let full = self.render.len() / BLOCK * BLOCK;
-        for block in self.render[..full].chunks_exact(BLOCK) {
+        for block in self.render[..full].as_chunks::<BLOCK>().0 {
             // Il render non produce uscita utile: si scrive su `out` e si butta.
             let _ = self.apm.process_render_f32(&[block], &mut [&mut self.out]);
         }
