@@ -16,6 +16,8 @@ sv-vad = { path = "crates/sv-vad" }
 sv-stt-local = { path = "crates/sv-stt-local" }
 sv-diar = { path = "crates/sv-diar" }
 sv-store = { path = "crates/sv-store" }
+sv-embed = { path = "crates/sv-embed" }
+sv-search = { path = "crates/sv-search" }
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -26,6 +28,23 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# DSP in Rust puro: senza ottimizzazioni AEC3 non sta in tempo reale
+# nemmeno nei build debug (`pnpm app:debug`).
+[profile.dev.package."sonora"]
+opt-level = 3
+[profile.dev.package."sonora-aec3"]
+opt-level = 3
+[profile.dev.package."sonora-common-audio"]
+opt-level = 3
+[profile.dev.package."sonora-fft"]
+opt-level = 3
+[profile.dev.package."sonora-simd"]
+opt-level = 3
+[profile.dev.package."sonora-ns"]
+opt-level = 3
+[profile.dev.package."sonora-agc2"]
+opt-level = 3
 
 # See https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

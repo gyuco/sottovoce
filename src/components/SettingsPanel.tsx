@@ -1,9 +1,12 @@
-import { AudioLines, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AudioLines, BellRing, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
 import { LocalModels } from "@/components/LocalModels";
+import { SearchSettings } from "@/components/SearchSettings";
+import { VoiceProfiles } from "@/components/VoiceProfiles";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -15,14 +18,14 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
-import type { Language, SttEngine } from "@/lib/ipc";
+import { type AppInfo, CONCRETE_LANGUAGES, type Language, type SttEngine, appInfo } from "@/lib/ipc";
 import { effectiveEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
-const LANGUAGES: Language[] = ["multi", "it", "en"];
+const LANGUAGES: Language[] = ["multi", ...CONCRETE_LANGUAGES];
 const ENGINES: SttEngine[] = ["local", "deepgram"];
 /** Altri partecipanti: 0 = automatico. */
 const SPEAKER_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -172,6 +175,18 @@ export function SettingsPanel() {
             />
           </label>
 
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.echoCancellation")}
+              <span className="block text-xs text-muted-foreground">{t("settings.echoCancellationHint")}</span>
+            </span>
+            <Switch
+              checked={settings.echoCancellation}
+              disabled={!settings.systemAudio || !systemSupported}
+              onCheckedChange={(echoCancellation) => void update({ echoCancellation })}
+            />
+          </label>
+
           <div className="flex flex-col gap-3 border-t pt-4">
             <label className="flex items-center justify-between gap-4 text-sm">
               <span>
@@ -213,7 +228,40 @@ export function SettingsPanel() {
         </CardContent>
       </Card>
 
+      <VoiceProfiles />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BellRing className="size-4 text-muted-foreground" aria-hidden />
+            {t("settings.duringCall.title")}
+          </CardTitle>
+          <CardDescription>{t("settings.duringCall.widgetHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <label className="flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.duringCall.nudges")}
+              <span className="block text-xs text-muted-foreground">{t("settings.duringCall.nudgesHint")}</span>
+            </span>
+            <Switch checked={settings.nudges} onCheckedChange={(nudges) => void update({ nudges })} />
+          </label>
+          <label className="mt-4 flex items-center justify-between gap-4 text-sm">
+            <span>
+              {t("settings.duringCall.liveAssist")}
+              <span className="block text-xs text-muted-foreground">{t("settings.duringCall.liveAssistHint")}</span>
+            </span>
+            <Switch
+              checked={settings.liveAssist}
+              onCheckedChange={(liveAssist) => void update({ liveAssist })}
+            />
+          </label>
+        </CardContent>
+      </Card>
+
       <LlmSettings />
+
+      <SearchSettings />
 
       <LocalModels />
 
@@ -223,7 +271,29 @@ export function SettingsPanel() {
         </p>
       )}
       <p className="text-xs text-muted-foreground">{t("settings.applyHint")}</p>
+      <AboutLine />
     </div>
+  );
+}
+
+/** Versione, commit e ora del build: per verificare quale build è in uso. */
+function AboutLine() {
+  const { t, i18n } = useTranslation();
+  const [info, setInfo] = useState<AppInfo | null>(null);
+  useEffect(() => {
+    appInfo()
+      .then(setInfo)
+      .catch(() => setInfo(null));
+  }, []);
+  if (!info) return null;
+  const built = info.builtAt
+    ? new Date(info.builtAt).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" })
+    : "";
+  return (
+    <p className="text-xs text-muted-foreground tabular-nums select-text">
+      {t("settings.about.line", { version: info.version, commit: info.commit || "—", built })}
+      {info.debug && ` · ${t("settings.about.debug")}`}
+    </p>
   );
 }
 

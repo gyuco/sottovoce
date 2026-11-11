@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 sv-audio.workspace = true
 sherpa-onnx = "2.0.1"
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

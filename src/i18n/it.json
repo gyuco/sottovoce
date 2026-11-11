@@ -39,7 +39,8 @@
     "copyAll": "Copia tutta la trascrizione",
     "copyLine": "Copia frase",
     "translate": "Traduci",
-    "translateRetry": "Riprova"
+    "translateRetry": "Riprova",
+    "mineTranslation": "La tua frase nella lingua del meeting"
   },
   "meeting": {
     "title": "Contesto meeting",
@@ -68,6 +69,22 @@
     "send": "Invia",
     "thinking": "Il modello sta rispondendo…"
   },
+  "historyChat": {
+    "title": "Chiedi allo storico",
+    "subtitle": "domande su tutti i meeting salvati, con le fonti",
+    "empty": "Chiedi cosa si è deciso, chi doveva fare cosa, quando… Le risposte arrivano solo dai meeting salvati, con le fonti citate.",
+    "placeholder": "Es. cosa avevamo deciso con ACME sul rinnovo?",
+    "send": "Invia",
+    "thinking": "Cerco nei meeting…",
+    "notFound": "Non trovato nei meeting.",
+    "wordsOnly": "Cercato solo per parole: scarica il modello in Impostazioni → Ricerca nello storico per cercare anche per significato.",
+    "sources": "Fonti",
+    "openSource": "Apri «{{meeting}}» al punto citato",
+    "from": "Dal",
+    "to": "Al",
+    "onlySelected": "Solo il meeting aperto",
+    "clear": "Nuova conversazione"
+  },
   "assist": {
     "title": "Live assist",
     "empty": "Ogni 20 secondi, se la conversazione va avanti, qui compare cosa potresti dire o chiedere. Scegli il modello in Impostazioni.",
@@ -79,7 +96,9 @@
     "askTitle": "Chiedi",
     "none": "Ancora nessuno.",
     "markUsed": "Segna come usato",
-    "markUnused": "Segna come non usato"
+    "markUnused": "Segna come non usato",
+    "toggle": "Suggerimenti",
+    "off": "Spenti. Accendili per ricevere cosa dire e cosa chiedere durante la call."
   },
   "settings": {
     "title": "Impostazioni",
@@ -117,10 +136,13 @@
       "mine": "La tua lingua (Io)",
       "mineHint": "Una lingua fissa è più accurata dell'automatica.",
       "theirs": "Lingua degli altri (Loro)",
-      "theirsHint": "Automatica: privilegia italiano e inglese, riconosce anche il cambio di lingua.",
+      "theirsHint": "Automatica: privilegia italiano, inglese, spagnolo, francese e tedesco, riconosce anche il cambio di lingua.",
       "multi": "Automatica (multilingua)",
       "it": "Italiano",
-      "en": "Inglese"
+      "en": "Inglese",
+      "es": "Spagnolo",
+      "fr": "Francese",
+      "de": "Tedesco"
     },
     "key": {
       "placeholder": "Incolla la API key",
@@ -181,7 +203,9 @@
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Riepilogo finale automatico",
       "autoSummaryHint": "Allo stop genera overview, punti chiave e azioni.",
-      "sameProvider": "Come sopra ({{name}})"
+      "sameProvider": "Come sopra ({{name}})",
+      "translateMine": "Traduci anche le mie frasi",
+      "translateMineHint": "Mostra sotto ogni tua frase come dirla nella lingua degli altri (quella impostata o riconosciuta dalle loro frasi)."
     },
     "localOnly": {
       "title": "Solo locale",
@@ -194,6 +218,49 @@
       "count": "Altri partecipanti",
       "countHint": "Se sai quanti sono, il riconoscimento è più stabile e corregge le frasi già mostrate.",
       "auto": "Automatico"
+    },
+    "duringCall": {
+      "title": "Durante la call",
+      "widgetHint": "Il widget resta sopra Teams, Meet o Zoom con traduzioni, suggerimenti e avvisi, e non compare nella condivisione schermo. Aprilo dal pulsante in alto, dall'icona nel menu bar o con ⌥⌘S.",
+      "nudges": "Avvisi sul modo di parlare",
+      "nudgesHint": "Ti avvisa se parli troppo o troppo in fretta, se il monologo si allunga o se non hai ancora fatto domande. Al massimo uno ogni 2 minuti.",
+      "liveAssist": "Suggerimenti in call",
+      "liveAssistHint": "Cosa dire e cosa chiedere, generati ogni 20 s dalla conversazione (live assist). Si possono accendere e spegnere anche durante la call."
+    },
+    "search": {
+      "title": "Ricerca nello storico",
+      "hint": "Trova i meeting anche per significato, in qualsiasi lingua: “costi dei server” trova “the AWS bill is too high”. Il modello gira sul tuo Mac; l’indice resta accanto alle trascrizioni e si elimina con il meeting.",
+      "toggle": "Ricerca per significato",
+      "toggleHint": "Indicizza i meeting in background, a bassa priorità, quando finiscono.",
+      "downloadHint": "Scarica EmbeddingGemma 2 (circa 206 MB): resta sul tuo Mac e funziona anche offline.",
+      "indexing": "Indicizzati {{indexed}} di {{total}} · {{pending}} in coda",
+      "indexed": "Indicizzati {{indexed}} di {{total}} meeting",
+      "reindex": "Ricontrolla"
+    },
+    "voices": {
+      "title": "Profili vocali",
+      "hint": "Riconosce nei meeting successivi i parlanti a cui hai dato un nome. Un'impronta vocale è un dato biometrico: resta solo su questo Mac (anche con Deepgram), non viene mai inviata in rete e si salva solo per i parlanti con un nome, dopo almeno 20 secondi di parlato.",
+      "toggle": "Riconosci i parlanti tra un meeting e l'altro",
+      "toggleHint": "Spento di default. Con voce molto simile il nome viene assegnato, altrimenti ti viene suggerito.",
+      "needsDiarization": "Serve anche \"Riconosci i parlanti\" attivo (scheda Trascrizione).",
+      "empty": "Nessun profilo salvato. Dai un nome a un parlante durante una call per crearne uno.",
+      "meta": "Ultimo meeting: {{date}} · meeting: {{meetings}}",
+      "nameLabel": "Nome del profilo",
+      "rename": "Rinomina {{name}}",
+      "delete": "Elimina il profilo di {{name}}",
+      "deleteAll": "Elimina tutti i profili",
+      "deleteAllTitle": "Eliminare tutti i profili vocali?",
+      "deleteAllConfirm": "Le impronte vocali salvate verranno cancellate da questo Mac. Non si può annullare.",
+      "offTitle": "Disattivare i profili vocali?",
+      "offConfirm": "Vuoi anche eliminare i profili già salvati? Se li conservi, restano su questo Mac ma non vengono usati.",
+      "offKeep": "Disattiva e conserva",
+      "offDelete": "Disattiva ed elimina"
+    },
+    "echoCancellation": "Cancellazione d'eco",
+    "echoCancellationHint": "Senza cuffie il microfono risente la voce degli altri dalle casse: la toglie prima della trascrizione, così le loro frasi non finiscono su \"Io\". Con le cuffie non serve ma non disturba.",
+    "about": {
+      "line": "Sottovoce {{version}} · build {{commit}} · compilata il {{built}}",
+      "debug": "debug"
     }
   },
   "permissions": {
@@ -233,11 +300,14 @@
   "talk": {
     "title": "Tempo di parola",
     "label": "Io {{me}}% · Loro {{them}}%",
-    "empty": "Il tempo di parola apparirà con la trascrizione"
+    "empty": "Il tempo di parola apparirà con la trascrizione",
+    "wpm": "Parole/min",
+    "questions": "Domande",
+    "monologue": "Monologo più lungo"
   },
   "models": {
     "title": "Modelli locali",
-    "hint": "Per trascrivere e riconoscere i parlanti senza inviare audio a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
+    "hint": "Per trascrivere, riconoscere i parlanti e cercare nello storico senza inviare dati a terzi. I modelli restano sul tuo Mac; dopo il download funzionano anche offline.",
     "used": "{{size}} occupati",
     "ready": "pronto",
     "missing": "non scaricato",
@@ -253,13 +323,23 @@
     "kind": {
       "vad": "Rilevamento del parlato",
       "stt": "Trascrizione",
-      "speakerEmbedding": "Riconoscimento parlanti"
+      "speakerEmbedding": "Riconoscimento parlanti",
+      "textEmbedding": "Ricerca per significato"
     }
   },
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rinomina {{name}}",
-    "renameHint": "Clic per dare un nome a questo parlante"
+    "renameHint": "Clic per dare un nome a questo parlante",
+    "voice": {
+      "region": "Parlanti riconosciuti dalla voce",
+      "suggest": "sembra {{name}}?",
+      "accept": "È {{name}}",
+      "dismiss": "No",
+      "recognized": "riconosciuto come {{name}} dal profilo vocale",
+      "notThem": "Non è {{name}}",
+      "ok": "OK"
+    }
   },
   "history": {
     "title": "Storico",
@@ -280,7 +360,32 @@
     "deleteConfirm": "Eliminare questo meeting? Frasi e traduzioni verranno perse.",
     "deleteAction": "Elimina",
     "rename": "Rinomina meeting",
-    "assists": "Suggerimenti"
+    "assists": "Suggerimenti",
+    "export": "Esporta in Markdown",
+    "exported": "Salvato in {{path}}",
+    "searchPlaceholderSemantic": "Cerca per parole o per significato…",
+    "results": "{{count}} risultati",
+    "semantic": {
+      "noModel": "Scarica il modello in Impostazioni → Ricerca nello storico per cercare anche per significato.",
+      "indexing": "Indicizzazione in corso: {{indexed}} di {{total}} meeting",
+      "ready": "Ricerca per significato attiva",
+      "wordMatch": "Contiene le parole cercate",
+      "kind": {
+        "block": "Sintesi a 5 minuti",
+        "overview": "Riepilogo",
+        "keyPoints": "Punti chiave",
+        "actionItems": "Azioni"
+      }
+    }
+  },
+  "export": {
+    "date": "Data",
+    "duration": "Durata",
+    "engine": "Trascrizione",
+    "participants": "Partecipanti",
+    "goal": "Obiettivo",
+    "notes": "Note",
+    "transcript": "Trascrizione"
   },
   "moment": {
     "objection": "Obiezione",
@@ -317,9 +422,51 @@
     "open": "Apri riepilogo",
     "dismiss": "Chiudi avviso"
   },
+  "update": {
+    "available": "Nuova versione disponibile",
+    "detail": "versione {{version}} · build {{build}}",
+    "download": "Scarica",
+    "dismiss": "Ignora questa versione"
+  },
   "tray": {
     "show": "Mostra Sottovoce",
     "quit": "Esci da Sottovoce",
-    "tooltip": "Sottovoce — trascrizione live"
+    "tooltip": "Sottovoce — trascrizione live",
+    "widget": "Mostra/nascondi widget"
+  },
+  "widget": {
+    "toggle": "Widget",
+    "toggleHint": "Mostra o nascondi il widget sopra la call (⌥⌘S)",
+    "openMain": "Apri Sottovoce",
+    "close": "Chiudi widget",
+    "idle": "Nessuna sessione attiva. Avviala dalla finestra di Sottovoce.",
+    "noLines": "Le frasi degli altri partecipanti appariranno qui."
+  },
+  "nudge": {
+    "dismiss": "Chiudi avviso",
+    "monologue": {
+      "title": "Parli da {{minutes}}:{{seconds}} senza pause",
+      "hint": "Fermati e lascia spazio: chiedi un parere o se è tutto chiaro."
+    },
+    "talkTooMuch": {
+      "title": "Negli ultimi minuti hai parlato tu il {{value}}% del tempo",
+      "hint": "Prova ad ascoltare di più: fai una domanda aperta."
+    },
+    "tooFast": {
+      "title": "Stai parlando veloce: {{value}} parole/min",
+      "hint": "Rallenta un po' e fai qualche pausa."
+    },
+    "listenLong": {
+      "title": "Gli altri parlano da {{minutes}}:{{seconds}}",
+      "hint": "Buon momento per riassumere cosa hai capito o fare una domanda."
+    },
+    "noQuestions": {
+      "title": "Nessuna domanda in {{value}} minuti",
+      "hint": "Una domanda aiuta a capire cosa serve davvero agli altri."
+    }
+  },
+  "startDialog": {
+    "title": "In che lingua si svolge la call?",
+    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua."
   }
 }

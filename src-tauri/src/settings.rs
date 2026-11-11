@@ -95,6 +95,10 @@ pub struct Settings {
     pub diarization: bool,
     /// Altri partecipanti noti (1–8); 0 = automatico.
     pub their_speakers: u8,
+    /// Profili vocali (dato biometrico, spento di default): riconosce nei
+    /// meeting successivi i parlanti a cui l'utente ha dato un nome. Solo
+    /// in locale, in `app_data_dir/voices/`.
+    pub voice_profiles: bool,
     /// Lingua dell'utente (canale "Io"): monolingua = più accurato.
     pub my_language: Language,
     /// Lingua degli altri partecipanti (canale "Loro").
@@ -112,6 +116,9 @@ pub struct Settings {
     /// Traduce da sola ogni frase di "Loro"; spento = solo su richiesta
     /// (pulsante "Traduci" accanto alla frase).
     pub auto_translate: bool,
+    /// Con la traduzione automatica traduce anche le frasi di "Io" nella
+    /// lingua del meeting (quella di "Loro").
+    pub translate_mine: bool,
     /// Modello per il live assist; vuoto = da scegliere.
     pub assist_model: String,
     /// Provider del live assist (e di compressione e riepilogo);
@@ -121,6 +128,18 @@ pub struct Settings {
     pub auto_summary: bool,
     /// Lingua in cui tradurre; `None` = la lingua dell'utente.
     pub target_language: Option<Language>,
+    /// Avvisi durante la call (parli troppo, monologo, nessuna domanda…),
+    /// calcolati dalle metriche senza LLM.
+    pub nudges: bool,
+    /// Suggerimenti del live assist (cosa dire/chiedere). Spenti di default:
+    /// si accendono e spengono anche a call in corso.
+    pub live_assist: bool,
+    /// Cancellazione d'eco sul microfono (AEC3): senza cuffie toglie da "Io"
+    /// la voce degli altri risentita dalle casse. Serve l'audio di sistema.
+    pub echo_cancellation: bool,
+    /// Ricerca per significato nello storico (modello locale di embedding):
+    /// indicizza i meeting in background. Senza il modello resta spenta.
+    pub semantic_search: bool,
 }
 
 /// Modello di un compito LLM con il suo provider.
@@ -180,6 +199,7 @@ impl Default for Settings {
             local_only: false,
             diarization: true,
             their_speakers: 0,
+            voice_profiles: false,
             my_language: Language::It,
             their_language: Language::Multi,
             mic_device_id: None,
@@ -189,10 +209,15 @@ impl Default for Settings {
             translation_model: String::new(),
             translation_provider: None,
             auto_translate: false,
+            translate_mine: true,
             assist_model: String::new(),
             assist_provider: None,
             auto_summary: true,
             target_language: None,
+            nudges: true,
+            live_assist: false,
+            echo_cancellation: true,
+            semantic_search: true,
         }
     }
 }
@@ -323,6 +348,7 @@ mod tests {
         assert_eq!(s.llm_provider, LlmProvider::Ollama);
         assert_eq!(s.stt_engine, SttEngineKind::Deepgram);
         assert!(!s.local_only);
+        assert!(s.nudges);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

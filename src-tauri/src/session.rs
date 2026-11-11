@@ -18,12 +18,12 @@ use tokio::task::JoinHandle;
 
 use crate::assist::{self, AssistConfig, AssistEvent, AssistLine};
 use crate::compress::{self, CompressConfig, CompressLine, CompressionEvent, CompressionLog};
-use crate::diarize::{self, DiarConfig, DiarJob};
+use crate::diarize::{self, DiarConfig, DiarJob, VoiceEvent, VoiceHooks};
 use crate::echo::EchoGuard;
 use crate::meeting::{MeetingContext, SharedContext};
 use crate::settings::Settings;
 use crate::summary::{self, SummaryConfig};
-use crate::translate::{self, Job, TranslationEvent, TranslatorConfig};
+use crate::translate::{self, Job, MeetingLanguage, TranslationEvent, TranslatorConfig};
 
 /// Capacità del bus audio: ~16 s di frame da ~64 ms per canale.
 const FRAME_BUS_CAPACITY: usize = 512;
@@ -55,6 +55,14 @@ pub struct Outputs {
     pub on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync>,
     pub on_assist: Box<dyn Fn(AssistEvent) + Send + Sync>,
     pub on_compression: Box<dyn Fn(CompressionEvent) + Send + Sync>,
+    /// Parlanti riconosciuti nei profili vocali.
+    pub on_voice: Arc<dyn Fn(VoiceEvent) + Send + Sync>,
+}
+
+/// Profili vocali da aggiornare a fine sessione con la voce dei parlanti.
+struct VoiceSave {
+    store: sv_diar::VoiceStore,
+    collected: Arc<std::sync::Mutex<Vec<sv_diar::SpeakerVoice>>>,
 }
 
 pub struct Session {
@@ -72,6 +80,7 @@ pub struct Session {
     auto_summary: bool,
     /// Traduzione su richiesta (pulsante "Traduci").
     translation: Option<TranslatorConfig>,
+    voices: Option<VoiceSave>,
 }
 
 /// Cosa serve per tradurre una frase su richiesta durante la sessione.
@@ -98,6 +107,7 @@ impl Session {
             on_translation,
             on_assist,
             on_compression,
+            on_voice,
         } = out;
         let system_audio = settings.system_audio && sv_audio::system::is_supported();
         let mut channels = vec![Channel::Me];
@@ -121,14 +131,13 @@ impl Session {
             }
             transcript_sink(event);
         });
-        let target_language = settings.effective_target_language().code();
         let translation_store = store_sink.clone();
         let on_translation: Box<dyn Fn(TranslationEvent) + Send + Sync> = Box::new(move |event| {
             if let Some(store) = &translation_store {
                 store.translation(
                     event.segment_id,
                     &event.text,
-                    target_language,
+                    &event.language,
                     event.latency_ms,
                 );
             }
@@ -158,8 +167,12 @@ impl Session {
         });
 
         let on_demand = llm.translation.clone();
-        let translating = llm.translation.is_some() && llm.auto_translate && system_audio;
-        // Solo "Loro" viene tradotto: senza audio di sistema niente traduttore.
+        // La lingua del meeting si impara dalle frasi di "Loro".
+        let meeting_language = llm.translation.as_ref().map(|cfg| cfg.meeting.clone());
+        let translating_mine = settings.translate_mine;
+        // "Loro" nella lingua dell'utente, "Io" (se richiesto) in quella del meeting.
+        let translating =
+            llm.translation.is_some() && llm.auto_translate && (system_audio || translating_mine);
         let translator = llm.translation.filter(|_| translating).map(|cfg| {
             let (tx, task) = translate::spawn(cfg, context.clone(), on_translation);
             tasks.push(task);
@@ -181,25 +194,64 @@ impl Session {
         let (frames, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
         // Parlanti solo su "Loro" (senza audio di sistema non c'è nessuno).
         let diarizing = diarization.is_some() && system_audio;
-        let diarizer = diarization.filter(|_| system_audio).map(|cfg| {
-            let (tx, task) = diarize::spawn(cfg, frames.subscribe());
+        let mut voices = None;
+        let diarizer = diarization.filter(|_| system_audio).map(|mut cfg| {
+            let hooks = cfg.voices.take().map(|profiles| {
+                let collected = Arc::new(std::sync::Mutex::new(Vec::new()));
+                voices = Some(VoiceSave {
+                    store: profiles.store,
+                    collected: collected.clone(),
+                });
+                VoiceHooks {
+                    known: profiles.known,
+                    on_match: on_voice.clone(),
+                    collected,
+                }
+            });
+            let (tx, task) = diarize::spawn(cfg, frames.subscribe(), hooks);
             tasks.push(task);
             tx
         });
         // Anti-eco: serve solo se c'è "Loro" da confrontare.
         let echo = system_audio.then(|| Arc::new(EchoGuard::default()));
+        if let Some(guard) = &echo {
+            // Il filtro misura sull'audio quando "Loro" ha voce.
+            let guard = guard.clone();
+            let mut bus = frames.subscribe();
+            tasks.push(tokio::spawn(async move {
+                loop {
+                    match bus.recv().await {
+                        Ok(f) if f.channel == Channel::Them => guard.them_audio(&f),
+                        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                        Err(broadcast::error::RecvError::Closed) => break,
+                    }
+                }
+                guard.close();
+            }));
+        }
+        // Cancellazione d'eco: "Io" arriva allo STT già ripulito dalla voce
+        // degli altri risentita dalle casse (riferimento = audio di sistema).
+        let clean_mic = (system_audio && settings.echo_cancellation)
+            .then(|| spawn_echo_canceller(frames.subscribe()));
         let ids = Arc::new(AtomicU64::new(1));
         for channel in channels {
             // Sottoscrizione prima dell'avvio cattura: nessun frame perso.
-            let bus = frames.subscribe();
+            let bus = match (channel, &clean_mic) {
+                (Channel::Me, Some(clean)) => clean.subscribe(),
+                _ => frames.subscribe(),
+            };
             let language = match channel {
                 Channel::Me => settings.my_language,
                 Channel::Them => settings.their_language,
             };
             let stream = engine.start(channel, language);
-            let (translate, diarize) = match channel {
-                Channel::Them => (translator.clone(), diarizer.clone()),
-                Channel::Me => (None, None),
+            let (translate, diarize, meeting) = match channel {
+                Channel::Them => (
+                    translator.clone(),
+                    diarizer.clone(),
+                    meeting_language.clone(),
+                ),
+                Channel::Me => (translator.clone().filter(|_| translating_mine), None, None),
             };
             let sink = on_transcript.clone();
             tasks.extend(spawn_channel(
@@ -213,6 +265,7 @@ impl Session {
                     diarize,
                     compress: compressor.clone(),
                     echo: echo.clone(),
+                    meeting,
                 },
                 move |e| sink(e),
             ));
@@ -237,8 +290,10 @@ impl Session {
                     system_audio,
                     with_context = context.prompt_block().is_some(),
                     translating,
+                    translating_mine = translating && translating_mine,
                     assisting,
                     diarizing,
+                    voice_profiles = voices.is_some(),
                     compressing = compression_log.is_some(),
                     "sessione avviata"
                 );
@@ -252,6 +307,7 @@ impl Session {
                     summary: llm.summary,
                     auto_summary: llm.auto_summary,
                     translation: on_demand,
+                    voices,
                 })
             }
             Err(e) => {
@@ -300,6 +356,7 @@ impl Session {
             summary,
             auto_summary,
             translation: _,
+            voices,
         } = self;
         // Join dei thread di cattura (pochi ms): chiude il bus audio.
         let _ = tokio::task::spawn_blocking(move || capture.stop()).await;
@@ -316,6 +373,11 @@ impl Session {
             }
         }
         let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+
+        // Dopo i task: la diarization ha lasciato la voce dei parlanti.
+        if let Some(voices) = voices {
+            save_voices(voices, &context.get()).await;
+        }
 
         // Dopo i task (traduzioni, assist e compressione compresi).
         let meeting_id = match store {
@@ -360,6 +422,38 @@ impl Session {
             meeting_id,
             summary: job,
         }
+    }
+}
+
+/// Aggiorna i profili vocali dei parlanti a cui l'utente ha dato un nome;
+/// gli altri non lasciano traccia.
+async fn save_voices(voices: VoiceSave, context: &MeetingContext) {
+    let collected =
+        std::mem::take(&mut *voices.collected.lock().unwrap_or_else(|e| e.into_inner()));
+    let named: Vec<(String, sv_diar::SpeakerVoice)> = collected
+        .into_iter()
+        .filter_map(|v| Some((context.speakers.get(&v.speaker)?.clone(), v)))
+        .collect();
+    if named.is_empty() {
+        return;
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+    let store = voices.store;
+    let saved = tokio::task::spawn_blocking(move || {
+        store.save_session(&named, &sv_diar::MatchThresholds::default(), now)
+    })
+    .await;
+    match saved {
+        Ok(Ok(results)) => {
+            for (_, outcome) in results {
+                // Niente nomi nei log: sono dati personali.
+                tracing::info!(?outcome, "profilo vocale");
+            }
+        }
+        Ok(Err(e)) => tracing::warn!("profili vocali non salvati: {e}"),
+        Err(e) => tracing::warn!("salvataggio dei profili vocali interrotto: {e}"),
     }
 }
 
@@ -430,6 +524,43 @@ fn millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
+/// Thread dell'AEC: legge il bus audio (sistema = riferimento, mic = da
+/// ripulire) e pubblica il microfono pulito su un bus proprio, che si chiude
+/// quando si chiude quello di cattura.
+fn spawn_echo_canceller(mut bus: broadcast::Receiver<AudioFrame>) -> broadcast::Sender<AudioFrame> {
+    let (clean, _) = broadcast::channel::<AudioFrame>(FRAME_BUS_CAPACITY);
+    let out = clean.clone();
+    let spawned = std::thread::Builder::new()
+        .name("sv-aec".into())
+        .spawn(move || {
+            let mut aec = sv_audio::EchoCanceller::new();
+            loop {
+                match bus.blocking_recv() {
+                    Ok(f) => match f.channel {
+                        Channel::Them => aec.push_render(&f),
+                        Channel::Me => {
+                            if let Some(f) = aec.push_capture(&f) {
+                                let _ = out.send(f);
+                            }
+                        }
+                    },
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(n, "cancellazione d'eco in ritardo: frame persi");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            if let Some(f) = aec.flush() {
+                let _ = out.send(f);
+            }
+            tracing::debug!("cancellazione d'eco fermata");
+        });
+    if let Err(e) = spawned {
+        tracing::error!("thread di cancellazione d'eco non avviato: {e}");
+    }
+    clean
+}
+
 /// Task che ricevono le frasi finali di un canale.
 #[derive(Default)]
 struct Followers {
@@ -441,6 +572,8 @@ struct Followers {
     compress: Option<mpsc::Sender<CompressLine>>,
     /// Anti-eco: "Loro" registra le frasi, "Io" scarta quelle ripetute.
     echo: Option<Arc<EchoGuard>>,
+    /// "Loro": lingue rilevate → lingua del meeting (arrivo per "Io").
+    meeting: Option<MeetingLanguage>,
 }
 
 /// Due task per canale: bus audio → motore, eventi motore → UI (e frasi
@@ -460,6 +593,7 @@ fn spawn_channel(
         diarize,
         compress,
         echo,
+        meeting,
     } = followers;
     let SttStream {
         channel,
@@ -503,9 +637,12 @@ fn spawn_channel(
             }
             if let Some(guard) = &echo {
                 match (&event.kind, channel) {
-                    (SttEventKind::Partial(_), Channel::Them) => guard.them_activity(),
-                    (SttEventKind::Final(seg), Channel::Them) => guard.them_final(&seg.text),
-                    (SttEventKind::Final(seg), Channel::Me) if guard.is_echo(&seg.text).await => {
+                    (SttEventKind::Final(seg), Channel::Them) => {
+                        guard.them_final(&seg.text, seg.start, seg.end);
+                    }
+                    (SttEventKind::Final(seg), Channel::Me)
+                        if guard.is_echo(&seg.text, seg.start, seg.end).await =>
+                    {
                         tracing::debug!(text = %seg.text, "eco di \"Loro\" sul microfono: frase scartata");
                         // Toglie il parziale rimasto in UI.
                         on_transcript(SttEvent {
@@ -551,8 +688,12 @@ fn spawn_channel(
                     {
                         tracing::warn!(?channel, "coda compressione piena: frase scartata");
                     }
+                    if let (Some(meeting), Some(language)) = (&meeting, &seg.language) {
+                        meeting.observe(language);
+                    }
                     translate.as_ref().map(|_| Job {
                         segment_id: seg.id,
+                        channel,
                         text: seg.text.clone(),
                         language: seg.language.clone(),
                         speaker: seg.speaker,
@@ -608,6 +749,7 @@ async fn speaker_of(
         segment_id: seg.id,
         start: seg.start,
         end: seg.end,
+        speaker: seg.speaker,
         reply,
     };
     if let Err(TrySendError::Full(_)) = tx.try_send(job) {
@@ -767,6 +909,7 @@ mod tests {
                 diarize: None,
                 compress: None,
                 echo: None,
+                meeting: None,
             },
             move |e| {
                 if let SttEventKind::Final(s) = e.kind {
@@ -784,6 +927,7 @@ mod tests {
         assert_eq!(*finals.lock().unwrap(), [5, 6]);
         let mut sent = Vec::new();
         while let Some(job) = jobs.recv().await {
+            assert_eq!(job.channel, Channel::Them);
             sent.push((job.segment_id, job.text));
         }
         // Il canale si chiude con il pump: il traduttore termina.

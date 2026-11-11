@@ -9,7 +9,7 @@ import trayIcon from "@/assets/tray-icon.png?inline";
 
 /**
  * Icona di Sottovoce nel menu bar (macOS) / area di notifica (Windows, Linux):
- * clic = torna alla finestra, clic destro = voci "Mostra" ed "Esci".
+ * clic = torna alla finestra, clic destro = voci "Mostra", "Widget" ed "Esci".
  */
 let tray: TrayIcon | null = null;
 let building: Promise<void> | null = null;
@@ -23,7 +23,7 @@ function pngBytes(dataUrl: string) {
 }
 
 /** Riporta in primo piano la finestra principale, anche se ridotta a icona. */
-async function showWindow() {
+export async function showMainWindow() {
   const window = getCurrentWindow();
   if (await window.isMinimized()) await window.unminimize();
   await window.show();
@@ -33,7 +33,8 @@ async function showWindow() {
 function menuOptions(t: TFunction): MenuOptions {
   return {
     items: [
-      { id: "show", text: t("tray.show"), action: () => void showWindow() },
+      { id: "show", text: t("tray.show"), action: () => void showMainWindow() },
+      { id: "widget", text: t("tray.widget"), action: () => void invoke("toggle_widget") },
       { item: "Separator" },
       { id: "quit", text: t("tray.quit"), action: () => void invoke("quit_app") },
     ],
@@ -51,7 +52,7 @@ async function create(t: TFunction, language: string) {
     showMenuOnLeftClick: false,
     action: (event) => {
       if (event.type === "Click" && event.button === "Left" && event.buttonState === "Up") {
-        void showWindow();
+        void showMainWindow();
       }
     },
   });

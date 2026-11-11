@@ -34,6 +34,8 @@ pub struct DeepgramConfig {
     pub model: String,
     /// Override per test/proxy; default `wss://api.deepgram.com/v1/listen`.
     pub endpoint: Option<String>,
+    /// Diarization di Deepgram sul canale "Loro" (parlante per parola).
+    pub diarize: bool,
 }
 
 pub struct Deepgram {
@@ -84,7 +86,8 @@ async fn run(
 ) {
     let mut attempt = 0u32;
     loop {
-        let outcome = match connect(&config, language).await {
+        let diarize = config.diarize && channel == Channel::Them;
+        let outcome = match connect(&config, language, diarize).await {
             Ok(ws) => {
                 tracing::info!(?channel, "deepgram connesso");
                 attempt = 0;
@@ -135,7 +138,7 @@ async fn run(
     }
 }
 
-fn listen_url(config: &DeepgramConfig, language: Language) -> String {
+fn listen_url(config: &DeepgramConfig, language: Language, diarize: bool) -> String {
     let endpoint = config.endpoint.as_deref().unwrap_or(DEFAULT_ENDPOINT);
     // In multi Nova-3 sceglie tra ~55 lingue e confonde italiano/spagnolo:
     // gli hint orientano il riconoscimento senza escludere le altre lingue.
@@ -150,14 +153,19 @@ fn listen_url(config: &DeepgramConfig, language: Language) -> String {
     format!(
         "{endpoint}?model={}&language={}&encoding=linear16&sample_rate=16000&channels=1\
          &interim_results=true&smart_format=true&punctuate=true\
-         &endpointing=300&utterance_end_ms=1000&vad_events=false{hints}",
+         &endpointing=300&utterance_end_ms=1000&vad_events=false{hints}{}",
         config.model,
-        language.code()
+        language.code(),
+        if diarize { "&diarize=true" } else { "" }
     )
 }
 
-async fn connect(config: &DeepgramConfig, language: Language) -> Result<Ws, SttError> {
-    let mut req = listen_url(config, language)
+async fn connect(
+    config: &DeepgramConfig,
+    language: Language,
+    diarize: bool,
+) -> Result<Ws, SttError> {
+    let mut req = listen_url(config, language, diarize)
         .into_client_request()
         .map_err(|e| SttError::Protocol(e.to_string()))?;
     let auth = HeaderValue::from_str(&format!("Token {}", config.api_key.trim()))
@@ -261,19 +269,21 @@ async fn handle(
     origin: Option<Duration>,
     events: &EventSender,
 ) -> bool {
-    let kind = match protocol::parse(text) {
+    let kinds = match protocol::parse(text) {
         Ok(ServerMessage::Results(r)) => utt.on_results(&r, origin.unwrap_or_default()),
-        Ok(ServerMessage::UtteranceEnd {}) => utt.flush(),
-        Ok(_) => None,
+        Ok(ServerMessage::UtteranceEnd {}) => utt.flush().into_iter().collect(),
+        Ok(_) => Vec::new(),
         Err(e) => {
             tracing::debug!("deepgram: messaggio non riconosciuto ({e}): {text}");
-            None
+            Vec::new()
         }
     };
-    match kind {
-        Some(kind) => events.send(kind).await,
-        None => true,
+    for kind in kinds {
+        if !events.send(kind).await {
+            return false;
+        }
     }
+    true
 }
 
 /// f32 [-1, 1] → PCM s16 little-endian.
@@ -302,13 +312,18 @@ mod tests {
             api_key: "SECRET".into(),
             model: "nova-3".into(),
             endpoint: None,
+            diarize: false,
         };
-        let url = listen_url(&cfg, Language::Multi);
+        let url = listen_url(&cfg, Language::Multi, false);
         assert!(url.starts_with("wss://api.deepgram.com/v1/listen?model=nova-3&language=multi&"));
         assert!(url.contains("interim_results=true"));
-        assert!(url.contains("&language_hint=it&language_hint=en"));
-        let mono = listen_url(&cfg, Language::It);
+        assert!(url.contains(
+            "&language_hint=it&language_hint=en&language_hint=es&language_hint=fr&language_hint=de"
+        ));
+        let mono = listen_url(&cfg, Language::It, false);
         assert!(mono.contains("language=it&") && !mono.contains("language_hint"));
+        assert!(!url.contains("diarize"));
+        assert!(listen_url(&cfg, Language::It, true).ends_with("&diarize=true"));
         assert!(!url.contains("SECRET"), "la chiave va solo nell'header");
     }
 
@@ -318,6 +333,7 @@ mod tests {
             api_key: "  ".into(),
             model: "nova-3".into(),
             endpoint: None,
+            diarize: false,
         };
         assert!(matches!(
             Deepgram::new(cfg),

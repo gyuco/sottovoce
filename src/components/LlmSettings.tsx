@@ -214,6 +214,14 @@ export function LlmSettings() {
             aria-label={t("settings.llm.autoTranslate")}
           />
         </Row>
+        <Row label={t("settings.llm.translateMine")} hint={t("settings.llm.translateMineHint")}>
+          <Switch
+            checked={settings.autoTranslate && settings.translateMine}
+            disabled={!settings.autoTranslate}
+            onCheckedChange={(translateMine) => void update({ translateMine })}
+            aria-label={t("settings.llm.translateMine")}
+          />
+        </Row>
         <TaskField
           label={t("settings.llm.assistModel")}
           hint={t("settings.llm.assistHint")}

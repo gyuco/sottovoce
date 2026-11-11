@@ -1,4 +1,6 @@
-//! Traduzione per frase dei `Final` del canale "Loro".
+//! Traduzione per frase dei `Final`: "Loro" nella lingua dell'utente, "Io"
+//! nella lingua del meeting (impostata per "Loro" o rilevata dalle loro frasi),
+//! così l'utente vede come dire in quella lingua ciò che ha appena detto.
 //!
 //! Un task riceve le frasi da una coda limitata e le traduce con al massimo
 //! [`MAX_PARALLEL`] richieste LLM in parallelo. Le traduzioni possono
@@ -7,10 +9,11 @@
 //! non ferma né la coda né la trascrizione.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
+use sv_audio::Channel;
 use sv_llm::{ChatRequest, LlmProvider, Message};
 use sv_stt::Language;
 use tokio::sync::{Semaphore, mpsc};
@@ -27,22 +30,107 @@ pub const QUEUE: usize = 16;
 const TIMEOUT: Duration = Duration::from_secs(8);
 /// Frasi precedenti passate come contesto.
 const HISTORY: usize = 3;
+/// Lingue rilevate di "Loro" considerate per la lingua del meeting.
+const MEETING_LANGUAGE_WINDOW: usize = 6;
+
+/// Lingua del meeting, in cui tradurre le frasi di "Io": quella impostata per
+/// "Loro" se fissa, altrimenti la più frequente tra le ultime rilevate sulle
+/// loro frasi (a parità vince la più recente). Condivisa tra sessione e
+/// traduttore.
+#[derive(Clone, Default)]
+pub struct MeetingLanguage(Arc<Mutex<MeetingLanguageInner>>);
+
+#[derive(Default)]
+struct MeetingLanguageInner {
+    fixed: Option<String>,
+    recent: VecDeque<String>,
+}
+
+impl MeetingLanguage {
+    /// `their_language` fissa (`It`/`En`) = lingua del meeting nota.
+    pub fn new(their_language: Language) -> Self {
+        let fixed = (their_language != Language::Multi).then(|| their_language.code().to_owned());
+        Self(Arc::new(Mutex::new(MeetingLanguageInner {
+            fixed,
+            recent: VecDeque::with_capacity(MEETING_LANGUAGE_WINDOW),
+        })))
+    }
+
+    /// Lingua rilevata su una frase di "Loro" (es. `en`, `en-US`).
+    pub fn observe(&self, language: &str) {
+        let Some(code) = base_code(language) else {
+            return;
+        };
+        let mut inner = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if inner.recent.len() == MEETING_LANGUAGE_WINDOW {
+            inner.recent.pop_front();
+        }
+        inner.recent.push_back(code);
+    }
+
+    /// Codice della lingua del meeting; `None` finché non è nota.
+    pub fn current(&self) -> Option<String> {
+        let inner = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(fixed) = &inner.fixed {
+            return Some(fixed.clone());
+        }
+        let mut best: Option<(&String, usize, usize)> = None;
+        for (i, code) in inner.recent.iter().enumerate() {
+            let count = inner.recent.iter().filter(|c| *c == code).count();
+            if best.is_none_or(|(_, n, last)| count > n || (count == n && i > last)) {
+                best = Some((code, count, i));
+            }
+        }
+        best.map(|(code, _, _)| code.clone())
+    }
+}
 
 /// Cosa serve per tradurre, preparato dal comando `start_session`.
 #[derive(Clone)]
 pub struct TranslatorConfig {
     pub llm: Arc<dyn LlmProvider>,
     pub model: String,
-    /// Lingua di arrivo (concreta: mai `Multi`).
+    /// Lingua di arrivo per "Loro" (concreta: mai `Multi`).
     pub target: Language,
     /// Lingua impostata per "Loro", usata se il motore non ne rileva una.
     pub source_hint: Option<Language>,
+    /// Lingua impostata per "Io", usata se il motore non ne rileva una.
+    pub my_hint: Option<Language>,
+    /// Lingua di arrivo per "Io".
+    pub meeting: MeetingLanguage,
+}
+
+impl TranslatorConfig {
+    /// Lingua di arrivo e lingua di partenza presunta di una frase.
+    fn languages(
+        &self,
+        channel: Channel,
+        detected: Option<&str>,
+    ) -> (Option<String>, Option<String>) {
+        let (target, hint) = match channel {
+            Channel::Them => (Some(self.target.code().to_owned()), self.source_hint),
+            Channel::Me => (self.meeting.current(), self.my_hint),
+        };
+        let source = detected
+            .map(str::to_owned)
+            .or_else(|| hint.map(|l| l.code().to_owned()));
+        (target, source)
+    }
+
+    /// Lingua di arrivo di una frase di `channel`; errore leggibile se non c'è.
+    pub fn target_for(&self, channel: Channel) -> Result<String, String> {
+        self.languages(channel, None)
+            .0
+            .filter(|code| language_name(code).is_some())
+            .ok_or_else(|| "lingua del meeting non ancora nota: imposta la lingua degli altri nelle Impostazioni".into())
+    }
 }
 
 /// Frase da tradurre.
 #[derive(Debug, Clone)]
 pub struct Job {
     pub segment_id: u64,
+    pub channel: Channel,
     pub text: String,
     /// Lingua rilevata dal motore STT, se c'è.
     pub language: Option<String>,
@@ -56,6 +144,8 @@ pub struct Job {
 pub struct TranslationEvent {
     pub segment_id: u64,
     pub text: String,
+    /// Lingua della traduzione (es. `it`, `en`).
+    pub language: String,
     pub latency_ms: u64,
 }
 
@@ -92,23 +182,25 @@ async fn run(
         while let Some(done) = inflight.try_join_next() {
             stats.record(done.ok());
         }
-        let language = job
-            .language
-            .clone()
-            .or_else(|| cfg.source_hint.map(|l| l.code().to_owned()));
-        let skip = same_language(language.as_deref(), cfg.target) || !has_letters(&job.text);
+        let (target, source) = cfg.languages(job.channel, job.language.as_deref());
+        let target = target.filter(|t| {
+            language_name(t).is_some()
+                && !same_language(source.as_deref(), t)
+                && has_letters(&job.text)
+        });
         let previous: Vec<String> = history.iter().cloned().collect();
         if history.len() == HISTORY {
             history.pop_front();
         }
-        history.push_back(match job.speaker {
-            Some(_) => format!("{}: {}", context.speaker_label(job.speaker), job.text),
-            None => job.text.clone(),
-        });
-        if skip {
+        let who = match job.channel {
+            Channel::Me => "Io".to_owned(),
+            Channel::Them => context.speaker_label(job.speaker),
+        };
+        history.push_back(format!("{who}: {}", job.text));
+        let Some(target) = target else {
             stats.skipped += 1;
             continue;
-        }
+        };
 
         // Attende uno slot: intanto le frasi successive restano in coda.
         let Ok(permit) = slots.clone().acquire_owned().await else {
@@ -118,7 +210,7 @@ async fn run(
         let block = context.prompt_block();
         inflight.spawn(async move {
             let _permit = permit;
-            translate(&cfg, block, &previous, job, emit.as_ref()).await
+            translate(&cfg, &target, block, &previous, job, emit.as_ref()).await
         });
     }
 
@@ -130,16 +222,18 @@ async fn run(
 
 async fn translate(
     cfg: &TranslatorConfig,
+    target: &str,
     context: Option<String>,
     previous: &[String],
     job: Job,
     emit: &(dyn Fn(TranslationEvent) + Send + Sync),
 ) -> Outcome {
-    match translate_one(cfg, context.as_deref(), previous, &job.text).await {
+    match translate_one(cfg, target, context.as_deref(), previous, &job.text).await {
         Ok((text, latency_ms)) => {
             emit(TranslationEvent {
                 segment_id: job.segment_id,
                 text,
+                language: target.to_owned(),
                 latency_ms,
             });
             Outcome::Done(latency_ms)
@@ -151,20 +245,19 @@ async fn translate(
     }
 }
 
-/// Traduce una frase: (testo, latenza in ms). Usata dal traduttore
-/// automatico e dal pulsante "Traduci".
+/// Traduce una frase in `target` (codice lingua): (testo, latenza in ms).
+/// Usata dal traduttore automatico e dal pulsante "Traduci".
 pub async fn translate_one(
     cfg: &TranslatorConfig,
+    target: &str,
     context: Option<&str>,
     previous: &[String],
     text: &str,
 ) -> Result<(String, u64), String> {
-    let req = ChatRequest::new(
-        cfg.model.clone(),
-        messages(cfg.target, context, previous, text),
-    )
-    .temperature(0.2)
-    .timeout(TIMEOUT);
+    let lang = language_name(target).ok_or_else(|| format!("lingua non supportata: {target}"))?;
+    let req = ChatRequest::new(cfg.model.clone(), messages(lang, context, previous, text))
+        .temperature(0.2)
+        .timeout(TIMEOUT);
     let resp = cfg.llm.chat(req).await.map_err(|e| e.to_string())?;
     let text = clean(&resp.content);
     if text.is_empty() {
@@ -174,15 +267,14 @@ pub async fn translate_one(
     Ok((text, latency_ms))
 }
 
-/// Prompt di traduzione: system con istruzioni, contesto meeting e frasi
-/// precedenti; user con la sola frase da tradurre.
+/// Prompt di traduzione verso `lang` (nome inglese della lingua): system con
+/// istruzioni, contesto meeting e frasi precedenti; user con la sola frase.
 pub fn messages(
-    target: Language,
+    lang: &str,
     context: Option<&str>,
     previous: &[String],
     text: &str,
 ) -> Vec<Message> {
-    let lang = language_name(target);
     let mut system = format!(
         "You are a real-time meeting interpreter. Translate the user's message into {lang}.\n\
          Output only the translation: no quotes, notes, or explanations.\n\
@@ -204,18 +296,39 @@ pub fn messages(
     vec![Message::system(system), Message::user(text)]
 }
 
-fn language_name(l: Language) -> &'static str {
-    match l {
-        Language::En => "English",
-        Language::It | Language::Multi => "Italian",
-    }
+/// Nome inglese (per il prompt) delle lingue riconosciute dai motori STT;
+/// `None` = lingua non supportata come arrivo.
+pub fn language_name(code: &str) -> Option<&'static str> {
+    Some(match base_code(code)?.as_str() {
+        "it" => "Italian",
+        "en" => "English",
+        "es" => "Spanish",
+        "fr" => "French",
+        "de" => "German",
+        "pt" => "Portuguese",
+        "nl" => "Dutch",
+        "ru" => "Russian",
+        "ja" => "Japanese",
+        "hi" => "Hindi",
+        _ => return None,
+    })
 }
 
-/// `language` (es. `en`, `en-US`) coincide con la lingua di arrivo.
-fn same_language(language: Option<&str>, target: Language) -> bool {
+/// `en-US` → `en`; `None` se vuoto.
+fn base_code(language: &str) -> Option<String> {
+    let code = language
+        .split(['-', '_'])
+        .next()?
+        .trim()
+        .to_ascii_lowercase();
+    (!code.is_empty()).then_some(code)
+}
+
+/// `language` (es. `en`, `en-US`) coincide con `target` (es. `en`).
+fn same_language(language: Option<&str>, target: &str) -> bool {
     language
-        .and_then(|l| l.split(['-', '_']).next())
-        .is_some_and(|l| l.eq_ignore_ascii_case(target.code()))
+        .and_then(base_code)
+        .is_some_and(|l| Some(l) == base_code(target))
 }
 
 fn has_letters(text: &str) -> bool {
@@ -309,15 +422,31 @@ mod tests {
     fn job(id: u64, text: &str, language: Option<&str>) -> Job {
         Job {
             speaker: None,
+            channel: Channel::Them,
             segment_id: id,
             text: text.into(),
             language: language.map(Into::into),
         }
     }
 
+    fn mine(id: u64, text: &str, language: Option<&str>) -> Job {
+        Job {
+            channel: Channel::Me,
+            ..job(id, text, language)
+        }
+    }
+
     async fn run_jobs(
         jobs: Vec<Job>,
         context: SharedContext,
+    ) -> (Vec<TranslationEvent>, Arc<FakeLlm>) {
+        run_with(jobs, context, MeetingLanguage::new(Language::Multi)).await
+    }
+
+    async fn run_with(
+        jobs: Vec<Job>,
+        context: SharedContext,
+        meeting: MeetingLanguage,
     ) -> (Vec<TranslationEvent>, Arc<FakeLlm>) {
         let llm = Arc::new(FakeLlm::default());
         let out = Arc::new(Mutex::new(Vec::new()));
@@ -328,6 +457,8 @@ mod tests {
                 model: "m".into(),
                 target: Language::It,
                 source_hint: None,
+                my_hint: Some(Language::It),
+                meeting,
             },
             context,
             move |e| sink.lock().unwrap().push(e),
@@ -407,15 +538,74 @@ mod tests {
         assert!(last[0].content.contains("MEETING CONTEXT"));
         assert!(last[0].content.contains("Name: Acme sync"));
         // Anche le frasi non tradotte fanno da contesto.
-        assert!(last[0].content.contains("- first one\n- già detto"));
+        assert!(
+            last[0]
+                .content
+                .contains("- Loro: first one\n- Loro: già detto")
+        );
+    }
+
+    #[tokio::test]
+    async fn my_sentences_go_to_the_meeting_language() {
+        let meeting = MeetingLanguage::new(Language::Multi);
+        // Lingua del meeting ignota: nessuna traduzione di "Io".
+        let (got, llm) = run_with(
+            vec![mine(1, "ciao a tutti", Some("it"))],
+            SharedContext::default(),
+            meeting.clone(),
+        )
+        .await;
+        assert!(got.is_empty());
+        assert!(llm.requests.lock().unwrap().is_empty());
+
+        meeting.observe("en-US");
+        let (got, llm) = run_with(
+            vec![
+                mine(2, "possiamo spostare la demo?", None),
+                mine(3, "Sounds good", Some("en")),
+            ],
+            SharedContext::default(),
+            meeting,
+        )
+        .await;
+        assert_eq!(got.len(), 1);
+        assert_eq!((got[0].segment_id, got[0].language.as_str()), (2, "en"));
+        let requests = llm.requests.lock().unwrap();
+        assert!(requests[0][0].content.contains("into English"));
+    }
+
+    #[test]
+    fn meeting_language_fixed_or_most_frequent() {
+        assert_eq!(
+            MeetingLanguage::new(Language::En).current().as_deref(),
+            Some("en")
+        );
+        let m = MeetingLanguage::new(Language::Multi);
+        assert_eq!(m.current(), None);
+        for l in ["en", "it", "en-GB", "it"] {
+            m.observe(l);
+        }
+        // Parità: vince la più recente.
+        assert_eq!(m.current().as_deref(), Some("it"));
+        m.observe("EN");
+        assert_eq!(m.current().as_deref(), Some("en"));
+        // Finestra limitata: le vecchie escono.
+        for _ in 0..MEETING_LANGUAGE_WINDOW {
+            m.observe("es");
+        }
+        assert_eq!(m.current().as_deref(), Some("es"));
+        m.observe("");
+        assert_eq!(m.current().as_deref(), Some("es"));
     }
 
     #[test]
     fn language_match() {
-        assert!(same_language(Some("it"), Language::It));
-        assert!(same_language(Some("EN-gb"), Language::En));
-        assert!(!same_language(Some("en"), Language::It));
-        assert!(!same_language(None, Language::It));
+        assert!(same_language(Some("it"), "it"));
+        assert!(same_language(Some("EN-gb"), "en"));
+        assert!(!same_language(Some("en"), "it"));
+        assert!(!same_language(None, "it"));
+        assert_eq!(language_name("pt-BR"), Some("Portuguese"));
+        assert_eq!(language_name("multi"), None);
     }
 
     #[test]
@@ -447,7 +637,7 @@ mod tests {
         ] {
             let req = ChatRequest::new(
                 model.clone(),
-                messages(Language::It, context.as_deref(), &previous, text),
+                messages("Italian", context.as_deref(), &previous, text),
             )
             .temperature(0.2)
             .timeout(Duration::from_secs(60));

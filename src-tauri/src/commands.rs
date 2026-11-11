@@ -1,7 +1,9 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use serde::Serialize;
 use sv_audio::{InputDevice, LevelEvent};
@@ -13,17 +15,23 @@ use crate::assist::{AssistConfig, AssistEvent};
 use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
+use crate::diarize::{VoiceEvent, VoiceProfiles};
+use crate::export;
+use crate::history_chat::{self, HistoryAnswer};
 use crate::llm;
 use crate::meeting::MeetingContext;
 use crate::models::{self, LocalModel, Models};
+use crate::search::{HistoryFilter, IndexStatus, Search, SearchResult};
 use crate::secrets;
 use crate::session::{LlmTasks, Outputs};
 use crate::session::{Session, SummaryJob};
 use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
-use crate::state::{AppState, Db};
+use crate::state::{AppState, Db, Voices};
 use crate::stt;
 use crate::summary::SummaryConfig;
-use crate::translate::{TranslationEvent, TranslatorConfig};
+use crate::translate::{MeetingLanguage, TranslationEvent, TranslatorConfig};
+use crate::update;
+use crate::widget;
 
 /// Errore restituito al frontend come stringa leggibile.
 type CmdResult<T> = Result<T, String>;
@@ -42,6 +50,28 @@ pub fn system_audio_supported() -> bool {
     sv_audio::system::is_supported()
 }
 
+/// Versione e build in esecuzione (Impostazioni → Informazioni).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    version: String,
+    /// Sha corto del commit; `-dirty` = modifiche non committate.
+    commit: &'static str,
+    /// Ora del build, RFC 3339 UTC.
+    built_at: &'static str,
+    debug: bool,
+}
+
+#[tauri::command]
+pub fn app_info(app: AppHandle) -> AppInfo {
+    AppInfo {
+        version: app.package_info().version.to_string(),
+        commit: env!("SV_INFO_COMMIT"),
+        built_at: env!("SV_INFO_BUILT"),
+        debug: cfg!(debug_assertions),
+    }
+}
+
 /// TEMPORANEO: log degli errori JS del webview.
 #[tauri::command]
 pub fn js_error(message: String) {
@@ -54,6 +84,19 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Mostra o nasconde il widget overlay; ritorna `true` se ora è aperto.
+/// Async: su Windows creare una finestra da un comando sincrono blocca.
+#[tauri::command]
+pub async fn toggle_widget(app: AppHandle) -> CmdResult<bool> {
+    widget::toggle(&app).map_err(to_msg)
+}
+
+/// Chiude il widget (pulsante nel widget stesso).
+#[tauri::command]
+pub async fn close_widget(app: AppHandle) {
+    widget::close(&app);
+}
+
 /// Avvia una sessione (ferma quella eventualmente attiva) con le impostazioni
 /// correnti. Livelli su `on_level`, trascrizione su `on_transcript`.
 #[tauri::command]
@@ -64,12 +107,15 @@ pub async fn start_session(
     settings: State<'_, SettingsStore>,
     models: State<'_, Models>,
     db: State<'_, Db>,
+    voices: State<'_, Voices>,
     on_level: Channel<LevelEvent>,
     on_transcript: Channel<SttEvent>,
     on_translation: Channel<TranslationEvent>,
     on_assist: Channel<AssistEvent>,
     on_compression: Channel<CompressionEvent>,
+    on_voice: Channel<VoiceEvent>,
     context: Option<MeetingContext>,
+    language: Option<Language>,
 ) -> CmdResult<()> {
     let mut slot = state.session.lock().await;
     if let Some(old) = slot.take() {
@@ -79,7 +125,14 @@ pub async fn start_session(
             spawn_summary(app.clone(), db.path.clone(), job);
         }
     }
-    let settings = settings.get();
+    let mut settings = settings.get();
+    // Lingua della call scelta all'avvio: la parlano tutti, quindi vale per
+    // il rilevamento di "Loro" e di "Io". La lingua dell'utente resta quella
+    // di arrivo di traduzioni e riepilogo.
+    if let Some(language) = language {
+        settings.their_language = language;
+    }
+    let my_spoken = language.unwrap_or(settings.my_language);
     // Prima di qualsiasi connessione: "solo locale" non ammette LLM esterni.
     stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
     let api_key = match stt::engine_kind(&settings) {
@@ -100,7 +153,7 @@ pub async fn start_session(
             SttEngineKind::Deepgram => settings.stt_model.clone(),
             SttEngineKind::Local => settings.local_stt_model.clone(),
         },
-        my_language: settings.my_language.code().into(),
+        my_language: my_spoken.code().into(),
         their_language: settings.their_language.code().into(),
         speakers: context.speakers.clone(),
     };
@@ -114,8 +167,46 @@ pub async fn start_session(
                 None
             }
         };
-    let diarization = stt::diarization(&settings, models.store());
-    let llm = llm_tasks(&settings).await;
+    let mut diarization = stt::diarization(&settings, models.store());
+    if settings.voice_profiles
+        && let Some(cfg) = diarization.as_mut()
+    {
+        let store = voices.0.clone();
+        let loaded = store.clone();
+        match blocking(move || loaded.known().map_err(anyhow::Error::from)).await {
+            Ok(known) => cfg.voices = Some(VoiceProfiles { store, known }),
+            Err(e) => tracing::warn!("profili vocali non disponibili: {e}"),
+        }
+    }
+    let mut llm = llm_tasks(&settings).await;
+    if language.is_some() {
+        // Dopo `llm_tasks`: le traduzioni restano nella lingua dell'utente;
+        // da qui `my_language` è solo la lingua parlata da "Io".
+        if let Some(t) = llm.translation.as_mut() {
+            t.my_hint = Some(my_spoken).filter(|l| *l != Language::Multi);
+        }
+        settings.my_language = my_spoken;
+    }
+    // Interruttore condiviso: `update_settings` lo cambia a call in corso.
+    state
+        .assist_on
+        .store(settings.live_assist, Ordering::Relaxed);
+    if let Some(a) = llm.assist.as_mut() {
+        a.enabled = state.assist_on.clone();
+    }
+    // Lingua della call fissa: suggerimenti, riepilogo progressivo e finale
+    // nella lingua della call. "Automatica" = lingua dell'utente.
+    if let Some(call) = language.filter(|l| *l != Language::Multi) {
+        if let Some(a) = llm.assist.as_mut() {
+            a.user_language = call;
+        }
+        if let Some(c) = llm.compression.as_mut() {
+            c.language = call;
+        }
+        if let Some(s) = llm.summary.as_mut() {
+            s.language = call;
+        }
+    }
     // Errore di invio = finestra chiusa o canale rilasciato: niente da fare.
     let out = Outputs {
         on_level: Box::new(move |e| {
@@ -132,6 +223,9 @@ pub async fn start_session(
         }),
         on_compression: Box::new(move |e| {
             let _ = on_compression.send(e);
+        }),
+        on_voice: std::sync::Arc::new(move |e| {
+            let _ = on_voice.send(e);
         }),
     };
     let session = Session::start(&settings, engine, context, llm, diarization, store, out)
@@ -189,10 +283,7 @@ pub async fn ask_model(
         .map_err(to_msg)?
     };
 
-    let language = match settings.summary_language() {
-        Language::En => "English",
-        _ => "Italian",
-    };
+    let language = crate::compress::language_name(settings.summary_language());
     let messages = chat::messages(
         &context,
         ChatInput {
@@ -221,6 +312,69 @@ pub async fn ask_model(
         return Err("il modello ha risposto vuoto".into());
     }
     Ok(reply)
+}
+
+/// Domanda sullo storico (RAG): recupera i passaggi dei meeting salvati e
+/// chiede al modello una risposta solo da quelli, con citazioni `[n]`. Senza
+/// passaggi risponde "non trovato" senza chiamare il modello.
+#[tauri::command]
+pub async fn ask_history(
+    search: State<'_, Search>,
+    settings: State<'_, SettingsStore>,
+    question: String,
+    history: Vec<ChatTurn>,
+    filter: Option<HistoryFilter>,
+    utc_offset_min: i32,
+) -> CmdResult<HistoryAnswer> {
+    let settings = settings.get();
+    // "Solo locale" vale anche qui: i passaggi lasciano il Mac solo verso
+    // un LLM locale.
+    stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
+    let task = settings.insight_llm().ok_or_else(|| {
+        "nessun modello scelto per la chat: impostane uno nelle Impostazioni".to_owned()
+    })?;
+    let question = question.trim().to_owned();
+    if question.is_empty() {
+        return Err("domanda vuota".into());
+    }
+    // Fuso orario plausibile (±14 h): solo per le date nel contesto.
+    let utc_offset_min = utc_offset_min.clamp(-14 * 60, 14 * 60);
+
+    let query = history_chat::search_query(&question, &history);
+    let retrieved = search
+        .retrieve(query, filter.unwrap_or_default(), utc_offset_min)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    if retrieved.context.sources.is_empty() {
+        return Ok(history_chat::not_found(retrieved.semantic));
+    }
+
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    let today = sv_search::date(now_ms, utc_offset_min);
+    let messages = history_chat::messages(&question, &history, &retrieved.context.text, &today);
+    let provider = task.provider;
+    let client = {
+        let settings = settings.clone();
+        blocking(move || llm::client(&settings, provider, true)).await?
+    };
+    let request = ChatRequest::new(task.model, messages)
+        .temperature(0.2)
+        .max_tokens(700)
+        .timeout(history_chat::TIMEOUT);
+    let reply = client
+        .chat(request)
+        .await
+        .map_err(|e| format!("risposta del modello non riuscita: {e}"))?;
+    if reply.content.trim().is_empty() {
+        return Err("il modello ha risposto vuoto".into());
+    }
+    Ok(history_chat::answer(
+        &reply.content,
+        &retrieved.context.sources,
+        retrieved.semantic,
+    ))
 }
 
 /// Aggiorna il contesto della sessione attiva: vale dalla prossima chiamata
@@ -282,12 +436,15 @@ async fn llm_tasks(settings: &Settings) -> LlmTasks {
             model,
             target: language,
             source_hint: Some(settings.their_language).filter(|l| *l != Language::Multi),
+            my_hint: Some(settings.my_language).filter(|l| *l != Language::Multi),
+            meeting: MeetingLanguage::new(settings.their_language),
         }),
         auto_translate: settings.auto_translate,
         assist: client_for(&assist).map(|(llm, model)| AssistConfig {
             llm,
             model,
             user_language: language,
+            enabled: Arc::new(AtomicBool::new(settings.live_assist)),
         }),
         compression: client_for(&insight).map(|(llm, model)| CompressConfig {
             llm,
@@ -310,9 +467,15 @@ pub async fn translate_segment(
     state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
     segment_id: u64,
+    channel: String,
     text: String,
     previous: Vec<String>,
 ) -> CmdResult<TranslationEvent> {
+    let channel = match channel.as_str() {
+        "me" => sv_audio::Channel::Me,
+        "them" => sv_audio::Channel::Them,
+        other => return Err(format!("canale sconosciuto: {other}")),
+    };
     let active = state
         .session
         .lock()
@@ -337,20 +500,31 @@ pub async fn translate_segment(
                     model: task.model,
                     target: settings.effective_target_language(),
                     source_hint: None,
+                    my_hint: None,
+                    // Senza sessione la lingua del meeting è nota solo se impostata.
+                    meeting: MeetingLanguage::new(settings.their_language),
                 },
                 context: None,
                 store: None,
             }
         }
     };
-    let (translated, latency_ms) =
-        crate::translate::translate_one(&job.cfg, job.context.as_deref(), &previous, &text).await?;
+    let target = job.cfg.target_for(channel)?;
+    let (translated, latency_ms) = crate::translate::translate_one(
+        &job.cfg,
+        &target,
+        job.context.as_deref(),
+        &previous,
+        &text,
+    )
+    .await?;
     if let Some(store) = &job.store {
-        store.translation(segment_id, &translated, job.cfg.target.code(), latency_ms);
+        store.translation(segment_id, &translated, &target, latency_ms);
     }
     Ok(TranslationEvent {
         segment_id,
         text: translated,
+        language: target,
         latency_ms,
     })
 }
@@ -393,6 +567,9 @@ pub async fn stop_session(
         });
     };
     let stopped = session.stop().await;
+    if let Some(id) = stopped.meeting_id {
+        app.state::<Search>().enqueue(id);
+    }
     let summary_pending = stopped.summary.is_some();
     if let Some(job) = stopped.summary {
         spawn_summary(app, db.path.clone(), job);
@@ -409,10 +586,13 @@ fn spawn_summary(app: AppHandle, db_path: PathBuf, job: SummaryJob) {
     tauri::async_runtime::spawn(async move {
         let meeting_id = job.meeting_id;
         let status = match job.run(db_path).await {
-            Ok(summary) => SummaryStatus::Ready {
-                meeting_id,
-                summary,
-            },
+            Ok(summary) => {
+                app.state::<Search>().enqueue(meeting_id);
+                SummaryStatus::Ready {
+                    meeting_id,
+                    summary,
+                }
+            }
             Err(e) => {
                 tracing::warn!(meeting = meeting_id, "riepilogo finale non riuscito: {e:#}");
                 SummaryStatus::Failed {
@@ -456,26 +636,61 @@ pub async fn get_meeting(db: State<'_, Db>, id: i64) -> CmdResult<sv_store::Meet
     blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await
 }
 
+/// Ricerca nello storico per significato e per parole (Reciprocal Rank
+/// Fusion). Senza il modello di embedding restano le sole parole.
 #[tauri::command]
-pub async fn delete_meeting(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+pub async fn search_meetings(
+    search: State<'_, Search>,
+    query: String,
+) -> CmdResult<Vec<SearchResult>> {
+    search.search(query).await.map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+pub async fn semantic_index_status(search: State<'_, Search>) -> CmdResult<IndexStatus> {
+    let search = search.inner().clone_handle();
+    blocking(move || Ok(search.status())).await
+}
+
+/// Ricontrolla tutti i meeting e indicizza quelli senza indice o cambiati.
+#[tauri::command]
+pub fn reindex_meetings(search: State<'_, Search>) {
+    search.backfill();
+}
+
+#[tauri::command]
+pub async fn delete_meeting(
+    db: State<'_, Db>,
+    search: State<'_, Search>,
+    id: i64,
+) -> CmdResult<()> {
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.delete_meeting(id)?)).await
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_meeting(id)?)).await?;
+    // I vettori permettono di ricostruire parte del testo: vanno via insieme.
+    search.remove(id);
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn rename_meeting(
     db: State<'_, Db>,
+    search: State<'_, Search>,
     id: i64,
     name: String,
 ) -> CmdResult<sv_store::Meeting> {
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await
+    let meeting =
+        blocking(move || Ok(sv_store::Store::open(path)?.rename_meeting(id, &name)?)).await?;
+    // Il nome è il titolo dei documenti indicizzati.
+    search.enqueue(id);
+    Ok(meeting)
 }
 
 /// Rigenera il riepilogo finale di un meeting salvato (anche in un'altra lingua).
 #[tauri::command]
 pub async fn generate_summary(
     db: State<'_, Db>,
+    search: State<'_, Search>,
     settings: State<'_, SettingsStore>,
     id: i64,
     language: Option<Language>,
@@ -486,8 +701,8 @@ pub async fn generate_summary(
         .insight_llm()
         .ok_or_else(|| "scegli un modello per il live assist o la traduzione".to_owned())?;
     let language = match language.unwrap_or(settings.summary_language()) {
-        Language::En => Language::En,
-        _ => Language::It,
+        Language::Multi => Language::It,
+        l => l,
     };
     let path = db.path.clone();
     let details = blocking(move || Ok(sv_store::Store::open(path)?.details(id)?)).await?;
@@ -554,7 +769,10 @@ pub async fn generate_summary(
         .await
         .ok_or_else(|| "riepilogo non generato".to_owned())?;
     let path = db.path.clone();
-    blocking(move || Ok(sv_store::Store::open(path)?.save_summary(id, &draft)?)).await
+    let summary =
+        blocking(move || Ok(sv_store::Store::open(path)?.save_summary(id, &draft)?)).await?;
+    search.enqueue(id);
+    Ok(summary)
 }
 
 #[tauri::command]
@@ -569,6 +787,17 @@ pub async fn update_summary_checklist(
 
 // --- API key (Keychain) ---------------------------------------------------
 // Il Keychain può bloccare (prompt di accesso): mai sul thread principale.
+
+/// Salva un meeting in Markdown nel file scelto dall'utente; `None` se annulla.
+#[tauri::command]
+pub async fn export_meeting_markdown(
+    app: AppHandle,
+    file_name: String,
+    contents: String,
+) -> CmdResult<Option<String>> {
+    let path = export::save_markdown(&app, &file_name, &contents).await?;
+    Ok(path.map(|p| p.display().to_string()))
+}
 
 async fn blocking<T: Send + 'static>(
     f: impl FnOnce() -> anyhow::Result<T> + Send + 'static,
@@ -602,10 +831,52 @@ pub fn get_settings(settings: State<'_, SettingsStore>) -> Settings {
 }
 #[tauri::command]
 pub fn update_settings(
+    state: State<'_, AppState>,
     settings: State<'_, SettingsStore>,
+    search: State<'_, Search>,
     patch: serde_json::Value,
 ) -> CmdResult<Settings> {
-    settings.update(patch).map_err(|e| format!("{e:#}"))
+    let was = settings.get().semantic_search;
+    let next = settings.update(patch).map_err(|e| format!("{e:#}"))?;
+    state.assist_on.store(next.live_assist, Ordering::Relaxed);
+    if next.semantic_search != was {
+        // Riattivata: recupera i meeting arrivati nel frattempo. Spenta: il
+        // thread svuota la coda. In entrambi i casi la UI riceve lo stato.
+        search.backfill();
+    }
+    Ok(next)
+}
+
+// --- Profili vocali -----------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_voice_profiles(
+    voices: State<'_, Voices>,
+) -> CmdResult<Vec<sv_diar::voices::VoiceProfile>> {
+    let store = voices.0.clone();
+    blocking(move || store.list().map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn rename_voice_profile(
+    voices: State<'_, Voices>,
+    id: String,
+    name: String,
+) -> CmdResult<sv_diar::voices::VoiceProfile> {
+    let store = voices.0.clone();
+    blocking(move || store.rename(&id, &name).map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn delete_voice_profile(voices: State<'_, Voices>, id: String) -> CmdResult<()> {
+    let store = voices.0.clone();
+    blocking(move || store.delete(&id).map_err(anyhow::Error::from)).await
+}
+
+#[tauri::command]
+pub async fn delete_all_voice_profiles(voices: State<'_, Voices>) -> CmdResult<()> {
+    let store = voices.0.clone();
+    blocking(move || store.delete_all().map_err(anyhow::Error::from)).await
 }
 
 // --- LLM ---------------------------------------------------------------------
@@ -686,6 +957,7 @@ pub fn list_local_models(models: State<'_, Models>) -> Vec<LocalModel> {
 #[tauri::command]
 pub async fn download_local_model(
     models: State<'_, Models>,
+    search: State<'_, Search>,
     id: String,
     on_progress: Channel<sv_models::DownloadProgress>,
 ) -> CmdResult<LocalModel> {
@@ -705,6 +977,9 @@ pub async fn download_local_model(
         .await;
     drop(guard);
     result.map_err(to_msg)?;
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
 }
 
@@ -714,7 +989,11 @@ pub fn cancel_local_model_download(models: State<'_, Models>, id: String) -> boo
 }
 
 #[tauri::command]
-pub async fn delete_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+pub async fn delete_local_model(
+    models: State<'_, Models>,
+    search: State<'_, Search>,
+    id: String,
+) -> CmdResult<LocalModel> {
     let spec = models::spec(&id).map_err(to_msg)?;
     // Il guard impedisce un download concorrente durante l'eliminazione.
     let guard = models
@@ -722,17 +1001,41 @@ pub async fn delete_local_model(models: State<'_, Models>, id: String) -> CmdRes
         .ok_or_else(|| format!("download di {id} in corso: annullalo prima"))?;
     models.store().delete(spec).await.map_err(to_msg)?;
     drop(guard);
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
 }
 
 /// Verifica completa (SHA-256 di tutti i file).
 #[tauri::command]
-pub async fn verify_local_model(models: State<'_, Models>, id: String) -> CmdResult<LocalModel> {
+pub async fn verify_local_model(
+    models: State<'_, Models>,
+    search: State<'_, Search>,
+    id: String,
+) -> CmdResult<LocalModel> {
     let spec = models::spec(&id).map_err(to_msg)?;
     let guard = models
         .begin(&id)
         .ok_or_else(|| format!("download di {id} in corso"))?;
     models.store().verify(spec).await.map_err(to_msg)?;
     drop(guard);
+    if spec.id == sv_models::EMBEDDING_GEMMA_2 {
+        search.model_changed();
+    }
     Ok(models.describe(spec))
+}
+
+// --- Aggiornamenti -----------------------------------------------------------
+
+/// Ultima release pubblicata più recente di questa build (`null` se nessuna).
+#[tauri::command]
+pub async fn check_update() -> Option<update::UpdateInfo> {
+    update::check().await
+}
+
+/// Apre nel browser la pagina di una release del repo dell'app.
+#[tauri::command]
+pub fn open_release_page(url: String) -> CmdResult<()> {
+    update::open_release(&url).map_err(to_msg)
 }

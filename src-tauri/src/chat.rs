@@ -111,7 +111,7 @@ pub fn messages(context: &MeetingContext, input: ChatInput) -> Vec<Message> {
 }
 
 /// Primi `max` caratteri (non byte), con "…" se troncato.
-fn clip(s: &str, max: usize) -> String {
+pub(crate) fn clip(s: &str, max: usize) -> String {
     match s.char_indices().nth(max.saturating_sub(1)) {
         Some((i, _)) if s.chars().count() > max => format!("{}…", &s[..i]),
         _ => s.to_owned(),

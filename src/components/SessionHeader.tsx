@@ -1,9 +1,22 @@
-import { Clock, Cloud, Loader2, Play, ShieldCheck, Square } from "lucide-react";
+import { Clock, Cloud, Loader2, PictureInPicture2, Play, ShieldCheck, Square } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDuration, useNow } from "@/lib/hooks";
+import { CONCRETE_LANGUAGES, type Language, toggleWidget } from "@/lib/ipc";
 import { isLocalSession } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
@@ -19,6 +32,7 @@ export function SessionHeader() {
   const blocked = useSttBlocker() !== null;
   const name = useMeetingStore((s) => s.context.name.trim());
   const micId = useSelectedMicId();
+  const [choosing, setChoosing] = useState(false);
 
   const busy = status === "starting" || status === "stopping";
   const running = status === "running";
@@ -49,6 +63,17 @@ export function SessionHeader() {
         </div>
       )}
 
+      <Button
+        variant="outline"
+        size="icon-lg"
+        className="rounded-xl"
+        aria-label={t("widget.toggle")}
+        title={t("widget.toggleHint")}
+        onClick={() => void toggleWidget()}
+      >
+        <PictureInPicture2 />
+      </Button>
+
       {running || status === "stopping" ? (
         <Button
           variant="destructive"
@@ -64,14 +89,68 @@ export function SessionHeader() {
         <Button
           size="lg"
           className="rounded-xl shadow-sm"
-          onClick={() => void start()}
+          onClick={() => setChoosing(true)}
           disabled={busy || !micId || blocked}
         >
           {busy ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />}
           {busy ? t("controls.starting") : t("controls.start")}
         </Button>
       )}
+
+      {choosing && settings && (
+        <StartDialog
+          initial={settings.theirLanguage}
+          onCancel={() => setChoosing(false)}
+          onStart={(language) => {
+            setChoosing(false);
+            // La scelta diventa la proposta per la prossima call.
+            void useSettingsStore.getState().update({ theirLanguage: language });
+            void start(language);
+          }}
+        />
+      )}
     </header>
+  );
+}
+
+const CALL_LANGUAGES: Language[] = [...CONCRETE_LANGUAGES, "multi"];
+
+/** All'avvio: in che lingua si svolge la call (rilevamento di "Io" e "Loro"). */
+function StartDialog(props: {
+  initial: Language;
+  onCancel: () => void;
+  onStart: (language: Language) => void;
+}) {
+  const { t } = useTranslation();
+  const [language, setLanguage] = useState<Language>(props.initial);
+  return (
+    <AlertDialog open onOpenChange={(open) => !open && props.onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("startDialog.title")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("startDialog.description")}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <Select value={language} onValueChange={(v) => setLanguage(v as Language)}>
+          <SelectTrigger className="w-full" aria-label={t("startDialog.title")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CALL_LANGUAGES.map((l) => (
+              <SelectItem key={l} value={l}>
+                {t(`settings.language.${l}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={() => props.onStart(language)}>
+            <Play className="fill-current" />
+            {t("controls.start")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

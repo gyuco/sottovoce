@@ -5,9 +5,12 @@ mod commands;
 mod compress;
 mod diarize;
 mod echo;
+mod export;
+mod history_chat;
 mod llm;
 mod meeting;
 mod models;
+mod search;
 mod secrets;
 mod session;
 mod settings;
@@ -15,6 +18,8 @@ mod state;
 mod stt;
 mod summary;
 mod translate;
+mod update;
+mod widget;
 
 use tauri::Manager;
 
@@ -25,15 +30,44 @@ pub fn run() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             EnvFilter::new(
-                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_diar=debug,sv_llm=debug",
+                "info,sottovoce=debug,sv_audio=debug,sv_stt=debug,sv_stt_local=debug,sv_diar=debug,sv_llm=debug,sv_search=debug",
             )
         }))
         .init();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Ricorda posizione e dimensione del solo widget: la finestra
+        // principale si apre sempre con le misure di `tauri.conf.json`.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&["main"])
+                .build(),
+        )
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed
+                        && let Err(e) = widget::toggle(app)
+                    {
+                        tracing::warn!("widget non aperto dalla scorciatoia: {e}");
+                    }
+                })
+                .build(),
+        )
         .manage(state::AppState::default())
         .setup(|app| {
+            // Registrata qui e non nel plugin: se un'altra app la occupa,
+            // Sottovoce parte comunque (il widget resta apribile da tray e header).
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                if let Err(e) = app.global_shortcut().register(widget::SHORTCUT) {
+                    tracing::warn!(
+                        shortcut = widget::SHORTCUT,
+                        "scorciatoia del widget non registrata: {e}"
+                    );
+                }
+            }
             let path = app.path().app_config_dir()?.join("settings.json");
             app.manage(settings::SettingsStore::load(path));
             let models_dir = app.path().app_data_dir()?.join("models");
@@ -54,26 +88,41 @@ pub fn run() {
                     "database dei meeting non disponibile, le call non verranno salvate: {e}"
                 ),
             }
+            let data_dir = app.path().app_data_dir()?;
+            app.manage(search::Search::start(
+                app.handle().clone(),
+                data_dir,
+                db_path.clone(),
+            ));
             app.manage(state::Db { path: db_path });
+            app.manage(state::Voices(sv_diar::VoiceStore::new(
+                app.path().app_data_dir()?.join("voices"),
+            )));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::system_audio_supported,
+            commands::app_info,
             commands::js_error,
             commands::quit_app,
             commands::start_session,
             commands::stop_session,
             commands::translate_segment,
             commands::list_meetings,
+            commands::search_meetings,
+            commands::semantic_index_status,
+            commands::reindex_meetings,
             commands::get_meeting,
             commands::delete_meeting,
             commands::rename_meeting,
             commands::generate_summary,
             commands::update_summary_checklist,
+            commands::export_meeting_markdown,
             commands::update_meeting_context,
             commands::inspect_code_path,
             commands::ask_model,
+            commands::ask_history,
             commands::set_api_key,
             commands::has_api_key,
             commands::delete_api_key,
@@ -86,7 +135,21 @@ pub fn run() {
             commands::cancel_local_model_download,
             commands::delete_local_model,
             commands::verify_local_model,
+            commands::check_update,
+            commands::open_release_page,
+            commands::list_voice_profiles,
+            commands::rename_voice_profile,
+            commands::delete_voice_profile,
+            commands::delete_all_voice_profiles,
+            commands::toggle_widget,
+            commands::close_widget,
         ])
+        .on_window_event(|window, event| {
+            // Senza la finestra principale il widget non riceve più dati.
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                widget::close(window.app_handle());
+            }
+        })
         .run(tauri::generate_context!())
         .expect("errore durante l'avvio di Sottovoce");
 }

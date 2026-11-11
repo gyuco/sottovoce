@@ -39,7 +39,8 @@
     "copyAll": "Copy the whole transcript",
     "copyLine": "Copy sentence",
     "translate": "Translate",
-    "translateRetry": "Retry"
+    "translateRetry": "Retry",
+    "mineTranslation": "Your sentence in the meeting language"
   },
   "meeting": {
     "title": "Meeting context",
@@ -68,6 +69,22 @@
     "send": "Send",
     "thinking": "The model is answering…"
   },
+  "historyChat": {
+    "title": "Ask your history",
+    "subtitle": "questions about all saved meetings, with sources",
+    "empty": "Ask what was decided, who was supposed to do what, when… Answers come only from your saved meetings, with sources cited.",
+    "placeholder": "E.g. what did we decide with ACME about the renewal?",
+    "send": "Send",
+    "thinking": "Searching your meetings…",
+    "notFound": "Not found in your meetings.",
+    "wordsOnly": "Searched by words only: download the model in Settings → History search to also search by meaning.",
+    "sources": "Sources",
+    "openSource": "Open “{{meeting}}” at the cited point",
+    "from": "From",
+    "to": "To",
+    "onlySelected": "Only the open meeting",
+    "clear": "New conversation"
+  },
   "assist": {
     "title": "Live assist",
     "empty": "Every 20 seconds, while the conversation goes on, what you could say or ask shows up here. Pick the model in Settings.",
@@ -79,7 +96,9 @@
     "askTitle": "Ask this",
     "none": "Nothing yet.",
     "markUsed": "Mark as used",
-    "markUnused": "Mark as unused"
+    "markUnused": "Mark as unused",
+    "toggle": "Suggestions",
+    "off": "Off. Turn them on to get what to say and what to ask during the call."
   },
   "settings": {
     "title": "Settings",
@@ -117,10 +136,13 @@
       "mine": "Your language (Me)",
       "mineHint": "A fixed language is more accurate than automatic.",
       "theirs": "Others' language (Them)",
-      "theirsHint": "Automatic: favours Italian and English, also handles language switching.",
+      "theirsHint": "Automatic: favours Italian, English, Spanish, French and German, also handles language switching.",
       "multi": "Automatic (multilingual)",
       "it": "Italian",
-      "en": "English"
+      "en": "English",
+      "es": "Spanish",
+      "fr": "French",
+      "de": "German"
     },
     "key": {
       "placeholder": "Paste the API key",
@@ -181,7 +203,9 @@
       "testOk": "ok in {{ms}} ms · {{model}}",
       "autoSummary": "Automatic final summary",
       "autoSummaryHint": "On stop, generate overview, key points and action items.",
-      "sameProvider": "Same as above ({{name}})"
+      "sameProvider": "Same as above ({{name}})",
+      "translateMine": "Translate my sentences too",
+      "translateMineHint": "Shows under each of your sentences how to say it in the others' language (the one set or detected from what they say)."
     },
     "localOnly": {
       "title": "Local only",
@@ -194,6 +218,49 @@
       "count": "Other participants",
       "countHint": "If you know how many there are, recognition is steadier and fixes sentences already shown.",
       "auto": "Automatic"
+    },
+    "duringCall": {
+      "title": "During the call",
+      "widgetHint": "The widget stays above Teams, Meet or Zoom with translations, suggestions and nudges, and is hidden from screen sharing. Open it from the button at the top, the menu bar icon or with ⌥⌘S.",
+      "nudges": "Speaking nudges",
+      "nudgesHint": "Warns you if you talk too much or too fast, if a monologue drags on or if you haven't asked any questions yet. At most one every 2 minutes.",
+      "liveAssist": "In-call suggestions",
+      "liveAssistHint": "What to say and what to ask, generated every 20 s from the conversation (live assist). You can turn them on and off during the call too."
+    },
+    "search": {
+      "title": "History search",
+      "hint": "Find meetings by meaning too, in any language: “server costs” finds “la bolletta AWS è troppo alta”. The model runs on your Mac; the index sits next to the transcripts and is deleted with the meeting.",
+      "toggle": "Search by meaning",
+      "toggleHint": "Indexes meetings in the background, at low priority, when they end.",
+      "downloadHint": "Download EmbeddingGemma 2 (about 206 MB): it stays on your Mac and works offline too.",
+      "indexing": "Indexed {{indexed}} of {{total}} · {{pending}} queued",
+      "indexed": "Indexed {{indexed}} of {{total}} meetings",
+      "reindex": "Recheck"
+    },
+    "voices": {
+      "title": "Voice profiles",
+      "hint": "Recognizes speakers you have named in later meetings. A voiceprint is biometric data: it stays on this Mac only (even with Deepgram), is never sent over the network, and is saved only for named speakers after at least 20 seconds of speech.",
+      "toggle": "Recognize speakers across meetings",
+      "toggleHint": "Off by default. When the voice is a close match the name is assigned, otherwise it is suggested.",
+      "needsDiarization": "\"Recognize speakers\" must also be on (Transcription card).",
+      "empty": "No saved profiles. Name a speaker during a call to create one.",
+      "meta": "Last meeting: {{date}} · meetings: {{meetings}}",
+      "nameLabel": "Profile name",
+      "rename": "Rename {{name}}",
+      "delete": "Delete {{name}}'s profile",
+      "deleteAll": "Delete all profiles",
+      "deleteAllTitle": "Delete all voice profiles?",
+      "deleteAllConfirm": "The saved voiceprints will be erased from this Mac. This cannot be undone.",
+      "offTitle": "Turn off voice profiles?",
+      "offConfirm": "Do you also want to delete the saved profiles? If you keep them, they stay on this Mac but are not used.",
+      "offKeep": "Turn off and keep",
+      "offDelete": "Turn off and delete"
+    },
+    "echoCancellation": "Echo cancellation",
+    "echoCancellationHint": "Without headphones the microphone picks up the others' voices from the speakers: this removes them before transcription, so their sentences don't end up under \"Me\". Not needed with headphones, but harmless.",
+    "about": {
+      "line": "Sottovoce {{version}} · build {{commit}} · built {{built}}",
+      "debug": "debug"
     }
   },
   "permissions": {
@@ -233,11 +300,14 @@
   "talk": {
     "title": "Talk time",
     "label": "Me {{me}}% · Them {{them}}%",
-    "empty": "Talk time appears with the transcript"
+    "empty": "Talk time appears with the transcript",
+    "wpm": "Words/min",
+    "questions": "Questions",
+    "monologue": "Longest monologue"
   },
   "models": {
     "title": "Local models",
-    "hint": "Transcribe and recognize speakers without sending audio to third parties. Models stay on your Mac and work offline once downloaded.",
+    "hint": "Transcribe, recognize speakers and search your history without sending data to third parties. Models stay on your Mac and work offline once downloaded.",
     "used": "{{size}} used",
     "ready": "ready",
     "missing": "not downloaded",
@@ -253,13 +323,23 @@
     "kind": {
       "vad": "Speech detection",
       "stt": "Transcription",
-      "speakerEmbedding": "Speaker recognition"
+      "speakerEmbedding": "Speaker recognition",
+      "textEmbedding": "Semantic search"
     }
   },
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rename {{name}}",
-    "renameHint": "Click to name this speaker"
+    "renameHint": "Click to name this speaker",
+    "voice": {
+      "region": "Speakers recognized by voice",
+      "suggest": "sounds like {{name}}?",
+      "accept": "It's {{name}}",
+      "dismiss": "No",
+      "recognized": "recognized as {{name}} from the voice profile",
+      "notThem": "Not {{name}}",
+      "ok": "OK"
+    }
   },
   "history": {
     "title": "History",
@@ -280,7 +360,32 @@
     "deleteConfirm": "Delete this meeting? Sentences and translations will be lost.",
     "deleteAction": "Delete",
     "rename": "Rename meeting",
-    "assists": "Suggestions"
+    "assists": "Suggestions",
+    "export": "Export to Markdown",
+    "exported": "Saved to {{path}}",
+    "searchPlaceholderSemantic": "Search by words or meaning…",
+    "results": "{{count}} results",
+    "semantic": {
+      "noModel": "Download the model in Settings → History search to also search by meaning.",
+      "indexing": "Indexing: {{indexed}} of {{total}} meetings",
+      "ready": "Search by meaning is on",
+      "wordMatch": "Contains the searched words",
+      "kind": {
+        "block": "5-minute digest",
+        "overview": "Summary",
+        "keyPoints": "Key points",
+        "actionItems": "Action items"
+      }
+    }
+  },
+  "export": {
+    "date": "Date",
+    "duration": "Duration",
+    "engine": "Transcription",
+    "participants": "Participants",
+    "goal": "Goal",
+    "notes": "Notes",
+    "transcript": "Transcript"
   },
   "moment": {
     "objection": "Objection",
@@ -317,9 +422,51 @@
     "open": "Open summary",
     "dismiss": "Dismiss"
   },
+  "update": {
+    "available": "New version available",
+    "detail": "version {{version}} · build {{build}}",
+    "download": "Download",
+    "dismiss": "Ignore this version"
+  },
   "tray": {
     "show": "Show Sottovoce",
     "quit": "Quit Sottovoce",
-    "tooltip": "Sottovoce — live transcription"
+    "tooltip": "Sottovoce — live transcription",
+    "widget": "Show/hide widget"
+  },
+  "widget": {
+    "toggle": "Widget",
+    "toggleHint": "Show or hide the widget above the call (⌥⌘S)",
+    "openMain": "Open Sottovoce",
+    "close": "Close widget",
+    "idle": "No active session. Start one from the Sottovoce window.",
+    "noLines": "What the other participants say will appear here."
+  },
+  "nudge": {
+    "dismiss": "Dismiss nudge",
+    "monologue": {
+      "title": "You've been talking for {{minutes}}:{{seconds}} without a break",
+      "hint": "Pause and give others room: ask for their view or whether it's clear."
+    },
+    "talkTooMuch": {
+      "title": "You've talked {{value}}% of the time in the last few minutes",
+      "hint": "Try listening more: ask an open question."
+    },
+    "tooFast": {
+      "title": "You're speaking fast: {{value}} words/min",
+      "hint": "Slow down a little and take a few pauses."
+    },
+    "listenLong": {
+      "title": "The others have been talking for {{minutes}}:{{seconds}}",
+      "hint": "Good moment to summarize what you understood or ask a question."
+    },
+    "noQuestions": {
+      "title": "No questions in {{value}} minutes",
+      "hint": "A question helps you understand what the others really need."
+    }
+  },
+  "startDialog": {
+    "title": "What language is the call in?",
+    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language."
   }
 }

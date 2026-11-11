@@ -3,6 +3,7 @@ import { create } from "zustand";
 import {
   type ChannelId,
   type InputDevice,
+  type Language,
   type LevelEvent,
   errorMessage,
   listInputDevices,
@@ -14,6 +15,7 @@ import { useAssistStore } from "@/stores/assist";
 import { useChatStore } from "@/stores/chat";
 import { useInsightsStore } from "@/stores/insights";
 import { useMeetingStore } from "@/stores/meeting";
+import { useNudgeStore } from "@/stores/nudges";
 import { useSettingsStore } from "@/stores/settings";
 import { useTranscriptStore } from "@/stores/transcript";
 
@@ -43,9 +45,12 @@ interface AudioState {
   startedWall: number;
   error: { key: string; message: string } | null;
   levels: Record<ChannelId, ChannelLevel>;
+  /** Lingua della call scelta all'avvio (vale anche al riavvio per cambio microfono). */
+  language: Language;
   init: () => Promise<void>;
   setMic: (id: string) => Promise<void>;
-  start: () => Promise<void>;
+  /** Avvia la sessione; senza `language` usa quella della call in corso. */
+  start: (language?: Language) => Promise<void>;
   stop: () => Promise<void>;
 }
 
@@ -81,6 +86,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
   startedWall: 0,
   error: null,
   levels: { me: silent(), them: silent() },
+  language: "multi",
 
   init: async () => {
     try {
@@ -100,8 +106,8 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     if (get().status === "running") await get().start();
   },
 
-  start: async () => {
-    set({ status: "starting", error: null, levels: { me: silent(), them: silent() } });
+  start: async (language = get().language) => {
+    set({ status: "starting", error: null, language, levels: { me: silent(), them: silent() } });
     const transcript = useTranscriptStore.getState();
     transcript.reset();
     const assist = useAssistStore.getState();
@@ -109,8 +115,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
     const insights = useInsightsStore.getState();
     insights.reset();
     useChatStore.getState().reset();
+    useNudgeStore.getState().reset();
     // I parlanti si rinumerano a ogni sessione: i nomi della precedente non valgono più.
-    useMeetingStore.setState((s) => ({ context: { ...s.context, speakers: {} } }));
+    useMeetingStore.getState().resetSpeakers();
     try {
       await startSession(
         (e) => {
@@ -125,7 +132,9 @@ export const useAudioStore = create<AudioState>((set, get) => ({
         transcript.applyTranslation,
         assist.add,
         insights.addBlock,
+        useMeetingStore.getState().applyVoice,
         useMeetingStore.getState().context,
+        language,
       );
       set({ status: "running", startedAt: performance.now(), startedWall: Date.now() });
     } catch (e) {
@@ -143,6 +152,7 @@ export const useAudioStore = create<AudioState>((set, get) => ({
       set({ error: { key: "errors.stop", message: errorMessage(e) } });
     } finally {
       set({ status: "idle", levels: { me: silent(), them: silent() } });
+      useNudgeStore.getState().dismiss();
     }
   },
 }));

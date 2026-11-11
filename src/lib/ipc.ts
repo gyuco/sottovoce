@@ -15,7 +15,9 @@ export interface LevelEvent {
   peakDb: number;
 }
 
-export type Language = "multi" | "it" | "en";
+export type Language = "multi" | "it" | "en" | "es" | "fr" | "de";
+/** Lingue concrete (STT, traduzione, riepilogo). */
+export const CONCRETE_LANGUAGES = ["it", "en", "es", "fr", "de"] as const satisfies Language[];
 /** Motore di trascrizione. */
 export type SttEngine = "local" | "deepgram";
 export type LlmProvider =
@@ -47,6 +49,8 @@ export interface Settings {
   diarization: boolean;
   /** Altri partecipanti noti (1–8); 0 = automatico. */
   theirSpeakers: number;
+  /** Profili vocali (dato biometrico, opt-in): riconosce i parlanti già nominati. */
+  voiceProfiles: boolean;
   myLanguage: Language;
   theirLanguage: Language;
   micDeviceId: string | null;
@@ -58,6 +62,8 @@ export interface Settings {
   translationProvider: LlmProvider | null;
   /** Traduce da sola ogni frase di "Loro"; spento = pulsante "Traduci". */
   autoTranslate: boolean;
+  /** Con la traduzione automatica traduce anche "Io" nella lingua del meeting. */
+  translateMine: boolean;
   assistModel: string;
   /** `null` = stesso provider di `llmProvider` (vale anche per compressione e riepilogo). */
   assistProvider: LlmProvider | null;
@@ -65,6 +71,14 @@ export interface Settings {
   autoSummary: boolean;
   /** `null` = la lingua dell'utente. */
   targetLanguage: Language | null;
+  /** Avvisi durante la call calcolati dalle metriche (senza LLM). */
+  nudges: boolean;
+  /** Suggerimenti del live assist (cosa dire/chiedere); spenti di default. */
+  liveAssist: boolean;
+  /** Cancellazione d'eco sul microfono (serve l'audio di sistema). */
+  echoCancellation: boolean;
+  /** Ricerca per significato nello storico (modello locale di embedding). */
+  semanticSearch: boolean;
 }
 
 export interface ModelInfo {
@@ -112,6 +126,8 @@ export interface AssistEvent {
 export interface TranslationEvent {
   segmentId: number;
   text: string;
+  /** Lingua della traduzione (es. "en"). */
+  language: string;
   latencyMs: number;
 }
 
@@ -208,13 +224,57 @@ export const askModel = (input: {
   context: MeetingContext;
 }) => invoke<string>("ask_model", input);
 
+/** Filtri opzionali delle domande sullo storico (ms epoch). */
+export interface HistoryFilter {
+  fromMs?: number | null;
+  /** Escluso. */
+  toMs?: number | null;
+  meetingId?: number | null;
+}
+
+/** Fonte citata in una risposta sullo storico. */
+export interface HistorySource {
+  n: number;
+  meetingId: number;
+  meetingName: string;
+  startedAtMs: number;
+  kind: PassageKind;
+  segmentId: number | null;
+  startMs: number;
+  text: string;
+}
+
+export interface HistoryAnswer {
+  /** Risposta con citazioni `[n]`; vuota se `found` è falso. */
+  answer: string;
+  /** `false` = nei meeting non c'è la risposta. */
+  found: boolean;
+  /** `false` = solo ricerca per parole (modello di embedding assente). */
+  semantic: boolean;
+  sources: HistorySource[];
+}
+
+/** Domanda su tutti i meeting salvati (RAG); risposta con le fonti citate. */
+export const askHistory = (input: {
+  question: string;
+  history: ChatTurn[];
+  filter: HistoryFilter | null;
+}) =>
+  invoke<HistoryAnswer>("ask_history", {
+    ...input,
+    utcOffsetMin: -new Date().getTimezoneOffset(),
+  });
+
 export function startSession(
   onLevel: (e: LevelEvent) => void,
   onTranscript: (e: SttEvent) => void,
   onTranslation: (e: TranslationEvent) => void,
   onAssist: (e: AssistEvent) => void,
   onCompression: (e: CompressionEvent) => void,
+  onVoice: (e: VoiceEvent) => void,
   context: MeetingContext,
+  /** Lingua della call: rilevamento di entrambi i canali. */
+  language: Language,
 ) {
   const level = new Channel<LevelEvent>();
   level.onmessage = onLevel;
@@ -226,15 +286,48 @@ export function startSession(
   assist.onmessage = onAssist;
   const compression = new Channel<CompressionEvent>();
   compression.onmessage = onCompression;
+  const voice = new Channel<VoiceEvent>();
+  voice.onmessage = onVoice;
   return invoke<void>("start_session", {
     onLevel: level,
     onTranscript: transcript,
     onTranslation: translation,
     onAssist: assist,
     onCompression: compression,
+    onVoice: voice,
     context,
+    language,
   });
 }
+
+/** Parlante di "Loro" riconosciuto in un profilo vocale. */
+export interface VoiceEvent {
+  speaker: number;
+  profileId: string;
+  name: string;
+  similarity: number;
+  /** `assign` = nome usato subito; `suggest` = da confermare. */
+  verdict: "assign" | "suggest";
+}
+
+/** Profilo vocale salvato (l'impronta resta nel backend). */
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  createdMs: number;
+  /** Ultimo meeting in cui è stato aggiornato. */
+  lastSeenMs: number;
+  meetings: number;
+}
+
+export const listVoiceProfiles = () => invoke<VoiceProfile[]>("list_voice_profiles");
+
+export const renameVoiceProfile = (id: string, name: string) =>
+  invoke<VoiceProfile>("rename_voice_profile", { id, name });
+
+export const deleteVoiceProfile = (id: string) => invoke<void>("delete_voice_profile", { id });
+
+export const deleteAllVoiceProfiles = () => invoke<void>("delete_all_voice_profiles");
 
 /** Esito dello stop: il riepilogo, se previsto, arriva dopo con `onSummaryStatus`. */
 export interface StopResult {
@@ -324,6 +417,47 @@ export interface MeetingDetails {
 export const listMeetings = (page: number, perPage: number, search?: string) =>
   invoke<MeetingPage>("list_meetings", { page, perPage, search: search?.trim() || null });
 
+export type PassageKind = "transcript" | "block" | "overview" | "keyPoints" | "actionItems";
+
+/** Passaggio trovato dalla ricerca per significato, con il testo attuale. */
+export interface SearchPassage {
+  kind: PassageKind;
+  /** Prima frase del passaggio (solo trascrizione). */
+  segmentId: number | null;
+  startMs: number;
+  text: string;
+  score: number;
+}
+
+export interface SearchResult extends MeetingSummary {
+  score: number;
+  /** Trovato anche dalla ricerca per parole. */
+  lexical: boolean;
+  passages: SearchPassage[];
+}
+
+/** Stato dell'indice della ricerca per significato. */
+export interface IndexStatus {
+  modelReady: boolean;
+  enabled: boolean;
+  indexed: number;
+  total: number;
+  pending: number;
+  error: string | null;
+}
+
+/** Ricerca per significato + per parole (senza modello: solo parole). */
+export const searchMeetings = (query: string) =>
+  invoke<SearchResult[]>("search_meetings", { query });
+
+export const semanticIndexStatus = () => invoke<IndexStatus>("semantic_index_status");
+
+export const reindexMeetings = () => invoke<void>("reindex_meetings");
+
+/** Aggiornamenti dello stato dell'indice (evento `search:status`). */
+export const onIndexStatus = (cb: (status: IndexStatus) => void) =>
+  listen<IndexStatus>("search:status", (e) => cb(e.payload));
+
 export const getMeeting = (id: number) => invoke<MeetingDetails>("get_meeting", { id });
 
 export const deleteMeeting = (id: number) => invoke<void>("delete_meeting", { id });
@@ -333,6 +467,10 @@ export const renameMeeting = (id: number, name: string) =>
 
 export const generateSummary = (id: number, language?: Language) =>
   invoke<Summary>("generate_summary", { id, language: language ?? null });
+
+/** Salva il meeting in Markdown nel file scelto dall'utente; `null` se annulla. */
+export const exportMeetingMarkdown = (fileName: string, contents: string) =>
+  invoke<string | null>("export_meeting_markdown", { fileName, contents });
 
 export const updateSummaryChecklist = (id: number, items: ActionItem[]) =>
   invoke<Summary>("update_summary_checklist", { id, items });
@@ -361,16 +499,36 @@ export const testLlm = (model?: string, provider?: LlmProvider) =>
   invoke<LlmTestResult>("test_llm", { model, provider });
 
 /** Traduce su richiesta una frase finale; `previous` = frasi precedenti (contesto). */
-export const translateSegment = (segmentId: number, text: string, previous: string[]) =>
-  invoke<TranslationEvent>("translate_segment", { segmentId, text, previous });
+/** "Loro" → lingua dell'utente; "Io" → lingua del meeting. */
+export const translateSegment = (segmentId: number, channel: ChannelId, text: string, previous: string[]) =>
+  invoke<TranslationEvent>("translate_segment", { segmentId, channel, text, previous });
 
 export function errorMessage(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
 }
 
+// --- Aggiornamenti ----------------------------------------------------------
+
+export interface UpdateInfo {
+  /** Versione della release (`0.1.0`). */
+  version: string;
+  /** Sha corto della build disponibile. */
+  build: string;
+  notes: string;
+  url: string;
+  /** Data di pubblicazione (RFC 3339). */
+  publishedAt: string | null;
+}
+
+/** Ultima release pubblicata più recente di questa build; `null` se non c'è nulla. */
+export const checkUpdate = () => invoke<UpdateInfo | null>("check_update");
+
+/** Apre nel browser la pagina della release. */
+export const openReleasePage = (url: string) => invoke<void>("open_release_page", { url });
+
 // --- Modelli locali ---------------------------------------------------------
 
-export type LocalModelKind = "vad" | "stt" | "speakerEmbedding";
+export type LocalModelKind = "vad" | "stt" | "speakerEmbedding" | "textEmbedding";
 
 export type LocalModelStatus =
   | { state: "missing" }
@@ -408,3 +566,20 @@ export const cancelLocalModelDownload = (id: string) =>
 export const deleteLocalModel = (id: string) => invoke<LocalModel>("delete_local_model", { id });
 
 export const verifyLocalModel = (id: string) => invoke<LocalModel>("verify_local_model", { id });
+
+/** Mostra o nasconde il widget overlay; `true` se ora è aperto. */
+export const toggleWidget = () => invoke<boolean>("toggle_widget");
+
+export const closeWidget = () => invoke<void>("close_widget");
+
+/** Versione e build in esecuzione. */
+export interface AppInfo {
+  version: string;
+  /** Sha corto del commit; `-dirty` = modifiche non committate. */
+  commit: string;
+  /** Ora del build (RFC 3339 UTC). */
+  builtAt: string;
+  debug: boolean;
+}
+
+export const appInfo = () => invoke<AppInfo>("app_info");

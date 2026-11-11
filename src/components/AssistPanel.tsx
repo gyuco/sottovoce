@@ -2,43 +2,56 @@ import { Check, CircleHelp, Copy, Lightbulb, MessageCircle, X } from "lucide-rea
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useCopy } from "@/lib/hooks";
 import type { AssistEvent, AssistKind } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 import { useAssistStore } from "@/stores/assist";
+import { useSettingsStore } from "@/stores/settings";
 
 const KIND_STYLE: Record<AssistKind, { icon: typeof MessageCircle; text: string; card: string; check: string }> = {
   say: {
     icon: MessageCircle,
     text: "text-say",
-    card: "border-say/20 bg-say/6 hover:bg-say/10",
+    card: "border-transparent hover:bg-muted/60",
     check: "border-say/50 data-[checked=true]:bg-say data-[checked=true]:border-say",
   },
   ask: {
     icon: CircleHelp,
     text: "text-ask",
-    card: "border-ask/20 bg-ask/6 hover:bg-ask/10",
+    card: "border-transparent hover:bg-muted/60",
     check: "border-ask/50 data-[checked=true]:bg-ask data-[checked=true]:border-ask",
   },
 };
 
-/** Live assist: cosa dire e cosa chiedere, in due gruppi, i più recenti in alto. */
+/**
+ * Live assist: cosa dire e cosa chiedere, in due gruppi, i più recenti in
+ * alto. Pannello secondario e discreto; spento di default (setting
+ * `liveAssist`), si accende anche a call in corso.
+ */
 export function AssistPanel() {
   const { t } = useTranslation();
   const items = useAssistStore((s) => s.items);
+  const enabled = useSettingsStore((s) => s.settings?.liveAssist ?? false);
+  const update = useSettingsStore((s) => s.update);
 
   return (
-    <section
-      className="flex min-h-72 flex-1 flex-col rounded-2xl border bg-card shadow-xs md:min-h-0"
-      aria-label={t("assist.title")}
-    >
-      <header className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <Lightbulb className="size-5 text-primary" aria-hidden />
-        <h2 className="text-lg font-semibold tracking-tight">{t("assist.title")}</h2>
+    <section className="flex flex-col rounded-2xl border bg-card/60" aria-label={t("assist.title")}>
+      <header className="flex items-center gap-2 px-4 py-3">
+        <Lightbulb className="size-4 text-muted-foreground" aria-hidden />
+        <h2 className="flex-1 text-sm font-medium text-muted-foreground">{t("assist.toggle")}</h2>
+        <Switch
+          checked={enabled}
+          onCheckedChange={(liveAssist) => void update({ liveAssist })}
+          aria-label={t("assist.toggle")}
+        />
       </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 pb-4" aria-live="polite">
+      {!enabled ? (
+        <p className="px-4 pb-3 text-xs text-muted-foreground">{t("assist.off")}</p>
+      ) : (
+      <div className="flex max-h-80 flex-col gap-4 overflow-y-auto px-3 pb-3" aria-live="polite">
         {items.length === 0 ? (
-          <p className="m-auto max-w-80 py-8 text-center text-sm text-muted-foreground">{t("assist.empty")}</p>
+          <p className="px-1 py-2 text-xs text-muted-foreground">{t("assist.empty")}</p>
         ) : (
           <>
             <AssistGroup kind="say" items={items} />
@@ -46,6 +59,7 @@ export function AssistPanel() {
           </>
         )}
       </div>
+      )}
     </section>
   );
 }
@@ -58,7 +72,7 @@ function AssistGroup({ kind, items }: { kind: AssistKind; items: AssistEvent[] }
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="flex items-center gap-2 text-sm font-medium">
+      <h3 className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
         <Icon className={cn("size-4", style.text)} aria-hidden />
         {t(`assist.${kind}Title`)}
         {mine.length > 0 && <span className="text-xs font-normal text-muted-foreground">{mine.length}</span>}
@@ -87,7 +101,7 @@ function AssistItem({ item }: { item: AssistEvent }) {
   return (
     <li
       className={cn(
-        "group flex animate-in items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors duration-200 fade-in slide-in-from-top-1",
+        "group flex animate-in items-start gap-2.5 rounded-lg border px-2 py-1.5 text-[13px] text-foreground/85 transition-colors duration-200 fade-in slide-in-from-top-1",
         style.card,
         used && "opacity-55",
       )}

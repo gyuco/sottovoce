@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { SpeakerLabel } from "@/components/SpeakerLabel";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { VoiceNotices } from "@/components/VoiceNotices";
 import { formatDuration, useCopy } from "@/lib/hooks";
 import { MOMENT_COLORS } from "@/lib/moments";
 import { type TranslationEvent, errorMessage, translateSegment } from "@/lib/ipc";
@@ -15,7 +16,7 @@ import { type Line, useTranscriptStore } from "@/stores/transcript";
 
 /** Distanza dal fondo (px) entro cui l'autoscroll resta agganciato. */
 const STICK_PX = 48;
-/** Frasi precedenti di "Loro" passate come contesto alla traduzione su richiesta. */
+/** Frasi precedenti passate come contesto alla traduzione su richiesta. */
 const TRANSLATE_HISTORY = 3;
 
 export function Transcript() {
@@ -57,10 +58,10 @@ export function Transcript() {
   /** Traduce su richiesta; lancia l'errore al chiamante (mostrato sulla riga). */
   const translate = async (line: Line) => {
     const previous = lines
-      .filter((l) => l.channel === "them" && l.start < line.start)
+      .filter((l) => l.start < line.start)
       .slice(-TRANSLATE_HISTORY)
-      .map((l) => l.text);
-    applyTranslation(await translateSegment(line.id, line.text, previous));
+      .map((l) => `${speakerName(l.channel, l.speaker)}: ${l.text}`);
+    applyTranslation(await translateSegment(line.id, line.channel, line.text, previous));
     setShowTranslations(true);
   };
 
@@ -86,7 +87,7 @@ export function Transcript() {
   return (
     <section className="relative flex min-h-80 flex-1 flex-col rounded-2xl border bg-card shadow-xs md:min-h-0">
       <header className="flex items-center gap-2 px-4 pt-3.5 pb-2.5">
-        <ScrollText className="size-4 text-primary" aria-hidden />
+        <ScrollText className="size-5 text-primary" aria-hidden />
         <h2 className="text-sm font-semibold">{t("transcript.title")}</h2>
         <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
           {t("transcript.showTranslations")}
@@ -103,6 +104,7 @@ export function Transcript() {
           {copied ? t("common.copied") : t("transcript.copy")}
         </Button>
       </header>
+      <VoiceNotices />
       <MomentBar moments={moments} end={rows.reduce((max, r) => Math.max(max, r.end), 0)} />
       <div
         ref={box}
@@ -121,7 +123,7 @@ export function Transcript() {
                 line={r}
                 translation={showTranslations && r.id !== 0 ? translations[r.id] : undefined}
                 onTranslate={
-                  r.id !== 0 && r.channel === "them" && !translations[r.id]
+                  r.id !== 0 && !translations[r.id]
                     ? () => translate(r)
                     : undefined
                 }
@@ -184,13 +186,23 @@ function TranscriptRow(props: {
   const partial = line.id === 0;
 
   return (
-    <li className="group grid grid-cols-[2.75rem_6rem_1fr_auto_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/60">
+    <li className="group grid grid-cols-[2.75rem_6rem_1fr_auto_1.5rem] items-baseline gap-2 rounded-lg px-2 py-1.5 text-[15px] hover:bg-muted/60">
       <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatDuration(line.start)}</span>
       <SpeakerLabel channel={line.channel} speaker={line.speaker} editable={!partial} />
       <span className={cn("leading-relaxed select-text", partial && "text-muted-foreground italic")}>
         {line.text}
         {translation?.text && (
-          <span className="mt-0.5 block text-muted-foreground">{translation.text}</span>
+          <span className="mt-0.5 block text-muted-foreground">
+            {line.channel === "me" && (
+              <span
+                className="mr-1.5 rounded bg-muted px-1 py-px align-middle font-mono text-[10px] uppercase"
+                title={t("transcript.mineTranslation")}
+              >
+                {translation.language}
+              </span>
+            )}
+            {translation.text}
+          </span>
         )}
       </span>
       {props.onTranslate ? <TranslateButton onTranslate={props.onTranslate} /> : <span />}

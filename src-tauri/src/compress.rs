@@ -407,10 +407,7 @@ fn messages(
 }
 
 pub(crate) fn language_name(language: Language) -> &'static str {
-    match language {
-        Language::En => "English",
-        Language::It | Language::Multi => "Italian",
-    }
+    language.english_name().unwrap_or("Italian")
 }
 
 #[derive(Default)]

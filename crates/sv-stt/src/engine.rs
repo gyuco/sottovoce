@@ -19,18 +19,42 @@ pub enum Language {
     Multi,
     It,
     En,
+    Es,
+    Fr,
+    De,
 }
 
 impl Language {
     /// Lingue concrete note all'app (usate come hint in modalità `Multi`).
-    pub const CONCRETE: [Language; 2] = [Language::It, Language::En];
+    pub const CONCRETE: [Language; 5] = [
+        Language::It,
+        Language::En,
+        Language::Es,
+        Language::Fr,
+        Language::De,
+    ];
 
     pub fn code(self) -> &'static str {
         match self {
             Self::Multi => "multi",
             Self::It => "it",
             Self::En => "en",
+            Self::Es => "es",
+            Self::Fr => "fr",
+            Self::De => "de",
         }
+    }
+
+    /// Nome inglese per i prompt; `None` per `Multi`.
+    pub fn english_name(self) -> Option<&'static str> {
+        Some(match self {
+            Self::Multi => return None,
+            Self::It => "Italian",
+            Self::En => "English",
+            Self::Es => "Spanish",
+            Self::Fr => "French",
+            Self::De => "German",
+        })
     }
 }
 
