@@ -2,6 +2,8 @@
 //!
 //! - [`Store`]: apertura/migrazione del DB e lettura (storico, dettaglio
 //!   meeting), più il recupero dei meeting rimasti aperti all'avvio.
+//! - Rubrica ([`Contact`]): schede delle persone incontrate nei meeting,
+//!   legate ai parlanti per nome.
 //! - [`Writer`]/[`StoreHandle`]: scrittura da un thread dedicato, a blocchi in
 //!   transazione, senza mai bloccare il pump STT.
 //!
@@ -15,6 +17,7 @@
 //! per lo scrittore e una per le letture, WAL per non fermare le letture
 //! durante le scritture.
 
+mod contacts;
 mod error;
 mod schema;
 mod store;
@@ -22,6 +25,7 @@ mod transcript;
 mod types;
 mod writer;
 
+pub use contacts::{Contact, ContactInput, is_valid_email, name_key};
 pub use error::StoreError;
 pub use schema::SCHEMA_VERSION;
 pub use store::{Store, normalize};

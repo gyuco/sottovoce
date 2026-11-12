@@ -149,6 +149,7 @@ fn meeting(id: i64, name: &str, day: i64, lang: &str, lines: &[(&str, &str)]) ->
             stt_model: String::new(),
             my_language: "it".into(),
             their_language: lang.into(),
+            participants: Vec::new(),
         },
         segments,
         translations: Vec::new(),

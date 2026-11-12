@@ -17,7 +17,15 @@ use keyring::{Entry, Error};
 const SERVICE: &str = "sottovoce";
 
 /// Provider per cui si accetta una chiave (account nel Keychain).
-pub const KNOWN_PROVIDERS: &[&str] = &["deepgram", "opencode", "openai", "anthropic", "custom"];
+/// `smtp` è la password del server di posta (invio del riepilogo).
+pub const KNOWN_PROVIDERS: &[&str] = &[
+    "deepgram",
+    "opencode",
+    "openai",
+    "anthropic",
+    "custom",
+    "smtp",
+];
 
 static CACHE: LazyLock<Mutex<HashMap<&'static str, String>>> = LazyLock::new(Default::default);
 

@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ParticipantsInput } from "@/components/ParticipantsInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { type CodePathInfo, errorMessage, inspectCodePath } from "@/lib/ipc";
@@ -24,83 +25,11 @@ export function MeetingContextPanel() {
   const { t } = useTranslation();
   const { context, syncError, set } = useMeetingStore();
   const [openPanel, setOpenPanel] = useState(false);
-  const path = context.codePath.trim();
-  /** Esito legato al percorso che lo ha prodotto: cambiando testo si riparte. */
-  const [result, setResult] = useState<{
-    path: string;
-    info: CodePathInfo | null;
-    error: boolean;
-  } | null>(null);
-  const [pickError, setPickError] = useState<string | null>(null);
-
-  const summary = [context.name, context.goal].filter((s) => s.trim() !== "").join(" · ");
-
-  // Verifica automatica (con debounce): la UI deve dire subito se la cartella
-  // esiste e quanti file vede il live assist.
-  useEffect(() => {
-    if (!openPanel || path === "") return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      inspectCodePath(path).then(
-        (info) => {
-          if (!cancelled) setResult({ path, info, error: false });
-        },
-        () => {
-          if (!cancelled) setResult({ path, info: null, error: true });
-        },
-      );
-    }, CHECK_DELAY_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [openPanel, path]);
-
-  const current = result?.path === path ? result : null;
-  const code = current?.info ?? null;
-  const checkError = current?.error ?? false;
-  const checking = path !== "" && current === null;
-
-  const pickFolder = async () => {
-    try {
-      const chosen = await open({
-        directory: true,
-        multiple: false,
-        title: t("meeting.codePathBrowse"),
-      });
-      if (typeof chosen === "string") {
-        setPickError(null);
-        set({ codePath: chosen });
-      }
-    } catch (e) {
-      setPickError(errorMessage(e));
-    }
-  };
-
-  const status = (() => {
-    if (pickError) return <StatusLine error>{pickError}</StatusLine>;
-    if (checkError) return <StatusLine error>{t("meeting.codePathError")}</StatusLine>;
-    if (path === "") {
-      return <StatusLine muted>{t("meeting.codePathHint")}</StatusLine>;
-    }
-    if (checking || (!code && !checkError)) {
-      return (
-        <StatusLine muted icon={<Loader2 className="animate-spin" aria-hidden />}>
-          {t("meeting.codePathChecking")}
-        </StatusLine>
-      );
-    }
-    if (!code) return null;
-    if (!code.exists) return <StatusLine error>{t("meeting.codePathMissing")}</StatusLine>;
-    if (!code.isDir) return <StatusLine error>{t("meeting.codePathNotDir")}</StatusLine>;
-    const languages = code.languages.slice(0, 3).map((l) => l.name).join(", ");
-    return (
-      <StatusLine muted icon={<CheckCircle2 className="text-primary" aria-hidden />}>
-        {t("meeting.codePathOk", { count: code.files.toLocaleString() })}
-        {languages ? ` · ${languages}` : ""}
-      </StatusLine>
-    );
-  })();
+  const people =
+    context.participants.length > 0
+      ? t("participants.count", { count: context.participants.length })
+      : "";
+  const summary = [context.name, context.goal, people].filter((s) => s.trim() !== "").join(" · ");
 
   return (
     <section className="rounded-2xl border bg-card shadow-xs">
@@ -141,34 +70,11 @@ export function MeetingContextPanel() {
             value={context.goal}
             onChange={(e) => set({ goal: e.target.value })}
           />
-          <div className="flex flex-col gap-1.5">
-            <div className="flex gap-2">
-              <Input
-                aria-label={t("meeting.codePath")}
-                placeholder={t("meeting.codePathPlaceholder")}
-                maxLength={MEETING_LIMITS.codePath}
-                value={context.codePath}
-                spellCheck={false}
-                autoComplete="off"
-                onChange={(e) => {
-                  setPickError(null);
-                  set({ codePath: e.target.value });
-                }}
-                className="min-w-0 font-mono text-xs"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label={t("meeting.codePathBrowse")}
-                title={t("meeting.codePathBrowse")}
-                onClick={pickFolder}
-              >
-                <FolderOpen aria-hidden />
-              </Button>
-            </div>
-            {status}
-          </div>
+          <ParticipantsInput
+            value={context.participants}
+            onChange={(participants) => set({ participants })}
+          />
+          <CodePathField value={context.codePath} onChange={(codePath) => set({ codePath })} />
           <textarea
             aria-label={t("meeting.notes")}
             placeholder={t("meeting.notesPlaceholder")}
@@ -192,6 +98,124 @@ export function MeetingContextPanel() {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Cartella del progetto (facoltativa): campo, selettore cartelle e verifica
+ * con debounce (esiste? quanti file? quali linguaggi?).
+ */
+export function CodePathField(props: {
+  value: string;
+  onChange: (path: string) => void;
+  inputClassName?: string;
+}) {
+  const { t } = useTranslation();
+  const path = props.value.trim();
+  /** Esito legato al percorso che lo ha prodotto: cambiando testo si riparte. */
+  const [result, setResult] = useState<{
+    path: string;
+    info: CodePathInfo | null;
+    error: boolean;
+  } | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
+
+  // Verifica automatica (con debounce): la UI deve dire subito se la cartella
+  // esiste e quanti file vede il live assist.
+  useEffect(() => {
+    if (path === "") return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      inspectCodePath(path).then(
+        (info) => {
+          if (!cancelled) setResult({ path, info, error: false });
+        },
+        () => {
+          if (!cancelled) setResult({ path, info: null, error: true });
+        },
+      );
+    }, CHECK_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [path]);
+
+  const current = result?.path === path ? result : null;
+  const code = current?.info ?? null;
+  const checkError = current?.error ?? false;
+  const checking = path !== "" && current === null;
+
+  const pickFolder = async () => {
+    try {
+      const chosen = await open({
+        directory: true,
+        multiple: false,
+        title: t("meeting.codePathBrowse"),
+      });
+      if (typeof chosen === "string") {
+        setPickError(null);
+        props.onChange(chosen);
+      }
+    } catch (e) {
+      setPickError(errorMessage(e));
+    }
+  };
+
+  const status = (() => {
+    if (pickError) return <StatusLine error>{pickError}</StatusLine>;
+    if (checkError) return <StatusLine error>{t("meeting.codePathError")}</StatusLine>;
+    if (path === "") {
+      return <StatusLine muted>{t("meeting.codePathHint")}</StatusLine>;
+    }
+    if (checking || (!code && !checkError)) {
+      return (
+        <StatusLine muted icon={<Loader2 className="animate-spin" aria-hidden />}>
+          {t("meeting.codePathChecking")}
+        </StatusLine>
+      );
+    }
+    if (!code) return null;
+    if (!code.exists) return <StatusLine error>{t("meeting.codePathMissing")}</StatusLine>;
+    if (!code.isDir) return <StatusLine error>{t("meeting.codePathNotDir")}</StatusLine>;
+    const languages = code.languages.slice(0, 3).map((l) => l.name).join(", ");
+    return (
+      <StatusLine muted icon={<CheckCircle2 className="text-primary" aria-hidden />}>
+        {t("meeting.codePathOk", { count: code.files.toLocaleString() })}
+        {languages ? ` · ${languages}` : ""}
+      </StatusLine>
+    );
+  })();
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-2">
+        <Input
+          aria-label={t("meeting.codePath")}
+          placeholder={t("meeting.codePathPlaceholder")}
+          maxLength={MEETING_LIMITS.codePath}
+          value={props.value}
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => {
+            setPickError(null);
+            props.onChange(e.target.value);
+          }}
+          className={cn("min-w-0 font-mono text-xs", props.inputClassName)}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={t("meeting.codePathBrowse")}
+          title={t("meeting.codePathBrowse")}
+          onClick={() => void pickFolder()}
+        >
+          <FolderOpen aria-hidden />
+        </Button>
+      </div>
+      {status}
+    </div>
   );
 }
 

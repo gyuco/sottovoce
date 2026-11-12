@@ -49,7 +49,7 @@
     "goal": "Obiettivo",
     "goalPlaceholder": "Obiettivo (es. chiudere il budget Q3)",
     "notes": "Note",
-    "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
+    "notesPlaceholder": "Note: sigle, nomi di prodotto, cose da ottenere…",
     "codePath": "Cartella del codice",
     "codePathPlaceholder": "Percorso del progetto (es. ~/progetti/app)",
     "codePathBrowse": "Scegli cartella",
@@ -261,6 +261,28 @@
     "about": {
       "line": "Sottovoce {{version}} · build {{commit}} · compilata il {{built}}",
       "debug": "debug"
+    },
+    "email": {
+      "title": "Email",
+      "hint": "Per inviare il riepilogo dei meeting. Senza server SMTP puoi comunque aprire il messaggio come bozza nel client di posta.",
+      "fromName": "Nome del mittente",
+      "fromNamePlaceholder": "Mario Rossi",
+      "from": "Indirizzo del mittente",
+      "host": "Server SMTP",
+      "port": "Porta",
+      "security": "Sicurezza",
+      "starttls": "STARTTLS (587)",
+      "tls": "TLS/SSL (465)",
+      "user": "Utente",
+      "userPlaceholder": "Uguale all'indirizzo del mittente",
+      "password": "Password SMTP",
+      "passwordHint": "Salvata nel Portachiavi di macOS. Per Gmail, iCloud e Outlook usa una password per app.",
+      "test": "Prova connessione",
+      "testOk": "Connessione e accesso riusciti."
+    },
+    "setup": {
+      "rerun": "Rifai il setup guidato",
+      "busy": "Disponibile a call ferma"
     }
   },
   "permissions": {
@@ -274,13 +296,15 @@
   "common": {
     "copied": "Copiato",
     "save": "Salva",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "close": "Chiudi"
   },
   "nav": {
     "label": "Navigazione",
     "live": "Sessione live",
     "settings": "Impostazioni",
-    "history": "Storico"
+    "history": "Storico",
+    "contacts": "Rubrica"
   },
   "header": {
     "untitled": "Nuovo meeting",
@@ -330,7 +354,7 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rinomina {{name}}",
-    "renameHint": "Clic per dare un nome a questo parlante",
+    "renameHint": "Clic per aprire la scheda: nome, ruolo, email",
     "voice": {
       "region": "Parlanti riconosciuti dalla voce",
       "suggest": "sembra {{name}}?",
@@ -339,6 +363,16 @@
       "recognized": "riconosciuto come {{name}} dal profilo vocale",
       "notThem": "Non è {{name}}",
       "ok": "OK"
+    },
+    "card": {
+      "title": "Scheda di {{name}}",
+      "hint": "Il nome compare nella trascrizione e nei riepiloghi. Ruolo, email e descrizione restano nella rubrica.",
+      "inContacts": "In rubrica",
+      "saveToContacts": "Salva in rubrica",
+      "saveHint": "Crea una scheda riutilizzabile nei prossimi meeting.",
+      "updateHint": "Aggiorna la scheda già presente in rubrica.",
+      "clear": "Togli il nome",
+      "whoIs": "Chi è tra i partecipanti?"
     }
   },
   "history": {
@@ -420,7 +454,9 @@
     "ready": "Riepilogo finale pronto",
     "failed": "Riepilogo non generato: {{message}}. Puoi riprovare dallo Storico.",
     "open": "Apri riepilogo",
-    "dismiss": "Chiudi avviso"
+    "dismiss": "Chiudi avviso",
+    "email": "Email",
+    "sendEmail": "Invia il riepilogo via email"
   },
   "update": {
     "available": "Nuova versione disponibile",
@@ -467,6 +503,247 @@
   },
   "startDialog": {
     "title": "In che lingua si svolge la call?",
-    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua."
+    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua.",
+    "heading": "Nuova call",
+    "intro": "Prima di iniziare: la lingua della call e, se vuoi, chi parteciperà.",
+    "context": "Contesto della riunione",
+    "optional": "facoltativo",
+    "participants": "Chi parteciperà?",
+    "participantsHint": "Scegli dalla rubrica. Un nome nuovo apre la scheda da salvare in rubrica. Aiuta a dare un nome ai parlanti e migliora suggerimenti, riepilogo e invio email.",
+    "namePlaceholder": "es. Sprint review con Acme"
+  },
+  "contacts": {
+    "title": "Rubrica",
+    "hint": "Le persone incontrate nei meeting. Le schede si compilano anche dando un nome a un parlante.",
+    "search": "Cerca per nome, ruolo o email…",
+    "empty": "Nessun contatto. Aggiungine uno o dai un nome a un parlante durante una call.",
+    "noResults": "Nessun contatto trovato.",
+    "add": "Nuovo contatto",
+    "edit": "Modifica {{name}}",
+    "delete": "Elimina {{name}}",
+    "deleteTitle": "Eliminare il contatto?",
+    "deleteConfirm": "La scheda di {{name}} verrà eliminata dalla rubrica. I nomi già dati nei meeting restano.",
+    "deleteAction": "Elimina",
+    "formHint": "Il nome collega la scheda ai parlanti dei meeting.",
+    "invalidEmail": "Indirizzo email non valido.",
+    "fields": {
+      "name": "Nome",
+      "role": "Ruolo",
+      "rolePlaceholder": "es. CTO, Product manager",
+      "email": "Email",
+      "emailPlaceholder": "nome@azienda.it",
+      "description": "Descrizione",
+      "descriptionPlaceholder": "Chi è, di cosa si occupa, come vi siete conosciuti…"
+    }
+  },
+  "email": {
+    "subject": "Riepilogo: {{name}}",
+    "heading": "Riepilogo del meeting",
+    "duration": "durata {{duration}}",
+    "participants": "Partecipanti",
+    "goal": "Obiettivo",
+    "overview": "In sintesi",
+    "keyPoints": "Punti chiave",
+    "actions": "Azioni da fare",
+    "footer": "Riepilogo preparato con Sottovoce.",
+    "dialog": {
+      "title": "Invia il riepilogo",
+      "to": "Destinatari",
+      "noEmail": "nessuna email in rubrica",
+      "noParticipants": "Nessun parlante con un nome: aggiungi gli indirizzi qui sotto.",
+      "extra": "Altri destinatari",
+      "extraPlaceholder": "Altri indirizzi, separati da virgola",
+      "invalid": "Indirizzo non valido: {{address}}",
+      "subject": "Oggetto",
+      "note": "Messaggio (facoltativo)",
+      "notePlaceholder": "Ciao a tutti, ecco il riepilogo della riunione di oggi…",
+      "preview": "Mostra anteprima",
+      "hidePreview": "Nascondi anteprima",
+      "smtpMissing": "Per inviare direttamente configura il server in Impostazioni → Email. Intanto puoi aprire il messaggio come bozza nel client di posta.",
+      "sent": "Email inviata (destinatari: {{count}}).",
+      "draftOpened": "Bozza aperta nel client di posta.",
+      "draft": "Apri nel client di posta",
+      "send": "Invia"
+    }
+  },
+  "participants": {
+    "label": "Partecipanti",
+    "placeholder": "Aggiungi partecipanti…",
+    "more": "Aggiungi…",
+    "full": "Massimo {{max}} partecipanti",
+    "remove": "Togli {{name}}",
+    "count": "{{count}} partecipanti",
+    "edit": "Clic per modificare la scheda",
+    "notInContacts": "Non in rubrica: clic per completare la scheda e salvarla",
+    "newHint": "«{{name}}» non è in rubrica: premi Invio per creare la scheda.",
+    "newTitle": "Aggiungi {{name}} alla rubrica",
+    "newDescription": "I partecipanti vengono dalla rubrica: completa i dati mancanti (ruolo, email, descrizione) e salva."
+  },
+  "onboarding": {
+    "progress": "Avanzamento del setup",
+    "steps": {
+      "languages": "Lingue",
+      "engine": "Trascrizione",
+      "models": "Modelli",
+      "audio": "Audio",
+      "ai": "Traduzione e riepiloghi",
+      "done": "Fatto"
+    },
+    "stepOf": "{{n}} di {{total}}",
+    "skip": "Salta il setup",
+    "back": "Indietro",
+    "next": "Avanti",
+    "finish": "Inizia a usare Sottovoce",
+    "recommended": "Consigliato",
+    "welcome": {
+      "title": "Benvenuto in Sottovoce",
+      "lead": "Il tuo assistente per le call su Teams, Meet e Zoom: ascolta con te e ti sussurra quello che serve.",
+      "time": "Ti guidiamo nella configurazione: bastano un paio di minuti e puoi cambiare tutto in seguito.",
+      "start": "Iniziamo",
+      "skip": "Configuro da solo",
+      "features": {
+        "transcribe": {
+          "title": "Trascrive",
+          "text": "Tu e gli altri, su due canali separati."
+        },
+        "translate": {
+          "title": "Traduce",
+          "text": "Ogni frase nella tua lingua, in tempo reale."
+        },
+        "suggest": {
+          "title": "Suggerisce",
+          "text": "Cosa dire o chiedere, mentre parli."
+        },
+        "summarize": {
+          "title": "Riassume",
+          "text": "Punti chiave e cose da fare a fine call."
+        }
+      }
+    },
+    "languages": {
+      "title": "Che lingue si parlano?",
+      "lead": "Una lingua fissa rende la trascrizione più precisa. Potrai sceglierla anche a ogni call.",
+      "mine": "La tua lingua",
+      "mineHint": "Quella in cui parli e in cui leggi traduzioni e riepiloghi.",
+      "theirs": "La lingua degli altri",
+      "theirsHint": "Se cambia da call a call lascia «Automatica»."
+    },
+    "engine": {
+      "title": "Dove trascrivere?",
+      "lead": "Scegli se l'audio resta sul tuo Mac o va a un servizio cloud.",
+      "local": {
+        "title": "Sul tuo Mac",
+        "text": "Privato e gratuito: l'audio non esce dal computer e funziona anche offline. Scarichi i modelli una volta sola."
+      },
+      "cloud": {
+        "title": "Nel cloud (Deepgram)",
+        "text": "Un po' più rapido e preciso sull'audio difficile. Serve un account Deepgram e l'audio va ai loro server.",
+        "keyHint": "Crea la chiave su console.deepgram.com e incollala qui: resta nel Portachiavi di macOS."
+      },
+      "localOnly": "Solo locale",
+      "localOnlyHint": "Garantisce che durante le call nessun dato esca dal Mac, anche per traduzioni e suggerimenti."
+    },
+    "models": {
+      "title": "Scarica i modelli",
+      "lead": "Restano sul tuo Mac e funzionano offline. Il download continua anche se vai avanti.",
+      "required": "Necessario",
+      "download": "Scarica ({{size}})",
+      "allReady": "Tutto pronto",
+      "background": "Download in corso: puoi continuare il setup.",
+      "purpose": {
+        "vad": {
+          "title": "Rilevamento del parlato",
+          "text": "Capisce quando qualcuno parla"
+        },
+        "stt": {
+          "title": "Trascrizione",
+          "text": "Trasforma la voce in testo"
+        },
+        "sttBackup": {
+          "title": "Trascrizione offline",
+          "text": "Di riserva, se un giorno vuoi trascrivere senza cloud"
+        },
+        "speakers": {
+          "title": "Riconoscere chi parla",
+          "text": "Distingue i partecipanti tra loro"
+        },
+        "search": {
+          "title": "Cerca nello storico",
+          "text": "Trova i meeting per significato, non solo per parole"
+        }
+      }
+    },
+    "audio": {
+      "title": "Proviamo l'audio",
+      "lead": "Sottovoce ascolta il tuo microfono e l'audio del Mac (gli altri nella call). Controlliamo che arrivino entrambi.",
+      "askTitle": "Serve il permesso del microfono",
+      "askText": "macOS ti chiederà di consentire l'accesso. Sottovoce non salva mai l'audio.",
+      "deniedTitle": "Il microfono è bloccato",
+      "deniedText": "Attiva Sottovoce in Impostazioni di Sistema → Privacy e sicurezza → Microfono, poi torna qui. Potrebbe servire riaprire l'app.",
+      "allow": "Consenti il microfono",
+      "openSettings": "Apri Impostazioni di Sistema",
+      "recheck": "Ricontrolla",
+      "mic": "Il tuo microfono",
+      "micHint": "Di' qualcosa: la barra deve muoversi.",
+      "system": "Audio del Mac",
+      "systemHint": "Avvia un video o una canzone: la barra deve muoversi.",
+      "systemSilent": "Non si muove? Consenti a Sottovoce la registrazione dell'audio di sistema in Impostazioni di Sistema → Privacy e sicurezza.",
+      "systemOff": "L'audio di sistema è disattivato: puoi attivarlo nelle Impostazioni.",
+      "headphones": "Con le cuffie la trascrizione è più pulita; senza, Sottovoce toglie l'eco degli altri dal tuo microfono."
+    },
+    "ai": {
+      "title": "Traduzione e riepiloghi",
+      "lead": "Per tradurre, suggerire e riassumere serve un modello linguistico. Puoi anche saltare: la trascrizione funziona lo stesso.",
+      "modes": {
+        "ollama": {
+          "title": "Ollama sul Mac",
+          "text": "Privato e gratuito, serve Ollama installato."
+        },
+        "cloud": {
+          "title": "Servizio cloud",
+          "text": "OpenAI, Claude o OpenCode, con la tua chiave."
+        },
+        "later": {
+          "title": "Più tardi",
+          "text": "Lo configuri quando vuoi nelle Impostazioni."
+        }
+      },
+      "localOnly": "Con «Solo locale» attivo si può usare solo un modello sul Mac.",
+      "ollamaMissing": "Ollama non risponde. Installalo da ollama.com, aprilo e riprova.",
+      "ollamaNoModels": "Ollama è attivo ma non ha modelli. Scaricane uno dal Terminale, ad esempio: ollama pull qwen3:8b",
+      "noModels": "Nessun modello compatibile trovato con questa chiave.",
+      "retry": "Riprova",
+      "model": "Modello",
+      "modelHint": "Usato per traduzione, suggerimenti e riepiloghi.",
+      "testOk": "Funziona ({{ms}} ms)"
+    },
+    "done": {
+      "title": "Tutto pronto",
+      "lead": "Ecco come è configurato Sottovoce.",
+      "rows": {
+        "stt": "Trascrizione",
+        "mic": "Microfono",
+        "system": "Audio del Mac",
+        "ai": "Traduzione e riepiloghi",
+        "search": "Ricerca nello storico"
+      },
+      "stt": {
+        "local": "Sul tuo Mac",
+        "deepgram": "Deepgram",
+        "needKey": "Manca la chiave Deepgram",
+        "downloading": "Modelli in download",
+        "needModels": "Mancano i modelli"
+      },
+      "heard": "Funziona",
+      "notChecked": "Non verificato",
+      "aiLater": "Da configurare",
+      "hint": "Puoi cambiare tutto in Impostazioni, e rifare questo setup quando vuoi. Per iniziare una call premi «Avvia».",
+      "search": {
+        "ready": "Pronta",
+        "downloading": "Modello in download",
+        "missing": "Manca il modello",
+        "off": "Disattivata"
+      }
+    }
   }
 }

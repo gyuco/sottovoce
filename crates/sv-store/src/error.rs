@@ -12,6 +12,14 @@ pub enum StoreError {
     MeetingNotFound(i64),
     #[error("il nome del meeting non può essere vuoto")]
     EmptyName,
+    #[error("contatto {0} non trovato")]
+    ContactNotFound(i64),
+    #[error("il nome del contatto non può essere vuoto")]
+    EmptyContactName,
+    #[error("in rubrica c'è già un contatto di nome {0}")]
+    DuplicateContact(String),
+    #[error("indirizzo email non valido: {0}")]
+    InvalidEmail(String),
     #[error("il task di salvataggio non è più attivo")]
     WriterClosed,
     #[error("il task di salvataggio non ha risposto in tempo: {0}")]

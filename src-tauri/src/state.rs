@@ -13,6 +13,9 @@ pub struct AppState {
     /// Setting `liveAssist`, letto dal task dell'assist a ogni giro: cambia
     /// anche a call in corso.
     pub assist_on: Arc<AtomicBool>,
+    /// Prova audio del setup guidato (solo livelli, niente STT). Si ferma
+    /// da sola all'avvio di una sessione.
+    pub audio_check: std::sync::Mutex<Option<sv_audio::Capture>>,
 }
 
 /// Profili vocali (`app_data_dir/voices/`), usati solo se attivati.

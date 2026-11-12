@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 
 import { AssistPanel } from "@/components/AssistPanel";
 import { AudioPanel } from "@/components/AudioPanel";
+import { Contacts } from "@/components/Contacts";
 import { History } from "@/components/History";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { MeetingChat } from "@/components/MeetingChat";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { NudgeCard } from "@/components/NudgeCard";
+import { Onboarding } from "@/components/onboarding/Onboarding";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SummaryNotice } from "@/components/SummaryNotice";
@@ -22,6 +24,7 @@ import { useSttBlocker } from "@/lib/readiness";
 import { syncTray } from "@/lib/tray";
 import { useWidgetSync } from "@/lib/widget";
 import { useAudioStore } from "@/stores/audio";
+import { useContactsStore } from "@/stores/contacts";
 import { useInsightsStore } from "@/stores/insights";
 import { useModelsStore } from "@/stores/models";
 import { useNudgeEngine, useNudgeStore } from "@/stores/nudges";
@@ -36,7 +39,9 @@ export default function App() {
   const load = useSettingsStore((s) => s.load);
   const loadModels = useModelsStore((s) => s.load);
   const checkUpdate = useUpdateStore((s) => s.check);
+  const loadContacts = useContactsStore((s) => s.load);
   const blocker = useSttBlocker();
+  const needsSetup = useSettingsStore((s) => s.settings !== null && !s.settings.onboardingDone);
   const [view, setView] = useState<View>("live");
   /** Meeting da aprire nello Storico (dall'avviso del riepilogo). */
   const [historyFocus, setHistoryFocus] = useState<number | null>(null);
@@ -46,7 +51,8 @@ export default function App() {
     void init();
     void loadModels();
     void checkUpdate();
-  }, [load, init, loadModels, checkUpdate]);
+    void loadContacts();
+  }, [load, init, loadModels, checkUpdate, loadContacts]);
 
   // Riepiloghi finali generati in background dopo lo stop.
   useEffect(() => {
@@ -72,6 +78,9 @@ export default function App() {
     }
   };
 
+  // Primo avvio: setup guidato al posto dell'app.
+  if (needsSetup) return <Onboarding />;
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <UpdateBanner />
@@ -91,6 +100,10 @@ export default function App() {
               <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
               <SettingsPanel />
             </div>
+          </main>
+        ) : view === "contacts" ? (
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <Contacts />
           </main>
         ) : view === "history" ? (
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden">

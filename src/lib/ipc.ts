@@ -28,7 +28,10 @@ export type LlmProvider =
   | "anthropic"
   | "custom";
 /** Account delle API key nel Keychain. */
-export type KeyProvider = "deepgram" | "opencode" | "openai" | "anthropic" | "custom";
+export type KeyProvider = "deepgram" | "opencode" | "openai" | "anthropic" | "custom" | "smtp";
+
+/** Cifratura SMTP: STARTTLS (587) o TLS dall'inizio (465). */
+export type SmtpSecurity = "starttls" | "tls";
 
 /** Account della chiave del provider LLM; `null` = nessuna chiave. */
 export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
@@ -79,6 +82,17 @@ export interface Settings {
   echoCancellation: boolean;
   /** Ricerca per significato nello storico (modello locale di embedding). */
   semanticSearch: boolean;
+  /** Mittente delle email del riepilogo. */
+  emailFromName: string;
+  /** Vuoto = invio SMTP non configurato (resta la bozza nel client di posta). */
+  emailFrom: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: SmtpSecurity;
+  /** Vuoto = l'indirizzo del mittente. La password è nel Keychain (`smtp`). */
+  smtpUser: string;
+  /** Setup guidato del primo avvio completato (o saltato). */
+  onboardingDone: boolean;
 }
 
 export interface ModelInfo {
@@ -184,6 +198,34 @@ export const listInputDevices = () => invoke<InputDevice[]>("list_input_devices"
 
 export const systemAudioSupported = () => invoke<boolean>("system_audio_supported");
 
+/** Permesso del microfono (macOS); `unsupported` = nessun permesso da chiedere. */
+export type MicPermission = "granted" | "denied" | "restricted" | "undetermined" | "unsupported";
+
+export const micPermission = () => invoke<MicPermission>("mic_permission");
+
+/** Mostra il dialogo di sistema se il permesso non è mai stato chiesto; `true` = concesso. */
+export const requestMicPermission = () => invoke<boolean>("request_mic_permission");
+
+/** Prova audio del setup: solo livelli di microfono e audio di sistema. */
+export function startAudioCheck(onLevel: (e: LevelEvent) => void) {
+  const level = new Channel<LevelEvent>();
+  level.onmessage = onLevel;
+  return invoke<void>("start_audio_check", { onLevel: level });
+}
+
+export const stopAudioCheck = () => invoke<void>("stop_audio_check");
+
+/** Apre le Impostazioni di Sistema sul permesso indicato. */
+export const openPrivacySettings = (pane: "microphone" | "systemAudio") =>
+  invoke<void>("open_privacy_settings", { pane });
+
+/** Partecipante atteso; ruolo e descrizione copiati dalla rubrica. */
+export interface Participant {
+  name: string;
+  role: string;
+  description: string;
+}
+
 /** Contesto del meeting: vive nella sessione, non nei settings. */
 export interface MeetingContext {
   name: string;
@@ -193,6 +235,8 @@ export interface MeetingContext {
   codePath: string;
   /** Nomi dei parlanti di "Loro" per indice ("0" = Speaker 1), per la sessione. */
   speakers: Record<string, string>;
+  /** Partecipanti attesi (facoltativi), chiesti all'avvio. */
+  participants: Participant[];
 }
 
 /** Esito della verifica di una cartella di codice. */
@@ -359,6 +403,8 @@ export interface Meeting {
   sttModel: string;
   myLanguage: Language;
   theirLanguage: Language;
+  /** Partecipanti attesi indicati all'avvio (nomi). */
+  participants: string[];
 }
 
 export interface MeetingSummary extends Meeting {
@@ -471,6 +517,53 @@ export const generateSummary = (id: number, language?: Language) =>
 /** Salva il meeting in Markdown nel file scelto dall'utente; `null` se annulla. */
 export const exportMeetingMarkdown = (fileName: string, contents: string) =>
   invoke<string | null>("export_meeting_markdown", { fileName, contents });
+
+/** Nome di un parlante di "Loro" in un meeting salvato (vuoto = "Speaker N"). */
+export const setMeetingSpeaker = (id: number, speaker: number, name: string) =>
+  invoke<SavedSpeaker[]>("set_meeting_speaker", { id, speaker, name });
+
+/** Scheda della rubrica, legata ai parlanti per nome. */
+export interface Contact {
+  id: number;
+  name: string;
+  role: string;
+  description: string;
+  email: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+/** Senza `id` si crea, o si aggiorna il contatto con lo stesso nome. */
+export interface ContactInput {
+  id?: number | null;
+  name: string;
+  role: string;
+  description: string;
+  email: string;
+}
+
+export const listContacts = () => invoke<Contact[]>("list_contacts");
+
+export const saveContact = (contact: ContactInput) => invoke<Contact>("save_contact", { contact });
+
+export const deleteContact = (id: number) => invoke<void>("delete_contact", { id });
+
+/** Email composta dal frontend (`src/lib/email.ts`). */
+export interface OutgoingEmail {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+}
+
+/** Invio SMTP; ritorna il numero di destinatari. */
+export const sendEmail = (email: OutgoingEmail) => invoke<number>("send_email", { email });
+
+/** Apre il messaggio come bozza nel client di posta predefinito. */
+export const openEmailDraft = (email: OutgoingEmail) => invoke<void>("open_email_draft", { email });
+
+/** Prova connessione e login SMTP senza inviare nulla. */
+export const testSmtp = () => invoke<void>("test_smtp");
 
 export const updateSummaryChecklist = (id: number, items: ActionItem[]) =>
   invoke<Summary>("update_summary_checklist", { id, items });

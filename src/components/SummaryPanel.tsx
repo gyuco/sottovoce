@@ -1,7 +1,8 @@
-import { Check, Copy, Loader2, RefreshCw } from "lucide-react";
+import { Check, Copy, Loader2, Mail, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { SendSummaryDialog } from "@/components/SendSummaryDialog";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -15,8 +16,10 @@ import {
   type ActionItem,
   CONCRETE_LANGUAGES,
   type Language,
+  type MeetingDetails,
   type Summary,
   errorMessage,
+  getMeeting,
   updateSummaryChecklist,
 } from "@/lib/ipc";
 import { summaryMarkdown } from "@/lib/markdown";
@@ -60,6 +63,23 @@ export function SummaryPanel(props: {
 
   const copyAll = () => copy(summaryMarkdown(props.summary, t));
 
+  // Meeting riletto all'apertura: nomi dei parlanti aggiornati.
+  const [mailDetails, setMailDetails] = useState<MeetingDetails | null>(null);
+  const [mailOpen, setMailOpen] = useState(false);
+  const [loadingMail, setLoadingMail] = useState(false);
+  const openMail = async () => {
+    setLoadingMail(true);
+    setError(null);
+    try {
+      setMailDetails(await getMeeting(props.summary.meetingId));
+      setMailOpen(true);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setLoadingMail(false);
+    }
+  };
+
   return (
     <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4 shadow-xs">
       <header className="flex flex-wrap items-center gap-2">
@@ -90,11 +110,29 @@ export function SummaryPanel(props: {
             </Button>
           </>
         )}
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={loadingMail}
+          onClick={() => void openMail()}
+          title={t("summary.sendEmail")}
+        >
+          {loadingMail ? <Loader2 className="animate-spin" /> : <Mail />}
+          {t("summary.email")}
+        </Button>
         <Button size="xs" variant="ghost" onClick={copyAll} title={t("summary.copy")}>
           {copied ? <Check className="text-emerald-600" /> : <Copy />}
           {copied ? t("common.copied") : t("summary.copy")}
         </Button>
       </header>
+
+      {mailDetails && mailOpen && (
+        <SendSummaryDialog
+          onOpenChange={setMailOpen}
+          details={mailDetails}
+          summary={props.summary}
+        />
+      )}
 
       {error && (
         <p role="alert" className="text-xs text-destructive">

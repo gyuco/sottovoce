@@ -1,15 +1,16 @@
-import { History, type LucideIcon, Radio, Settings } from "lucide-react";
+import { BookUser, History, type LucideIcon, Radio, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
 
-export type View = "live" | "history" | "settings";
+export type View = "live" | "history" | "contacts" | "settings";
 
 const NAV: { view: View; icon: LucideIcon; label: string }[] = [
   { view: "live", icon: Radio, label: "nav.live" },
   { view: "history", icon: History, label: "nav.history" },
+  { view: "contacts", icon: BookUser, label: "nav.contacts" },
   { view: "settings", icon: Settings, label: "nav.settings" },
 ];
 

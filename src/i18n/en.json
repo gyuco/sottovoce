@@ -49,7 +49,7 @@
     "goal": "Goal",
     "goalPlaceholder": "Goal (e.g. close the Q3 budget)",
     "notes": "Notes",
-    "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
+    "notesPlaceholder": "Notes: acronyms, product names, what you want to achieve…",
     "codePath": "Code folder",
     "codePathPlaceholder": "Project path (e.g. ~/projects/app)",
     "codePathBrowse": "Choose folder",
@@ -261,6 +261,28 @@
     "about": {
       "line": "Sottovoce {{version}} · build {{commit}} · built {{built}}",
       "debug": "debug"
+    },
+    "email": {
+      "title": "Email",
+      "hint": "To send meeting summaries. Without an SMTP server you can still open the message as a draft in your mail app.",
+      "fromName": "Sender name",
+      "fromNamePlaceholder": "Jane Smith",
+      "from": "Sender address",
+      "host": "SMTP server",
+      "port": "Port",
+      "security": "Security",
+      "starttls": "STARTTLS (587)",
+      "tls": "TLS/SSL (465)",
+      "user": "Username",
+      "userPlaceholder": "Same as the sender address",
+      "password": "SMTP password",
+      "passwordHint": "Stored in the macOS Keychain. For Gmail, iCloud and Outlook use an app password.",
+      "test": "Test connection",
+      "testOk": "Connection and login succeeded."
+    },
+    "setup": {
+      "rerun": "Run guided setup again",
+      "busy": "Available when no call is running"
     }
   },
   "permissions": {
@@ -274,13 +296,15 @@
   "common": {
     "copied": "Copied",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "nav": {
     "label": "Navigation",
     "live": "Live session",
     "settings": "Settings",
-    "history": "History"
+    "history": "History",
+    "contacts": "Contacts"
   },
   "header": {
     "untitled": "New meeting",
@@ -330,7 +354,7 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rename {{name}}",
-    "renameHint": "Click to name this speaker",
+    "renameHint": "Click to open the card: name, role, email",
     "voice": {
       "region": "Speakers recognized by voice",
       "suggest": "sounds like {{name}}?",
@@ -339,6 +363,16 @@
       "recognized": "recognized as {{name}} from the voice profile",
       "notThem": "Not {{name}}",
       "ok": "OK"
+    },
+    "card": {
+      "title": "{{name}}'s card",
+      "hint": "The name appears in the transcript and summaries. Role, email and description stay in your contacts.",
+      "inContacts": "In contacts",
+      "saveToContacts": "Save to contacts",
+      "saveHint": "Creates a card you can reuse in future meetings.",
+      "updateHint": "Updates the card already in your contacts.",
+      "clear": "Remove name",
+      "whoIs": "Which participant is it?"
     }
   },
   "history": {
@@ -420,7 +454,9 @@
     "ready": "Final summary ready",
     "failed": "Summary not generated: {{message}}. You can retry from History.",
     "open": "Open summary",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "email": "Email",
+    "sendEmail": "Send the summary by email"
   },
   "update": {
     "available": "New version available",
@@ -467,6 +503,247 @@
   },
   "startDialog": {
     "title": "What language is the call in?",
-    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language."
+    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language.",
+    "heading": "New call",
+    "intro": "Before you start: the call language and, if you like, who will attend.",
+    "context": "Meeting context",
+    "optional": "optional",
+    "participants": "Who will attend?",
+    "participantsHint": "Pick from your contacts. A new name opens a card to save to your contacts. It helps name speakers and improves suggestions, the summary and email.",
+    "namePlaceholder": "e.g. Sprint review with Acme"
+  },
+  "contacts": {
+    "title": "Contacts",
+    "hint": "People you met in meetings. Cards are also filled in when you name a speaker.",
+    "search": "Search by name, role or email…",
+    "empty": "No contacts yet. Add one or name a speaker during a call.",
+    "noResults": "No contacts found.",
+    "add": "New contact",
+    "edit": "Edit {{name}}",
+    "delete": "Delete {{name}}",
+    "deleteTitle": "Delete contact?",
+    "deleteConfirm": "{{name}}'s card will be removed from your contacts. Names already given in meetings stay.",
+    "deleteAction": "Delete",
+    "formHint": "The name links the card to meeting speakers.",
+    "invalidEmail": "Invalid email address.",
+    "fields": {
+      "name": "Name",
+      "role": "Role",
+      "rolePlaceholder": "e.g. CTO, Product manager",
+      "email": "Email",
+      "emailPlaceholder": "name@company.com",
+      "description": "Description",
+      "descriptionPlaceholder": "Who they are, what they work on, how you met…"
+    }
+  },
+  "email": {
+    "subject": "Summary: {{name}}",
+    "heading": "Meeting summary",
+    "duration": "duration {{duration}}",
+    "participants": "Participants",
+    "goal": "Goal",
+    "overview": "At a glance",
+    "keyPoints": "Key points",
+    "actions": "Action items",
+    "footer": "Summary prepared with Sottovoce.",
+    "dialog": {
+      "title": "Send the summary",
+      "to": "Recipients",
+      "noEmail": "no email in contacts",
+      "noParticipants": "No named speakers: add addresses below.",
+      "extra": "Other recipients",
+      "extraPlaceholder": "Other addresses, comma separated",
+      "invalid": "Invalid address: {{address}}",
+      "subject": "Subject",
+      "note": "Message (optional)",
+      "notePlaceholder": "Hi all, here is the summary of today's meeting…",
+      "preview": "Show preview",
+      "hidePreview": "Hide preview",
+      "smtpMissing": "To send directly, set up the server in Settings → Email. Meanwhile you can open the message as a draft in your mail app.",
+      "sent": "Email sent (recipients: {{count}}).",
+      "draftOpened": "Draft opened in your mail app.",
+      "draft": "Open in mail app",
+      "send": "Send"
+    }
+  },
+  "participants": {
+    "label": "Participants",
+    "placeholder": "Add participants…",
+    "more": "Add…",
+    "full": "Up to {{max}} participants",
+    "remove": "Remove {{name}}",
+    "count": "{{count}} participants",
+    "edit": "Click to edit the card",
+    "notInContacts": "Not in contacts: click to complete and save the card",
+    "newHint": "“{{name}}” is not in your contacts: press Enter to create the card.",
+    "newTitle": "Add {{name}} to contacts",
+    "newDescription": "Participants come from your contacts: fill in the missing details (role, email, description) and save."
+  },
+  "onboarding": {
+    "progress": "Setup progress",
+    "steps": {
+      "languages": "Languages",
+      "engine": "Transcription",
+      "models": "Models",
+      "audio": "Audio",
+      "ai": "Translation and summaries",
+      "done": "Done"
+    },
+    "stepOf": "{{n}} of {{total}}",
+    "skip": "Skip setup",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Start using Sottovoce",
+    "recommended": "Recommended",
+    "welcome": {
+      "title": "Welcome to Sottovoce",
+      "lead": "Your assistant for Teams, Meet and Zoom calls: it listens with you and whispers what you need.",
+      "time": "We'll walk you through the setup: it takes a couple of minutes and you can change everything later.",
+      "start": "Let's start",
+      "skip": "I'll set it up myself",
+      "features": {
+        "transcribe": {
+          "title": "Transcribes",
+          "text": "You and the others, on two separate channels."
+        },
+        "translate": {
+          "title": "Translates",
+          "text": "Every sentence in your language, in real time."
+        },
+        "suggest": {
+          "title": "Suggests",
+          "text": "What to say or ask, while you talk."
+        },
+        "summarize": {
+          "title": "Summarizes",
+          "text": "Key points and to-dos at the end of the call."
+        }
+      }
+    },
+    "languages": {
+      "title": "Which languages are spoken?",
+      "lead": "A fixed language makes transcription more accurate. You can also pick it for each call.",
+      "mine": "Your language",
+      "mineHint": "The one you speak and read translations and summaries in.",
+      "theirs": "The others' language",
+      "theirsHint": "If it changes from call to call, leave it on \"Automatic\"."
+    },
+    "engine": {
+      "title": "Where to transcribe?",
+      "lead": "Choose whether audio stays on your Mac or goes to a cloud service.",
+      "local": {
+        "title": "On your Mac",
+        "text": "Private and free: audio never leaves the computer and it works offline too. You download the models only once."
+      },
+      "cloud": {
+        "title": "In the cloud (Deepgram)",
+        "text": "A bit faster and more accurate on difficult audio. Needs a Deepgram account, and audio goes to their servers.",
+        "keyHint": "Create the key at console.deepgram.com and paste it here: it stays in the macOS Keychain."
+      },
+      "localOnly": "Local only",
+      "localOnlyHint": "Guarantees that no data leaves your Mac during calls, including translations and suggestions."
+    },
+    "models": {
+      "title": "Download the models",
+      "lead": "They stay on your Mac and work offline. The download keeps going even if you move on.",
+      "required": "Required",
+      "download": "Download ({{size}})",
+      "allReady": "All set",
+      "background": "Downloading: you can continue the setup.",
+      "purpose": {
+        "vad": {
+          "title": "Speech detection",
+          "text": "Knows when someone is speaking"
+        },
+        "stt": {
+          "title": "Transcription",
+          "text": "Turns voice into text"
+        },
+        "sttBackup": {
+          "title": "Offline transcription",
+          "text": "A backup, in case you want to transcribe without the cloud"
+        },
+        "speakers": {
+          "title": "Recognize who is speaking",
+          "text": "Tells participants apart"
+        },
+        "search": {
+          "title": "Search your history",
+          "text": "Finds meetings by meaning, not just by words"
+        }
+      }
+    },
+    "audio": {
+      "title": "Let's test the audio",
+      "lead": "Sottovoce listens to your microphone and to your Mac's audio (the others in the call). Let's check both come through.",
+      "askTitle": "Microphone permission needed",
+      "askText": "macOS will ask you to allow access. Sottovoce never stores audio.",
+      "deniedTitle": "The microphone is blocked",
+      "deniedText": "Enable Sottovoce in System Settings → Privacy & Security → Microphone, then come back. You may need to reopen the app.",
+      "allow": "Allow microphone",
+      "openSettings": "Open System Settings",
+      "recheck": "Check again",
+      "mic": "Your microphone",
+      "micHint": "Say something: the bar should move.",
+      "system": "Mac audio",
+      "systemHint": "Play a video or a song: the bar should move.",
+      "systemSilent": "Not moving? Allow Sottovoce to record system audio in System Settings → Privacy & Security.",
+      "systemOff": "System audio is turned off: you can enable it in Settings.",
+      "headphones": "With headphones transcription is cleaner; without them, Sottovoce removes the others' echo from your microphone."
+    },
+    "ai": {
+      "title": "Translation and summaries",
+      "lead": "Translating, suggesting and summarizing need a language model. You can also skip this: transcription works anyway.",
+      "modes": {
+        "ollama": {
+          "title": "Ollama on your Mac",
+          "text": "Private and free, needs Ollama installed."
+        },
+        "cloud": {
+          "title": "Cloud service",
+          "text": "OpenAI, Claude or OpenCode, with your own key."
+        },
+        "later": {
+          "title": "Later",
+          "text": "Set it up whenever you like in Settings."
+        }
+      },
+      "localOnly": "With \"Local only\" on, only a model on your Mac can be used.",
+      "ollamaMissing": "Ollama isn't responding. Install it from ollama.com, open it and try again.",
+      "ollamaNoModels": "Ollama is running but has no models. Download one from Terminal, for example: ollama pull qwen3:8b",
+      "noModels": "No compatible model found with this key.",
+      "retry": "Try again",
+      "model": "Model",
+      "modelHint": "Used for translation, suggestions and summaries.",
+      "testOk": "Working ({{ms}} ms)"
+    },
+    "done": {
+      "title": "All set",
+      "lead": "Here's how Sottovoce is configured.",
+      "rows": {
+        "stt": "Transcription",
+        "mic": "Microphone",
+        "system": "Mac audio",
+        "ai": "Translation and summaries",
+        "search": "History search"
+      },
+      "stt": {
+        "local": "On your Mac",
+        "deepgram": "Deepgram",
+        "needKey": "Deepgram key missing",
+        "downloading": "Models downloading",
+        "needModels": "Models missing"
+      },
+      "heard": "Working",
+      "notChecked": "Not checked",
+      "aiLater": "To be set up",
+      "hint": "You can change everything in Settings and run this setup again anytime. To begin a call, press \"Start\".",
+      "search": {
+        "ready": "Ready",
+        "downloading": "Model downloading",
+        "missing": "Model missing",
+        "off": "Turned off"
+      }
+    }
   }
 }

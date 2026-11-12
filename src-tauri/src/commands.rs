@@ -6,7 +6,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use serde::Serialize;
-use sv_audio::{InputDevice, LevelEvent};
+use sv_audio::{InputDevice, LevelEvent, MicPermission};
 use sv_llm::{ChatRequest, Message, ModelInfo};
 use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
@@ -16,6 +16,7 @@ use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
 use crate::diarize::{VoiceEvent, VoiceProfiles};
+use crate::email::{self, OutgoingEmail};
 use crate::export;
 use crate::history_chat::{self, HistoryAnswer};
 use crate::llm;
@@ -48,6 +49,98 @@ pub async fn list_input_devices() -> CmdResult<Vec<InputDevice>> {
 #[tauri::command]
 pub fn system_audio_supported() -> bool {
     sv_audio::system::is_supported()
+}
+
+/// Stato del permesso del microfono (setup guidato).
+#[tauri::command]
+pub fn mic_permission() -> MicPermission {
+    sv_audio::mic_permission()
+}
+
+/// Chiede il permesso del microfono; `true` se concesso.
+#[tauri::command]
+pub async fn request_mic_permission() -> CmdResult<bool> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    sv_audio::request_mic_permission(move |granted| {
+        let _ = tx.send(granted);
+    });
+    rx.await.map_err(to_msg)
+}
+
+/// Prova audio del setup guidato: solo livelli di microfono e audio di
+/// sistema, niente trascrizione. Rifiutata a sessione attiva.
+#[tauri::command]
+pub async fn start_audio_check(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsStore>,
+    on_level: Channel<LevelEvent>,
+) -> CmdResult<()> {
+    if state.session.lock().await.is_some() {
+        return Err("prova audio non disponibile durante una sessione".into());
+    }
+    let settings = settings.get();
+    // Il canale dei frame resta senza lettori: qui servono solo i livelli.
+    let (frames, _) = tokio::sync::broadcast::channel(16);
+    let capture = sv_audio::Capture::start(
+        sv_audio::CaptureConfig {
+            mic_device_id: settings.mic_device_id,
+            system_audio: settings.system_audio && sv_audio::system::is_supported(),
+        },
+        frames,
+        move |e| {
+            let _ = on_level.send(e);
+        },
+    )
+    .map_err(to_msg)?;
+    let old = state
+        .audio_check
+        .lock()
+        .expect("audio check lock")
+        .replace(capture);
+    if let Some(old) = old {
+        old.stop();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_audio_check(state: State<'_, AppState>) {
+    stop_check(&state);
+}
+
+fn stop_check(state: &AppState) {
+    let capture = state.audio_check.lock().expect("audio check lock").take();
+    if let Some(capture) = capture {
+        capture.stop();
+    }
+}
+
+/// Pannello privacy delle Impostazioni di Sistema da aprire.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrivacyPane {
+    Microphone,
+    /// "Registrazione schermo e audio di sistema".
+    SystemAudio,
+}
+
+/// Apre le Impostazioni di Sistema sul permesso indicato (macOS).
+#[tauri::command]
+pub fn open_privacy_settings(pane: PrivacyPane) -> CmdResult<()> {
+    let anchor = match pane {
+        PrivacyPane::Microphone => "Privacy_Microphone",
+        PrivacyPane::SystemAudio => "Privacy_ScreenCapture",
+    };
+    if !cfg!(target_os = "macos") {
+        return Err("disponibile solo su macOS".into());
+    }
+    std::process::Command::new("open")
+        .arg(format!(
+            "x-apple.systempreferences:com.apple.preference.security?{anchor}"
+        ))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("apertura delle Impostazioni di Sistema non riuscita: {e}"))
 }
 
 /// Versione e build in esecuzione (Impostazioni → Informazioni).
@@ -117,6 +210,7 @@ pub async fn start_session(
     context: Option<MeetingContext>,
     language: Option<Language>,
 ) -> CmdResult<()> {
+    stop_check(&state);
     let mut slot = state.session.lock().await;
     if let Some(old) = slot.take() {
         // Riavvio a sessione attiva (es. cambio microfono): il riepilogo
@@ -156,6 +250,7 @@ pub async fn start_session(
         my_language: my_spoken.code().into(),
         their_language: settings.their_language.code().into(),
         speakers: context.speakers.clone(),
+        participants: context.participant_names(),
     };
     // Il DB può essere su disco lento: mai sul thread async.
     let db_path = db.path.clone();
@@ -710,6 +805,29 @@ pub async fn generate_summary(
         return Err("nessuna trascrizione per questo meeting".into());
     }
 
+    // Ruolo e descrizione dei partecipanti dalla rubrica attuale.
+    let names = details.meeting.participants.clone();
+    let path = db.path.clone();
+    let contacts = blocking(move || Ok(sv_store::Store::open(path)?.contacts()?))
+        .await
+        .unwrap_or_default();
+    let participants = names
+        .into_iter()
+        .map(|name| {
+            let key = sv_store::name_key(&name);
+            match contacts.iter().find(|c| sv_store::name_key(&c.name) == key) {
+                Some(c) => crate::meeting::Participant {
+                    name,
+                    role: c.role.clone(),
+                    description: c.description.clone(),
+                },
+                None => crate::meeting::Participant {
+                    name,
+                    ..Default::default()
+                },
+            }
+        })
+        .collect();
     let speakers = details
         .speakers
         .iter()
@@ -722,6 +840,7 @@ pub async fn generate_summary(
         // Il percorso del codice non è salvato nello storico.
         code_path: String::new(),
         speakers,
+        participants,
     };
     let blocks = details
         .blocks
@@ -783,6 +902,84 @@ pub async fn update_summary_checklist(
 ) -> CmdResult<sv_store::Summary> {
     let path = db.path.clone();
     blocking(move || Ok(sv_store::Store::open(path)?.set_action_items(id, &items)?)).await
+}
+
+/// Nome di un parlante di "Loro" in un meeting salvato (vuoto = "Speaker N").
+#[tauri::command]
+pub async fn set_meeting_speaker(
+    db: State<'_, Db>,
+    search: State<'_, Search>,
+    id: i64,
+    speaker: u8,
+    name: String,
+) -> CmdResult<Vec<sv_store::SpeakerName>> {
+    let path = db.path.clone();
+    let speakers = blocking(move || {
+        let store = sv_store::Store::open(path)?;
+        store.set_speaker_name(id, speaker, &name)?;
+        Ok(store.speakers(id)?)
+    })
+    .await?;
+    // I nomi dei parlanti finiscono nei passaggi indicizzati.
+    search.enqueue(id);
+    Ok(speakers)
+}
+
+// --- Rubrica -----------------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_contacts(db: State<'_, Db>) -> CmdResult<Vec<sv_store::Contact>> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.contacts()?)).await
+}
+
+/// Crea o aggiorna una scheda; senza `id` si unisce al contatto con lo stesso nome.
+#[tauri::command]
+pub async fn save_contact(
+    db: State<'_, Db>,
+    contact: sv_store::ContactInput,
+) -> CmdResult<sv_store::Contact> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.save_contact(&contact)?)).await
+}
+
+#[tauri::command]
+pub async fn delete_contact(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_contact(id)?)).await
+}
+
+// --- Email -------------------------------------------------------------------
+
+/// Invia il riepilogo con il server SMTP configurato; ritorna i destinatari.
+#[tauri::command]
+pub async fn send_email(
+    settings: State<'_, SettingsStore>,
+    email: OutgoingEmail,
+) -> CmdResult<usize> {
+    email::send(&settings.get(), email)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Apre il riepilogo come bozza nel client di posta predefinito.
+#[tauri::command]
+pub async fn open_email_draft(
+    app: AppHandle,
+    settings: State<'_, SettingsStore>,
+    email: OutgoingEmail,
+) -> CmdResult<()> {
+    let dir = app.path().app_cache_dir().map_err(to_msg)?.join("drafts");
+    let settings = settings.get();
+    blocking(move || email::open_draft(&dir, &settings, email).map(|_| ())).await
+}
+
+/// Prova connessione e login SMTP senza inviare nulla.
+#[tauri::command]
+pub async fn test_smtp(settings: State<'_, SettingsStore>) -> CmdResult<()> {
+    email::test(&settings.get())
+        .await
+        .map_err(|e| format!("{e:#}"))
 }
 
 // --- API key (Keychain) ---------------------------------------------------

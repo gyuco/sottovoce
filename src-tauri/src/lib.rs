@@ -5,6 +5,7 @@ mod commands;
 mod compress;
 mod diarize;
 mod echo;
+mod email;
 mod export;
 mod history_chat;
 mod llm;
@@ -103,6 +104,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::system_audio_supported,
+            commands::mic_permission,
+            commands::request_mic_permission,
+            commands::start_audio_check,
+            commands::stop_audio_check,
+            commands::open_privacy_settings,
             commands::app_info,
             commands::js_error,
             commands::quit_app,
@@ -119,6 +125,13 @@ pub fn run() {
             commands::generate_summary,
             commands::update_summary_checklist,
             commands::export_meeting_markdown,
+            commands::set_meeting_speaker,
+            commands::list_contacts,
+            commands::save_contact,
+            commands::delete_contact,
+            commands::send_email,
+            commands::open_email_draft,
+            commands::test_smtp,
             commands::update_meeting_context,
             commands::inspect_code_path,
             commands::ask_model,

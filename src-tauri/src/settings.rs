@@ -77,6 +77,20 @@ impl LlmProvider {
     }
 }
 
+/// Cifratura della connessione SMTP.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SmtpSecurity {
+    /// Connessione in chiaro promossa a TLS (porta 587).
+    #[default]
+    Starttls,
+    /// TLS dall'inizio (porta 465).
+    Tls,
+}
+
+/// Account Keychain della password SMTP (vedi `secrets::KNOWN_PROVIDERS`).
+pub const SMTP_KEY: &str = "smtp";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -140,6 +154,19 @@ pub struct Settings {
     /// Ricerca per significato nello storico (modello locale di embedding):
     /// indicizza i meeting in background. Senza il modello resta spenta.
     pub semantic_search: bool,
+    /// Nome del mittente delle email (riepilogo del meeting).
+    pub email_from_name: String,
+    /// Indirizzo del mittente; vuoto = invio SMTP non configurato.
+    pub email_from: String,
+    /// Server SMTP (es. `smtp.gmail.com`); la password è nel Keychain.
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_security: SmtpSecurity,
+    /// Utente SMTP; vuoto = l'indirizzo del mittente.
+    pub smtp_user: String,
+    /// Setup guidato del primo avvio completato (o saltato). I file salvati
+    /// prima del setup guidato non hanno la chiave: valgono come completati.
+    pub onboarding_done: bool,
 }
 
 /// Modello di un compito LLM con il suo provider.
@@ -218,6 +245,13 @@ impl Default for Settings {
             live_assist: false,
             echo_cancellation: true,
             semantic_search: true,
+            email_from_name: String::new(),
+            email_from: String::new(),
+            smtp_host: String::new(),
+            smtp_port: 587,
+            smtp_security: SmtpSecurity::Starttls,
+            smtp_user: String::new(),
+            onboarding_done: false,
         }
     }
 }
@@ -239,7 +273,7 @@ impl SettingsStore {
     /// Carica da `path`; file assente o illeggibile → default (con warning).
     pub fn load(path: PathBuf) -> Self {
         let current = match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
+            Ok(bytes) => parse_saved(&bytes).unwrap_or_else(|e| {
                 tracing::warn!(path = %path.display(), "settings non validi, uso i default: {e}");
                 Settings::default()
             }),
@@ -280,6 +314,16 @@ impl SettingsStore {
         *guard = next.clone();
         Ok(next)
     }
+}
+
+/// Settings salvati. Senza `onboardingDone` il file viene da una versione
+/// precedente al setup guidato: l'app era già configurata, niente setup.
+fn parse_saved(bytes: &[u8]) -> serde_json::Result<Settings> {
+    let mut value: Value = serde_json::from_slice(bytes)?;
+    if let Value::Object(obj) = &mut value {
+        obj.entry("onboardingDone").or_insert(Value::Bool(true));
+    }
+    serde_json::from_value(value)
 }
 
 /// Scrittura atomica: file temporaneo + rename.
@@ -349,6 +393,21 @@ mod tests {
         assert_eq!(s.stt_engine, SttEngineKind::Deepgram);
         assert!(!s.local_only);
         assert!(s.nudges);
+        // Già configurato prima del setup guidato: niente setup.
+        assert!(s.onboarding_done);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn onboarding_on_first_run_only() {
+        let path = temp_path("onboarding");
+        let store = SettingsStore::load(path.clone());
+        assert!(!store.get().onboarding_done);
+        // Salvato a metà setup: al riavvio il setup riparte.
+        store.update(json!({"myLanguage": "en"})).unwrap();
+        assert!(!SettingsStore::load(path.clone()).get().onboarding_done);
+        store.update(json!({"onboardingDone": true})).unwrap();
+        assert!(SettingsStore::load(path.clone()).get().onboarding_done);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

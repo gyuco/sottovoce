@@ -39,6 +39,7 @@ enum Command {
         name: String,
         goal: String,
         notes: String,
+        participants: Vec<String>,
     },
     Assist {
         kind: String,
@@ -173,11 +174,12 @@ impl StoreHandle {
         self.send(Command::SpeakerNames(names.clone()));
     }
 
-    pub fn context(&self, name: &str, goal: &str, notes: &str) {
+    pub fn context(&self, name: &str, goal: &str, notes: &str, participants: &[String]) {
         self.send(Command::Context {
             name: name.to_owned(),
             goal: goal.to_owned(),
             notes: notes.to_owned(),
+            participants: participants.to_vec(),
         });
     }
 
@@ -382,10 +384,16 @@ fn apply(
                 )?;
             }
         }
-        Command::Context { name, goal, notes } => {
+        Command::Context {
+            name,
+            goal,
+            notes,
+            participants,
+        } => {
             tx.execute(
-                "UPDATE meetings SET name = ?1, goal = ?2, notes = ?3 WHERE id = ?4",
-                params![name, goal, notes, meeting_id],
+                "UPDATE meetings SET name = ?1, goal = ?2, notes = ?3, participants = ?4
+                 WHERE id = ?5",
+                params![name, goal, notes, json_names(&participants), meeting_id],
             )?;
         }
         Command::Assist { kind, text, at_ms } => {
@@ -406,6 +414,10 @@ fn apply(
     Ok(())
 }
 
+fn json_names(names: &[String]) -> String {
+    serde_json::to_string(names).unwrap_or_else(|_| "[]".into())
+}
+
 fn create_meeting(
     conn: &mut Connection,
     draft: &MeetingDraft,
@@ -415,8 +427,8 @@ fn create_meeting(
     tx.execute(
         "INSERT INTO meetings
              (name, goal, notes, started_at_ms, stt_engine, stt_model,
-              my_language, their_language)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+              my_language, their_language, participants)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             draft.name,
             draft.goal,
@@ -426,6 +438,7 @@ fn create_meeting(
             draft.stt_model,
             draft.my_language,
             draft.their_language,
+            json_names(&draft.participants),
         ],
     )?;
     let meeting_id = tx.last_insert_rowid();
@@ -491,6 +504,7 @@ mod tests {
             my_language: "it".into(),
             their_language: "multi".into(),
             speakers: BTreeMap::from([(0, "Marco".to_owned())]),
+            participants: vec!["Marco".into()],
             ..MeetingDraft::default()
         }
     }
@@ -519,7 +533,12 @@ mod tests {
         store.segment(segment(2, Some(1)));
         store.translation(1, "prima frase", "it", 120);
         store.relabel(vec![(2, Some(0))]);
-        store.context("Acme sync 2", "chiudere", "note nuove");
+        store.context(
+            "Acme sync 2",
+            "chiudere",
+            "note nuove",
+            &["Marco".into(), "Anna Bianchi".into()],
+        );
         store.assist("say", "proposta", 1500);
         store.speaker_names(&BTreeMap::from([
             (0, "Marco".to_owned()),
@@ -532,6 +551,7 @@ mod tests {
         assert_eq!(details.meeting.name, "Acme sync 2");
         assert_eq!(details.meeting.goal, "chiudere");
         assert_eq!(details.meeting.notes, "note nuove");
+        assert_eq!(details.meeting.participants, ["Marco", "Anna Bianchi"]);
         assert_eq!(details.meeting.stt_engine, "deepgram");
         assert_eq!(details.meeting.stt_model, "nova-3");
         assert_eq!(details.meeting.my_language, "it");
