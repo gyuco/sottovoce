@@ -899,5 +899,14 @@
         "off": "Desactivada"
       }
     }
+  },
+  "consent": {
+    "title": "Pide el consentimiento a los participantes",
+    "intro": "Antes de transcribir, pregunta a los participantes si están de acuerdo: lee el mensaje o pégalo en el chat de la llamada. Empieza solo si nadie se opone.",
+    "message": "Mensaje para los participantes",
+    "language": "Idioma del mensaje",
+    "copy": "Copiar mensaje",
+    "cloudNote": "La transcripción o el modelo de lenguaje usan servicios externos, así que el mensaje lo indica. Con «Solo local» en Ajustes la transcripción se queda por completo en este ordenador.",
+    "confirm": "Han aceptado, empezar"
   }
 }

@@ -22,6 +22,7 @@ import { isLocalSession } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
 import { useAudioStore, useSelectedMicId } from "@/stores/audio";
+import { useConsentStore } from "@/stores/consent";
 import { MEETING_LIMITS, useMeetingStore } from "@/stores/meeting";
 import { freshParticipants, useDueMeeting, useScheduledStore } from "@/stores/scheduled";
 import { useSettingsStore } from "@/stores/settings";
@@ -115,12 +116,15 @@ export function SessionHeader() {
             // La scelta diventa la proposta per la prossima call (non quella
             // fissata in una riunione programmata).
             if (!scheduled) void useSettingsStore.getState().update({ theirLanguage: language });
-            void start(language).then(() => {
+            void (async () => {
+              // Prima di trascrivere: consenso dei partecipanti.
+              if (!(await useConsentStore.getState().ask(language))) return;
+              await start(language);
               // Avviata: la riunione esce dall'agenda.
               if (scheduled && useAudioStore.getState().status === "running") {
                 void useScheduledStore.getState().remove(scheduled.id);
               }
-            });
+            })();
           }}
         />
       )}

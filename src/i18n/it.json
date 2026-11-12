@@ -899,5 +899,14 @@
         "off": "Disattivata"
       }
     }
+  },
+  "consent": {
+    "title": "Chiedi il consenso ai partecipanti",
+    "intro": "Prima di trascrivere, chiedi a chi partecipa se è d'accordo: leggi il messaggio o incollalo nella chat della call. Avvia solo se nessuno si oppone.",
+    "message": "Messaggio per i partecipanti",
+    "language": "Lingua del messaggio",
+    "copy": "Copia messaggio",
+    "cloudNote": "Trascrizione o modello linguistico usano servizi esterni, quindi il messaggio lo dice. Con “Solo locale” nelle Impostazioni la trascrizione resta tutta su questo computer.",
+    "confirm": "Hanno accettato, avvia"
   }
 }

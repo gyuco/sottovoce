@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { AssistPanel } from "@/components/AssistPanel";
 import { AudioPanel } from "@/components/AudioPanel";
+import { ConsentDialog } from "@/components/ConsentDialog";
 import { Contacts } from "@/components/Contacts";
 import { History } from "@/components/History";
 import { InsightsPanel } from "@/components/InsightsPanel";
@@ -99,6 +100,7 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <UpdateBanner />
+      <ConsentDialog />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar

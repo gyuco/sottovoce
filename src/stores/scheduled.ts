@@ -14,6 +14,7 @@ import {
   saveScheduledMeeting,
 } from "@/lib/ipc";
 import { useAudioStore } from "@/stores/audio";
+import { useConsentStore } from "@/stores/consent";
 import { useCalendarStore } from "@/stores/calendar";
 import { findContact, useContactsStore } from "@/stores/contacts";
 import { useMeetingStore } from "@/stores/meeting";
@@ -118,6 +119,9 @@ export const useScheduledStore = create<ScheduledState>((set, get) => ({
   start: async (m) => {
     const audio = useAudioStore.getState();
     if (audio.status !== "idle") return;
+    // Prima di trascrivere: consenso dei partecipanti.
+    if (!(await useConsentStore.getState().ask(m.language))) return;
+    if (useAudioStore.getState().status !== "idle") return;
     applyScheduledContext(m);
     await audio.start(m.language);
     if (useAudioStore.getState().status === "running") await get().remove(m.id);

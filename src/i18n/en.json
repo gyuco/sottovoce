@@ -899,5 +899,14 @@
         "off": "Turned off"
       }
     }
+  },
+  "consent": {
+    "title": "Ask participants for consent",
+    "intro": "Before transcribing, ask the participants whether they agree: read the message aloud or paste it into the call chat. Start only if nobody objects.",
+    "message": "Message for participants",
+    "language": "Message language",
+    "copy": "Copy message",
+    "cloudNote": "Transcription or the language model use external services, so the message says so. With “Local only” in Settings the transcript stays entirely on this computer.",
+    "confirm": "They agreed, start"
   }
 }
