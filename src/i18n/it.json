@@ -302,6 +302,7 @@
   "nav": {
     "label": "Navigazione",
     "live": "Sessione live",
+    "scheduled": "Agenda",
     "settings": "Impostazioni",
     "history": "Storico",
     "contacts": "Rubrica"
@@ -535,6 +536,33 @@
       "description": "Descrizione",
       "descriptionPlaceholder": "Chi è, di cosa si occupa, come vi siete conosciuti…"
     }
+  },
+  "scheduled": {
+    "title": "Agenda",
+    "hint": "Riunioni programmate con il contesto già pronto: all'ora giusta basta un clic su Avvia.",
+    "add": "Nuova riunione",
+    "edit": "Modifica {{name}}",
+    "delete": "Elimina {{name}}",
+    "deleteTitle": "Eliminare la riunione programmata?",
+    "deleteConfirm": "{{name}} verrà tolta dall'agenda.",
+    "deleteAction": "Elimina",
+    "empty": "Nessuna riunione in programma. Creane una per preparare contesto e partecipanti in anticipo.",
+    "missed": "Non avviate",
+    "notStarted": "non avviata",
+    "today": "Oggi",
+    "tomorrow": "Domani",
+    "now": "In corso",
+    "soon": "A breve",
+    "minutes": "{{count}} min",
+    "formHint": "Giorno, ora e contesto della call. Quando è ora la trovi in Sessione live, pronta da avviare.",
+    "date": "Giorno",
+    "time": "Ora",
+    "duration": "Durata",
+    "startHint": "Avvia la call con il contesto di questa riunione",
+    "startsIn": "inizia tra {{count}} min",
+    "started": "è ora",
+    "participants": "partecipanti: {{count}}",
+    "dismiss": "Nascondi"
   },
   "email": {
     "subject": "Riepilogo: {{name}}",

@@ -548,6 +548,36 @@ export const saveContact = (contact: ContactInput) => invoke<Contact>("save_cont
 
 export const deleteContact = (id: number) => invoke<void>("delete_contact", { id });
 
+/** Riunione programmata: giorno, ora e contesto pronti per l'avvio. */
+export interface ScheduledMeeting {
+  id: number;
+  name: string;
+  goal: string;
+  notes: string;
+  codePath: string;
+  participants: Participant[];
+  /** Lingua della call. */
+  language: Language;
+  startsAtMs: number;
+  durationMin: number;
+  createdAtMs: number;
+  updatedAtMs: number;
+}
+
+/** Senza `id` si crea, con `id` si aggiorna. */
+export type ScheduledMeetingInput = Omit<ScheduledMeeting, "id" | "createdAtMs" | "updatedAtMs"> & {
+  id?: number | null;
+};
+
+/** Riunioni che finiscono dopo `sinceMs`, dalla più vicina. */
+export const listScheduledMeetings = (sinceMs: number) =>
+  invoke<ScheduledMeeting[]>("list_scheduled_meetings", { sinceMs });
+
+export const saveScheduledMeeting = (meeting: ScheduledMeetingInput) =>
+  invoke<ScheduledMeeting>("save_scheduled_meeting", { meeting });
+
+export const deleteScheduledMeeting = (id: number) => invoke<void>("delete_scheduled_meeting", { id });
+
 /** Email composta dal frontend (`src/lib/email.ts`). */
 export interface OutgoingEmail {
   to: string[];

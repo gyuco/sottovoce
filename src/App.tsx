@@ -11,6 +11,7 @@ import { MeetingChat } from "@/components/MeetingChat";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { NudgeCard } from "@/components/NudgeCard";
 import { Onboarding } from "@/components/onboarding/Onboarding";
+import { Scheduled, ScheduledBanner } from "@/components/Scheduled";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SummaryNotice } from "@/components/SummaryNotice";
@@ -28,6 +29,7 @@ import { useContactsStore } from "@/stores/contacts";
 import { useInsightsStore } from "@/stores/insights";
 import { useModelsStore } from "@/stores/models";
 import { useNudgeEngine, useNudgeStore } from "@/stores/nudges";
+import { useDueMeeting, useScheduledStore, useScheduledTicker } from "@/stores/scheduled";
 import { useSettingsStore } from "@/stores/settings";
 import { useUpdateStore } from "@/stores/update";
 
@@ -66,6 +68,8 @@ export default function App() {
   }, [t, i18n.resolvedLanguage]);
 
   useNudgeEngine(status === "running", startedAt);
+  useScheduledTicker();
+  const dueMeeting = useDueMeeting();
   useWidgetSync();
 
   const openSummary = (meetingId: number) => {
@@ -101,6 +105,15 @@ export default function App() {
               <SettingsPanel />
             </div>
           </main>
+        ) : view === "scheduled" ? (
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <Scheduled
+              onStart={(m) => {
+                setView("live");
+                void useScheduledStore.getState().start(m);
+              }}
+            />
+          </main>
         ) : view === "contacts" ? (
           <main className="min-w-0 flex-1 overflow-y-auto">
             <Contacts />
@@ -112,6 +125,12 @@ export default function App() {
         ) : (
           <main className="flex min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
             <SessionHeader />
+
+            {dueMeeting && status === "idle" && (
+              <div className="px-6 pb-3">
+                <ScheduledBanner meeting={dueMeeting} />
+              </div>
+            )}
 
             {nudge && (
               <div className="px-6 pb-3">

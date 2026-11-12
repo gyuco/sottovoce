@@ -302,6 +302,7 @@
   "nav": {
     "label": "Navigation",
     "live": "Live session",
+    "scheduled": "Schedule",
     "settings": "Settings",
     "history": "History",
     "contacts": "Contacts"
@@ -535,6 +536,33 @@
       "description": "Description",
       "descriptionPlaceholder": "Who they are, what they work on, how you met…"
     }
+  },
+  "scheduled": {
+    "title": "Schedule",
+    "hint": "Scheduled meetings with their context ready: when it's time, just click Start.",
+    "add": "New meeting",
+    "edit": "Edit {{name}}",
+    "delete": "Delete {{name}}",
+    "deleteTitle": "Delete the scheduled meeting?",
+    "deleteConfirm": "{{name}} will be removed from the schedule.",
+    "deleteAction": "Delete",
+    "empty": "No meetings scheduled. Create one to prepare context and participants in advance.",
+    "missed": "Not started",
+    "notStarted": "not started",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "now": "Now",
+    "soon": "Soon",
+    "minutes": "{{count}} min",
+    "formHint": "Day, time and context of the call. When it's time you'll find it in Live session, ready to start.",
+    "date": "Day",
+    "time": "Time",
+    "duration": "Duration",
+    "startHint": "Start the call with this meeting's context",
+    "startsIn": "starts in {{count}} min",
+    "started": "it's time",
+    "participants": "participants: {{count}}",
+    "dismiss": "Hide"
   },
   "email": {
     "subject": "Summary: {{name}}",

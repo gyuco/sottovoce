@@ -1,4 +1,5 @@
 import { effectiveEngine, requiredLocalModels } from "@/lib/privacy";
+import { useAudioStore, useSelectedMicId } from "@/stores/audio";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -17,4 +18,12 @@ export function useSttBlocker(): SttBlocker {
     (id) => models.find((m) => m.id === id)?.status.state === "ready",
   );
   return ready ? null : "needModels";
+}
+
+/** Si può avviare una call adesso (nessuna sessione, microfono e STT pronti). */
+export function useCanStart(): boolean {
+  const idle = useAudioStore((s) => s.status === "idle");
+  const micId = useSelectedMicId();
+  const blocked = useSttBlocker() !== null;
+  return idle && !!micId && !blocked;
 }

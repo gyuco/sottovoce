@@ -4,6 +4,8 @@
 //!   meeting), più il recupero dei meeting rimasti aperti all'avvio.
 //! - Rubrica ([`Contact`]): schede delle persone incontrate nei meeting,
 //!   legate ai parlanti per nome.
+//! - Riunioni programmate ([`ScheduledMeeting`]): giorno, ora e contesto
+//!   preparati in anticipo, da avviare con un clic.
 //! - [`Writer`]/[`StoreHandle`]: scrittura da un thread dedicato, a blocchi in
 //!   transazione, senza mai bloccare il pump STT.
 //!
@@ -19,6 +21,7 @@
 
 mod contacts;
 mod error;
+mod scheduled;
 mod schema;
 mod store;
 mod transcript;
@@ -27,6 +30,7 @@ mod writer;
 
 pub use contacts::{Contact, ContactInput, is_valid_email, name_key};
 pub use error::StoreError;
+pub use scheduled::{ScheduledMeeting, ScheduledMeetingInput, ScheduledParticipant};
 pub use schema::SCHEMA_VERSION;
 pub use store::{Store, normalize};
 pub use types::{

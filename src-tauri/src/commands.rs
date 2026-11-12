@@ -949,6 +949,46 @@ pub async fn delete_contact(db: State<'_, Db>, id: i64) -> CmdResult<()> {
     blocking(move || Ok(sv_store::Store::open(path)?.delete_contact(id)?)).await
 }
 
+// --- Riunioni programmate -------------------------------------------------------
+
+/// Riunioni mai avviate tenute dopo la fine prevista (poi eliminate).
+const SCHEDULED_RETENTION_MS: i64 = 30 * 24 * 60 * 60 * 1000;
+
+/// Riunioni programmate che finiscono dopo `since_ms`, dalla più vicina.
+/// Elimina quelle mai avviate e finite da più di 30 giorni.
+#[tauri::command]
+pub async fn list_scheduled_meetings(
+    db: State<'_, Db>,
+    since_ms: i64,
+) -> CmdResult<Vec<sv_store::ScheduledMeeting>> {
+    let path = db.path.clone();
+    blocking(move || {
+        let store = sv_store::Store::open(path)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+        store.prune_scheduled_meetings(now - SCHEDULED_RETENTION_MS)?;
+        Ok(store.scheduled_meetings(since_ms)?)
+    })
+    .await
+}
+
+/// Crea (senza `id`) o aggiorna una riunione programmata.
+#[tauri::command]
+pub async fn save_scheduled_meeting(
+    db: State<'_, Db>,
+    meeting: sv_store::ScheduledMeetingInput,
+) -> CmdResult<sv_store::ScheduledMeeting> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.save_scheduled_meeting(&meeting)?)).await
+}
+
+#[tauri::command]
+pub async fn delete_scheduled_meeting(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_scheduled_meeting(id)?)).await
+}
+
 // --- Email -------------------------------------------------------------------
 
 /// Invia il riepilogo con il server SMTP configurato; ritorna i destinatari.

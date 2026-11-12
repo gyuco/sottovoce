@@ -17,7 +17,7 @@ use crate::error::StoreError;
 use crate::transcript;
 
 /// Versione dello schema corrente.
-pub const SCHEMA_VERSION: i64 = 6;
+pub const SCHEMA_VERSION: i64 = 7;
 
 pub(crate) const MIGRATIONS: &[&str] = &[
     // 1 — meeting, frasi finali, traduzioni, nomi dei parlanti, assist.
@@ -158,6 +158,23 @@ CREATE TABLE contacts (
     // 6 — partecipanti attesi indicati all'avvio (array JSON di nomi).
     r#"
 ALTER TABLE meetings ADD COLUMN participants TEXT NOT NULL DEFAULT '[]';
+"#,
+    // 7 — riunioni programmate: giorno, ora e contesto pronti per l'avvio.
+    r#"
+CREATE TABLE scheduled_meetings (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    goal          TEXT    NOT NULL DEFAULT '',
+    notes         TEXT    NOT NULL DEFAULT '',
+    code_path     TEXT    NOT NULL DEFAULT '',
+    participants  TEXT    NOT NULL DEFAULT '[]',
+    language      TEXT    NOT NULL DEFAULT 'multi',
+    starts_at_ms  INTEGER NOT NULL,
+    duration_min  INTEGER NOT NULL DEFAULT 30,
+    created_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX scheduled_meetings_by_start ON scheduled_meetings(starts_at_ms);
 "#,
 ];
 

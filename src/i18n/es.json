@@ -302,6 +302,7 @@
   "nav": {
     "label": "Navegación",
     "live": "Sesión en vivo",
+    "scheduled": "Agenda",
     "settings": "Ajustes",
     "history": "Historial",
     "contacts": "Contactos"
@@ -535,6 +536,33 @@
       "description": "Descripción",
       "descriptionPlaceholder": "Quién es, a qué se dedica, cómo os conocisteis…"
     }
+  },
+  "scheduled": {
+    "title": "Agenda",
+    "hint": "Reuniones programadas con el contexto ya preparado: a la hora indicada basta con pulsar Iniciar.",
+    "add": "Nueva reunión",
+    "edit": "Editar {{name}}",
+    "delete": "Eliminar {{name}}",
+    "deleteTitle": "¿Eliminar la reunión programada?",
+    "deleteConfirm": "{{name}} se quitará de la agenda.",
+    "deleteAction": "Eliminar",
+    "empty": "No hay reuniones programadas. Crea una para preparar el contexto y los participantes con antelación.",
+    "missed": "No iniciadas",
+    "notStarted": "no iniciada",
+    "today": "Hoy",
+    "tomorrow": "Mañana",
+    "now": "En curso",
+    "soon": "En breve",
+    "minutes": "{{count}} min",
+    "formHint": "Día, hora y contexto de la llamada. Cuando llegue la hora la encontrarás en Sesión en vivo, lista para iniciar.",
+    "date": "Día",
+    "time": "Hora",
+    "duration": "Duración",
+    "startHint": "Inicia la llamada con el contexto de esta reunión",
+    "startsIn": "empieza en {{count}} min",
+    "started": "es la hora",
+    "participants": "participantes: {{count}}",
+    "dismiss": "Ocultar"
   },
   "email": {
     "subject": "Resumen: {{name}}",

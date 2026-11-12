@@ -17,12 +17,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDuration, useNow } from "@/lib/hooks";
-import { CONCRETE_LANGUAGES, type Language, type Participant, toggleWidget } from "@/lib/ipc";
+import { CONCRETE_LANGUAGES, type Language, type Participant, type ScheduledMeeting, toggleWidget } from "@/lib/ipc";
 import { isLocalSession } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
 import { useAudioStore, useSelectedMicId } from "@/stores/audio";
 import { MEETING_LIMITS, useMeetingStore } from "@/stores/meeting";
+import { freshParticipants, useDueMeeting, useScheduledStore } from "@/stores/scheduled";
 import { useSettingsStore } from "@/stores/settings";
 
 /** Nome del meeting, ora di inizio, cronometro e comando avvia/ferma. */
@@ -34,6 +35,9 @@ export function SessionHeader() {
   const name = useMeetingStore((s) => s.context.name.trim());
   const micId = useSelectedMicId();
   const [choosing, setChoosing] = useState(false);
+  // Riunione programmata di adesso: il dialogo parte dal suo contesto.
+  const due = useDueMeeting();
+  const [scheduled, setScheduled] = useState<ScheduledMeeting | null>(null);
 
   const busy = status === "starting" || status === "stopping";
   const running = status === "running";
@@ -90,7 +94,10 @@ export function SessionHeader() {
         <Button
           size="lg"
           className="rounded-xl shadow-sm"
-          onClick={() => setChoosing(true)}
+          onClick={() => {
+            setScheduled(due);
+            setChoosing(true);
+          }}
           disabled={busy || !micId || blocked}
         >
           {busy ? <Loader2 className="animate-spin" /> : <Play className="fill-current" />}
@@ -100,13 +107,20 @@ export function SessionHeader() {
 
       {choosing && settings && (
         <StartDialog
-          initial={settings.theirLanguage}
+          initial={scheduled?.language ?? settings.theirLanguage}
+          scheduled={scheduled}
           onCancel={() => setChoosing(false)}
           onStart={(language) => {
             setChoosing(false);
-            // La scelta diventa la proposta per la prossima call.
-            void useSettingsStore.getState().update({ theirLanguage: language });
-            void start(language);
+            // La scelta diventa la proposta per la prossima call (non quella
+            // fissata in una riunione programmata).
+            if (!scheduled) void useSettingsStore.getState().update({ theirLanguage: language });
+            void start(language).then(() => {
+              // Avviata: la riunione esce dall'agenda.
+              if (scheduled && useAudioStore.getState().status === "running") {
+                void useScheduledStore.getState().remove(scheduled.id);
+              }
+            });
           }}
         />
       )}
@@ -119,20 +133,25 @@ const CALL_LANGUAGES: Language[] = [...CONCRETE_LANGUAGES, "multi"];
 /**
  * All'avvio: lingua della call (rilevamento di "Io" e "Loro") e contesto
  * facoltativo: nome, obiettivo e partecipanti attesi. Il contesto parte dai
- * valori correnti del pannello "Contesto meeting" e lo aggiorna.
+ * valori correnti del pannello "Contesto meeting" e lo aggiorna; con una
+ * riunione programmata in corso parte dal contesto di quella.
  */
 function StartDialog(props: {
   initial: Language;
+  scheduled: ScheduledMeeting | null;
   onCancel: () => void;
   onStart: (language: Language) => void;
 }) {
   const { t } = useTranslation();
-  const context = useMeetingStore((s) => s.context);
+  const current = useMeetingStore((s) => s.context);
+  const source = props.scheduled
+    ? { ...props.scheduled, participants: freshParticipants(props.scheduled.participants) }
+    : current;
   const [language, setLanguage] = useState<Language>(props.initial);
-  const [name, setName] = useState(context.name);
-  const [goal, setGoal] = useState(context.goal);
-  const [participants, setParticipants] = useState<Participant[]>(context.participants);
-  const [codePath, setCodePath] = useState(context.codePath);
+  const [name, setName] = useState(source.name);
+  const [goal, setGoal] = useState(source.goal);
+  const [participants, setParticipants] = useState<Participant[]>(source.participants);
+  const [codePath, setCodePath] = useState(source.codePath);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -141,6 +160,8 @@ function StartDialog(props: {
       goal: goal.trim(),
       participants,
       codePath: codePath.trim(),
+      // Le note della riunione programmata non hanno un campo qui: passano così.
+      ...(props.scheduled ? { notes: props.scheduled.notes } : {}),
     });
     props.onStart(language);
   };

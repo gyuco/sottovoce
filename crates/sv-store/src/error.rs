@@ -20,6 +20,10 @@ pub enum StoreError {
     DuplicateContact(String),
     #[error("indirizzo email non valido: {0}")]
     InvalidEmail(String),
+    #[error("riunione programmata {0} non trovata")]
+    ScheduledNotFound(i64),
+    #[error("riunione programmata non valida: {0}")]
+    InvalidScheduled(String),
     #[error("il task di salvataggio non è più attivo")]
     WriterClosed,
     #[error("il task di salvataggio non ha risposto in tempo: {0}")]
