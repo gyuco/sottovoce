@@ -1,4 +1,4 @@
-import { AudioLines, BellRing, Languages, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AudioLines, BellRing, Languages, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ import { LocalModels } from "@/components/LocalModels";
 import { SearchSettings } from "@/components/SearchSettings";
 import { VoiceProfiles } from "@/components/VoiceProfiles";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -35,6 +36,7 @@ export function SettingsPanel() {
   const { t, i18n } = useTranslation();
   const { settings, hasKey, error, update } = useSettingsStore();
   const systemSupported = useAudioStore((s) => s.systemSupported);
+  const sessionActive = useAudioStore((s) => s.status !== "idle");
 
   if (!settings) return null;
   const engine = effectiveEngine(settings);
@@ -274,7 +276,19 @@ export function SettingsPanel() {
         </p>
       )}
       <p className="text-xs text-muted-foreground">{t("settings.applyHint")}</p>
-      <AboutLine />
+      <div className="flex items-center justify-between gap-4">
+        <AboutLine />
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          disabled={sessionActive}
+          title={sessionActive ? t("settings.setup.busy") : undefined}
+          onClick={() => void update({ onboardingDone: false })}
+        >
+          <Sparkles /> {t("settings.setup.rerun")}
+        </Button>
+      </div>
     </div>
   );
 }

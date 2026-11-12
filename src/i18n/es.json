@@ -279,6 +279,10 @@
       "passwordHint": "Guardada en el Llavero de macOS. Para Gmail, iCloud y Outlook usa una contraseña de aplicación.",
       "test": "Probar conexión",
       "testOk": "Conexión e inicio de sesión correctos."
+    },
+    "setup": {
+      "rerun": "Repetir la configuración guiada",
+      "busy": "Disponible sin llamada en curso"
     }
   },
   "permissions": {
@@ -574,5 +578,165 @@
     "newHint": "«{{name}}» no está en tus contactos: pulsa Intro para crear la ficha.",
     "newTitle": "Añadir a {{name}} a contactos",
     "newDescription": "Los participantes vienen de tus contactos: completa los datos que faltan (cargo, email, descripción) y guarda."
+  },
+  "onboarding": {
+    "progress": "Progreso de la configuración",
+    "steps": {
+      "languages": "Idiomas",
+      "engine": "Transcripción",
+      "models": "Modelos",
+      "audio": "Audio",
+      "ai": "Traducción y resúmenes",
+      "done": "Listo"
+    },
+    "stepOf": "{{n}} de {{total}}",
+    "skip": "Omitir configuración",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "finish": "Empezar a usar Sottovoce",
+    "recommended": "Recomendado",
+    "welcome": {
+      "title": "Te damos la bienvenida a Sottovoce",
+      "lead": "Tu asistente para llamadas en Teams, Meet y Zoom: escucha contigo y te susurra lo que necesitas.",
+      "time": "Te guiamos en la configuración: bastan un par de minutos y puedes cambiarlo todo después.",
+      "start": "Empecemos",
+      "skip": "Lo configuro yo",
+      "features": {
+        "transcribe": {
+          "title": "Transcribe",
+          "text": "Tú y los demás, en dos canales separados."
+        },
+        "translate": {
+          "title": "Traduce",
+          "text": "Cada frase en tu idioma, en tiempo real."
+        },
+        "suggest": {
+          "title": "Sugiere",
+          "text": "Qué decir o preguntar, mientras hablas."
+        },
+        "summarize": {
+          "title": "Resume",
+          "text": "Puntos clave y tareas al final de la llamada."
+        }
+      }
+    },
+    "languages": {
+      "title": "¿Qué idiomas se hablan?",
+      "lead": "Un idioma fijo hace la transcripción más precisa. También podrás elegirlo en cada llamada.",
+      "mine": "Tu idioma",
+      "mineHint": "El que hablas y en el que lees traducciones y resúmenes.",
+      "theirs": "El idioma de los demás",
+      "theirsHint": "Si cambia de una llamada a otra, déjalo en «Automático»."
+    },
+    "engine": {
+      "title": "¿Dónde transcribir?",
+      "lead": "Elige si el audio se queda en tu Mac o va a un servicio en la nube.",
+      "local": {
+        "title": "En tu Mac",
+        "text": "Privado y gratuito: el audio no sale del ordenador y funciona sin conexión. Descargas los modelos una sola vez."
+      },
+      "cloud": {
+        "title": "En la nube (Deepgram)",
+        "text": "Algo más rápido y preciso con audio difícil. Necesita una cuenta de Deepgram y el audio va a sus servidores.",
+        "keyHint": "Crea la clave en console.deepgram.com y pégala aquí: se guarda en el Llavero de macOS."
+      },
+      "localOnly": "Solo local",
+      "localOnlyHint": "Garantiza que durante las llamadas ningún dato salga del Mac, también en traducciones y sugerencias."
+    },
+    "models": {
+      "title": "Descarga los modelos",
+      "lead": "Se quedan en tu Mac y funcionan sin conexión. La descarga continúa aunque sigas adelante.",
+      "required": "Necesario",
+      "download": "Descargar ({{size}})",
+      "allReady": "Todo listo",
+      "background": "Descargando: puedes seguir con la configuración.",
+      "purpose": {
+        "vad": {
+          "title": "Detección de voz",
+          "text": "Sabe cuándo alguien habla"
+        },
+        "stt": {
+          "title": "Transcripción",
+          "text": "Convierte la voz en texto"
+        },
+        "sttBackup": {
+          "title": "Transcripción sin conexión",
+          "text": "De reserva, por si quieres transcribir sin la nube"
+        },
+        "speakers": {
+          "title": "Reconocer quién habla",
+          "text": "Distingue a los participantes entre sí"
+        },
+        "search": {
+          "title": "Buscar en el historial",
+          "text": "Encuentra reuniones por su significado, no solo por palabras"
+        }
+      }
+    },
+    "audio": {
+      "title": "Probemos el audio",
+      "lead": "Sottovoce escucha tu micrófono y el audio del Mac (los demás en la llamada). Comprobemos que llegan los dos.",
+      "askTitle": "Se necesita permiso para el micrófono",
+      "askText": "macOS te pedirá que permitas el acceso. Sottovoce nunca guarda el audio.",
+      "deniedTitle": "El micrófono está bloqueado",
+      "deniedText": "Activa Sottovoce en Ajustes del Sistema → Privacidad y seguridad → Micrófono y vuelve aquí. Puede que tengas que reabrir la app.",
+      "allow": "Permitir el micrófono",
+      "openSettings": "Abrir Ajustes del Sistema",
+      "recheck": "Volver a comprobar",
+      "mic": "Tu micrófono",
+      "micHint": "Di algo: la barra debe moverse.",
+      "system": "Audio del Mac",
+      "systemHint": "Reproduce un vídeo o una canción: la barra debe moverse.",
+      "systemSilent": "¿No se mueve? Permite a Sottovoce grabar el audio del sistema en Ajustes del Sistema → Privacidad y seguridad.",
+      "systemOff": "El audio del sistema está desactivado: puedes activarlo en Ajustes.",
+      "headphones": "Con auriculares la transcripción es más limpia; sin ellos, Sottovoce quita el eco de los demás de tu micrófono."
+    },
+    "ai": {
+      "title": "Traducción y resúmenes",
+      "lead": "Para traducir, sugerir y resumir hace falta un modelo de lenguaje. También puedes omitirlo: la transcripción funciona igual.",
+      "modes": {
+        "ollama": {
+          "title": "Ollama en tu Mac",
+          "text": "Privado y gratuito, necesita Ollama instalado."
+        },
+        "cloud": {
+          "title": "Servicio en la nube",
+          "text": "OpenAI, Claude u OpenCode, con tu clave."
+        },
+        "later": {
+          "title": "Más tarde",
+          "text": "Configúralo cuando quieras en Ajustes."
+        }
+      },
+      "localOnly": "Con «Solo local» activo solo se puede usar un modelo en el Mac.",
+      "ollamaMissing": "Ollama no responde. Instálalo desde ollama.com, ábrelo y vuelve a intentarlo.",
+      "ollamaNoModels": "Ollama está activo pero no tiene modelos. Descarga uno desde el Terminal, por ejemplo: ollama pull qwen3:8b",
+      "noModels": "No se encontró ningún modelo compatible con esta clave.",
+      "retry": "Reintentar",
+      "model": "Modelo",
+      "modelHint": "Se usa para traducción, sugerencias y resúmenes.",
+      "testOk": "Funciona ({{ms}} ms)"
+    },
+    "done": {
+      "title": "Todo listo",
+      "lead": "Así está configurado Sottovoce.",
+      "rows": {
+        "stt": "Transcripción",
+        "mic": "Micrófono",
+        "system": "Audio del Mac",
+        "ai": "Traducción y resúmenes"
+      },
+      "stt": {
+        "local": "En tu Mac",
+        "deepgram": "Deepgram",
+        "needKey": "Falta la clave de Deepgram",
+        "downloading": "Modelos descargándose",
+        "needModels": "Faltan los modelos"
+      },
+      "heard": "Funciona",
+      "notChecked": "Sin comprobar",
+      "aiLater": "Por configurar",
+      "hint": "Puedes cambiarlo todo en Ajustes y repetir esta configuración cuando quieras. Para empezar una llamada pulsa «Iniciar»."
+    }
   }
 }

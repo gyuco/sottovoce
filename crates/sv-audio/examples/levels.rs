@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use sv_audio::{Capture, CaptureConfig, Channel, list_input_devices};
+use sv_audio::{Capture, CaptureConfig, Channel, list_input_devices, mic_permission};
 use tokio::sync::broadcast;
 
 fn main() {
@@ -12,6 +12,7 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(5);
+    println!("permesso microfono: {:?}", mic_permission());
     for d in list_input_devices().expect("elenco device") {
         println!(
             "{} {} ({})",

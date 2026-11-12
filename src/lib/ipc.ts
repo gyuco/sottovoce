@@ -91,6 +91,8 @@ export interface Settings {
   smtpSecurity: SmtpSecurity;
   /** Vuoto = l'indirizzo del mittente. La password è nel Keychain (`smtp`). */
   smtpUser: string;
+  /** Setup guidato del primo avvio completato (o saltato). */
+  onboardingDone: boolean;
 }
 
 export interface ModelInfo {
@@ -195,6 +197,27 @@ export type SttEvent = { channel: ChannelId } & (
 export const listInputDevices = () => invoke<InputDevice[]>("list_input_devices");
 
 export const systemAudioSupported = () => invoke<boolean>("system_audio_supported");
+
+/** Permesso del microfono (macOS); `unsupported` = nessun permesso da chiedere. */
+export type MicPermission = "granted" | "denied" | "restricted" | "undetermined" | "unsupported";
+
+export const micPermission = () => invoke<MicPermission>("mic_permission");
+
+/** Mostra il dialogo di sistema se il permesso non è mai stato chiesto; `true` = concesso. */
+export const requestMicPermission = () => invoke<boolean>("request_mic_permission");
+
+/** Prova audio del setup: solo livelli di microfono e audio di sistema. */
+export function startAudioCheck(onLevel: (e: LevelEvent) => void) {
+  const level = new Channel<LevelEvent>();
+  level.onmessage = onLevel;
+  return invoke<void>("start_audio_check", { onLevel: level });
+}
+
+export const stopAudioCheck = () => invoke<void>("stop_audio_check");
+
+/** Apre le Impostazioni di Sistema sul permesso indicato. */
+export const openPrivacySettings = (pane: "microphone" | "systemAudio") =>
+  invoke<void>("open_privacy_settings", { pane });
 
 /** Partecipante atteso; ruolo e descrizione copiati dalla rubrica. */
 export interface Participant {

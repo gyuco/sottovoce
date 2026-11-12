@@ -10,6 +10,7 @@ import { InsightsPanel } from "@/components/InsightsPanel";
 import { MeetingChat } from "@/components/MeetingChat";
 import { MeetingContextPanel } from "@/components/MeetingContextPanel";
 import { NudgeCard } from "@/components/NudgeCard";
+import { Onboarding } from "@/components/onboarding/Onboarding";
 import { SessionHeader } from "@/components/SessionHeader";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { SummaryNotice } from "@/components/SummaryNotice";
@@ -40,6 +41,7 @@ export default function App() {
   const checkUpdate = useUpdateStore((s) => s.check);
   const loadContacts = useContactsStore((s) => s.load);
   const blocker = useSttBlocker();
+  const needsSetup = useSettingsStore((s) => s.settings !== null && !s.settings.onboardingDone);
   const [view, setView] = useState<View>("live");
   /** Meeting da aprire nello Storico (dall'avviso del riepilogo). */
   const [historyFocus, setHistoryFocus] = useState<number | null>(null);
@@ -75,6 +77,9 @@ export default function App() {
       setView("history");
     }
   };
+
+  // Primo avvio: setup guidato al posto dell'app.
+  if (needsSetup) return <Onboarding />;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">

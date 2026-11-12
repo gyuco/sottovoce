@@ -104,6 +104,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_input_devices,
             commands::system_audio_supported,
+            commands::mic_permission,
+            commands::request_mic_permission,
+            commands::start_audio_check,
+            commands::stop_audio_check,
+            commands::open_privacy_settings,
             commands::app_info,
             commands::js_error,
             commands::quit_app,

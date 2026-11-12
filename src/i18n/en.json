@@ -279,6 +279,10 @@
       "passwordHint": "Stored in the macOS Keychain. For Gmail, iCloud and Outlook use an app password.",
       "test": "Test connection",
       "testOk": "Connection and login succeeded."
+    },
+    "setup": {
+      "rerun": "Run guided setup again",
+      "busy": "Available when no call is running"
     }
   },
   "permissions": {
@@ -574,5 +578,165 @@
     "newHint": "“{{name}}” is not in your contacts: press Enter to create the card.",
     "newTitle": "Add {{name}} to contacts",
     "newDescription": "Participants come from your contacts: fill in the missing details (role, email, description) and save."
+  },
+  "onboarding": {
+    "progress": "Setup progress",
+    "steps": {
+      "languages": "Languages",
+      "engine": "Transcription",
+      "models": "Models",
+      "audio": "Audio",
+      "ai": "Translation and summaries",
+      "done": "Done"
+    },
+    "stepOf": "{{n}} of {{total}}",
+    "skip": "Skip setup",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Start using Sottovoce",
+    "recommended": "Recommended",
+    "welcome": {
+      "title": "Welcome to Sottovoce",
+      "lead": "Your assistant for Teams, Meet and Zoom calls: it listens with you and whispers what you need.",
+      "time": "We'll walk you through the setup: it takes a couple of minutes and you can change everything later.",
+      "start": "Let's start",
+      "skip": "I'll set it up myself",
+      "features": {
+        "transcribe": {
+          "title": "Transcribes",
+          "text": "You and the others, on two separate channels."
+        },
+        "translate": {
+          "title": "Translates",
+          "text": "Every sentence in your language, in real time."
+        },
+        "suggest": {
+          "title": "Suggests",
+          "text": "What to say or ask, while you talk."
+        },
+        "summarize": {
+          "title": "Summarizes",
+          "text": "Key points and to-dos at the end of the call."
+        }
+      }
+    },
+    "languages": {
+      "title": "Which languages are spoken?",
+      "lead": "A fixed language makes transcription more accurate. You can also pick it for each call.",
+      "mine": "Your language",
+      "mineHint": "The one you speak and read translations and summaries in.",
+      "theirs": "The others' language",
+      "theirsHint": "If it changes from call to call, leave it on \"Automatic\"."
+    },
+    "engine": {
+      "title": "Where to transcribe?",
+      "lead": "Choose whether audio stays on your Mac or goes to a cloud service.",
+      "local": {
+        "title": "On your Mac",
+        "text": "Private and free: audio never leaves the computer and it works offline too. You download the models only once."
+      },
+      "cloud": {
+        "title": "In the cloud (Deepgram)",
+        "text": "A bit faster and more accurate on difficult audio. Needs a Deepgram account, and audio goes to their servers.",
+        "keyHint": "Create the key at console.deepgram.com and paste it here: it stays in the macOS Keychain."
+      },
+      "localOnly": "Local only",
+      "localOnlyHint": "Guarantees that no data leaves your Mac during calls, including translations and suggestions."
+    },
+    "models": {
+      "title": "Download the models",
+      "lead": "They stay on your Mac and work offline. The download keeps going even if you move on.",
+      "required": "Required",
+      "download": "Download ({{size}})",
+      "allReady": "All set",
+      "background": "Downloading: you can continue the setup.",
+      "purpose": {
+        "vad": {
+          "title": "Speech detection",
+          "text": "Knows when someone is speaking"
+        },
+        "stt": {
+          "title": "Transcription",
+          "text": "Turns voice into text"
+        },
+        "sttBackup": {
+          "title": "Offline transcription",
+          "text": "A backup, in case you want to transcribe without the cloud"
+        },
+        "speakers": {
+          "title": "Recognize who is speaking",
+          "text": "Tells participants apart"
+        },
+        "search": {
+          "title": "Search your history",
+          "text": "Finds meetings by meaning, not just by words"
+        }
+      }
+    },
+    "audio": {
+      "title": "Let's test the audio",
+      "lead": "Sottovoce listens to your microphone and to your Mac's audio (the others in the call). Let's check both come through.",
+      "askTitle": "Microphone permission needed",
+      "askText": "macOS will ask you to allow access. Sottovoce never stores audio.",
+      "deniedTitle": "The microphone is blocked",
+      "deniedText": "Enable Sottovoce in System Settings → Privacy & Security → Microphone, then come back. You may need to reopen the app.",
+      "allow": "Allow microphone",
+      "openSettings": "Open System Settings",
+      "recheck": "Check again",
+      "mic": "Your microphone",
+      "micHint": "Say something: the bar should move.",
+      "system": "Mac audio",
+      "systemHint": "Play a video or a song: the bar should move.",
+      "systemSilent": "Not moving? Allow Sottovoce to record system audio in System Settings → Privacy & Security.",
+      "systemOff": "System audio is turned off: you can enable it in Settings.",
+      "headphones": "With headphones transcription is cleaner; without them, Sottovoce removes the others' echo from your microphone."
+    },
+    "ai": {
+      "title": "Translation and summaries",
+      "lead": "Translating, suggesting and summarizing need a language model. You can also skip this: transcription works anyway.",
+      "modes": {
+        "ollama": {
+          "title": "Ollama on your Mac",
+          "text": "Private and free, needs Ollama installed."
+        },
+        "cloud": {
+          "title": "Cloud service",
+          "text": "OpenAI, Claude or OpenCode, with your own key."
+        },
+        "later": {
+          "title": "Later",
+          "text": "Set it up whenever you like in Settings."
+        }
+      },
+      "localOnly": "With \"Local only\" on, only a model on your Mac can be used.",
+      "ollamaMissing": "Ollama isn't responding. Install it from ollama.com, open it and try again.",
+      "ollamaNoModels": "Ollama is running but has no models. Download one from Terminal, for example: ollama pull qwen3:8b",
+      "noModels": "No compatible model found with this key.",
+      "retry": "Try again",
+      "model": "Model",
+      "modelHint": "Used for translation, suggestions and summaries.",
+      "testOk": "Working ({{ms}} ms)"
+    },
+    "done": {
+      "title": "All set",
+      "lead": "Here's how Sottovoce is configured.",
+      "rows": {
+        "stt": "Transcription",
+        "mic": "Microphone",
+        "system": "Mac audio",
+        "ai": "Translation and summaries"
+      },
+      "stt": {
+        "local": "On your Mac",
+        "deepgram": "Deepgram",
+        "needKey": "Deepgram key missing",
+        "downloading": "Models downloading",
+        "needModels": "Models missing"
+      },
+      "heard": "Working",
+      "notChecked": "Not checked",
+      "aiLater": "To be set up",
+      "hint": "You can change everything in Settings and run this setup again anytime. To begin a call, press \"Start\"."
+    }
   }
 }

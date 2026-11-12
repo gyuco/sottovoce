@@ -6,7 +6,7 @@ use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use serde::Serialize;
-use sv_audio::{InputDevice, LevelEvent};
+use sv_audio::{InputDevice, LevelEvent, MicPermission};
 use sv_llm::{ChatRequest, Message, ModelInfo};
 use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
@@ -49,6 +49,98 @@ pub async fn list_input_devices() -> CmdResult<Vec<InputDevice>> {
 #[tauri::command]
 pub fn system_audio_supported() -> bool {
     sv_audio::system::is_supported()
+}
+
+/// Stato del permesso del microfono (setup guidato).
+#[tauri::command]
+pub fn mic_permission() -> MicPermission {
+    sv_audio::mic_permission()
+}
+
+/// Chiede il permesso del microfono; `true` se concesso.
+#[tauri::command]
+pub async fn request_mic_permission() -> CmdResult<bool> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    sv_audio::request_mic_permission(move |granted| {
+        let _ = tx.send(granted);
+    });
+    rx.await.map_err(to_msg)
+}
+
+/// Prova audio del setup guidato: solo livelli di microfono e audio di
+/// sistema, niente trascrizione. Rifiutata a sessione attiva.
+#[tauri::command]
+pub async fn start_audio_check(
+    state: State<'_, AppState>,
+    settings: State<'_, SettingsStore>,
+    on_level: Channel<LevelEvent>,
+) -> CmdResult<()> {
+    if state.session.lock().await.is_some() {
+        return Err("prova audio non disponibile durante una sessione".into());
+    }
+    let settings = settings.get();
+    // Il canale dei frame resta senza lettori: qui servono solo i livelli.
+    let (frames, _) = tokio::sync::broadcast::channel(16);
+    let capture = sv_audio::Capture::start(
+        sv_audio::CaptureConfig {
+            mic_device_id: settings.mic_device_id,
+            system_audio: settings.system_audio && sv_audio::system::is_supported(),
+        },
+        frames,
+        move |e| {
+            let _ = on_level.send(e);
+        },
+    )
+    .map_err(to_msg)?;
+    let old = state
+        .audio_check
+        .lock()
+        .expect("audio check lock")
+        .replace(capture);
+    if let Some(old) = old {
+        old.stop();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn stop_audio_check(state: State<'_, AppState>) {
+    stop_check(&state);
+}
+
+fn stop_check(state: &AppState) {
+    let capture = state.audio_check.lock().expect("audio check lock").take();
+    if let Some(capture) = capture {
+        capture.stop();
+    }
+}
+
+/// Pannello privacy delle Impostazioni di Sistema da aprire.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PrivacyPane {
+    Microphone,
+    /// "Registrazione schermo e audio di sistema".
+    SystemAudio,
+}
+
+/// Apre le Impostazioni di Sistema sul permesso indicato (macOS).
+#[tauri::command]
+pub fn open_privacy_settings(pane: PrivacyPane) -> CmdResult<()> {
+    let anchor = match pane {
+        PrivacyPane::Microphone => "Privacy_Microphone",
+        PrivacyPane::SystemAudio => "Privacy_ScreenCapture",
+    };
+    if !cfg!(target_os = "macos") {
+        return Err("disponibile solo su macOS".into());
+    }
+    std::process::Command::new("open")
+        .arg(format!(
+            "x-apple.systempreferences:com.apple.preference.security?{anchor}"
+        ))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("apertura delle Impostazioni di Sistema non riuscita: {e}"))
 }
 
 /// Versione e build in esecuzione (Impostazioni → Informazioni).
@@ -118,6 +210,7 @@ pub async fn start_session(
     context: Option<MeetingContext>,
     language: Option<Language>,
 ) -> CmdResult<()> {
+    stop_check(&state);
     let mut slot = state.session.lock().await;
     if let Some(old) = slot.take() {
         // Riavvio a sessione attiva (es. cambio microfono): il riepilogo

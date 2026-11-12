@@ -6,19 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LocalModel } from "@/lib/ipc";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { useModelsStore } from "@/stores/models";
-
-function formatBytes(n: number, locale: string) {
-  const units = ["B", "KB", "MB", "GB"];
-  let v = n;
-  let i = 0;
-  while (v >= 1000 && i < units.length - 1) {
-    v /= 1000;
-    i++;
-  }
-  return `${v.toLocaleString(locale, { maximumFractionDigits: v < 10 && i > 0 ? 1 : 0 })} ${units[i]}`;
-}
 
 /** Modelli per la trascrizione locale e la diarization: download e stato. */
 export function LocalModels() {
