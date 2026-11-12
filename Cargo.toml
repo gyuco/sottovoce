@@ -14,6 +14,7 @@ sv-llm = { path = "crates/sv-llm" }
 sv-models = { path = "crates/sv-models" }
 sv-vad = { path = "crates/sv-vad" }
 sv-stt-local = { path = "crates/sv-stt-local" }
+sv-stt-chunked = { path = "crates/sv-stt-chunked" }
 sv-diar = { path = "crates/sv-diar" }
 sv-store = { path = "crates/sv-store" }
 sv-embed = { path = "crates/sv-embed" }

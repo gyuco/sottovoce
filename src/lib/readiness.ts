@@ -1,3 +1,4 @@
+import { sttKeyAccount } from "@/lib/ipc";
 import { effectiveEngine, requiredLocalModels } from "@/lib/privacy";
 import { useAudioStore, useSelectedMicId } from "@/stores/audio";
 import { useModelsStore } from "@/stores/models";
@@ -8,13 +9,15 @@ export type SttBlocker = "needKey" | "needModels" | null;
 
 export function useSttBlocker(): SttBlocker {
   const settings = useSettingsStore((s) => s.settings);
-  const hasKey = useSettingsStore((s) => s.hasKey);
+  const keys = useSettingsStore((s) => s.keys);
   const models = useModelsStore((s) => s.models);
   if (!settings) return null;
-  if (effectiveEngine(settings) === "deepgram") return hasKey ? null : "needKey";
+  const account = sttKeyAccount(effectiveEngine(settings));
+  if (account && !keys[account]) return "needKey";
+  const required = requiredLocalModels(settings);
   // Catalogo non ancora caricato: decide il backend all'avvio.
-  if (models.length === 0) return null;
-  const ready = requiredLocalModels(settings).every(
+  if (required.length === 0 || models.length === 0) return null;
+  const ready = required.every(
     (id) => models.find((m) => m.id === id)?.status.state === "ready",
   );
   return ready ? null : "needModels";

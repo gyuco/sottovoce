@@ -1,4 +1,4 @@
-import type { Settings, SttEngine } from "@/lib/ipc";
+import { CHUNKED_ENGINES, type Settings, type SttEngine } from "@/lib/ipc";
 
 /** Motore effettivo: "solo locale" forza il motore locale (come il backend). */
 export function effectiveEngine(s: Settings): SttEngine {
@@ -40,7 +40,17 @@ export function isLocalSession(s: Settings): boolean {
   return effectiveEngine(s) === "local" && (!llmUsed(s) || isLocalLlm(s));
 }
 
-/** Id dei modelli che servono al motore locale: VAD + modello STT scelto. */
+/** Motore cloud che taglia le frasi col VAD locale prima di inviarle. */
+export function isChunkedEngine(e: SttEngine): boolean {
+  return (CHUNKED_ENGINES as readonly SttEngine[]).includes(e);
+}
+
+/**
+ * Id dei modelli locali che servono al motore: VAD + modello STT per il
+ * locale, solo il VAD per i motori cloud a blocchi, nessuno per lo streaming.
+ */
 export function requiredLocalModels(s: Settings): string[] {
-  return ["silero-vad", s.localSttModel];
+  const engine = effectiveEngine(s);
+  if (engine === "local") return ["silero-vad", s.localSttModel];
+  return isChunkedEngine(engine) ? ["silero-vad"] : [];
 }

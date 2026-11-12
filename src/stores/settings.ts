@@ -9,6 +9,7 @@ import {
   hasApiKey,
   llmKeyAccount,
   setApiKey,
+  sttKeyAccount,
   updateSettings,
 } from "@/lib/ipc";
 
@@ -44,6 +45,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
         const settings = await getSettings();
         set({ settings, error: null });
         await get().refreshKey("deepgram");
+        const stt = sttKeyAccount(settings.sttEngine);
+        if (stt && stt !== "deepgram") await get().refreshKey(stt);
         const llm = llmKeyAccount(settings.llmProvider);
         if (llm) await get().refreshKey(llm);
       } catch (e) {
@@ -54,6 +57,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
     update: async (patch) => {
       try {
         set({ settings: await updateSettings(patch), error: null });
+        // Motore cambiato: serve sapere se la sua chiave c'è.
+        const stt = patch.sttEngine ? sttKeyAccount(patch.sttEngine) : null;
+        if (stt && get().keys[stt] === undefined) await get().refreshKey(stt);
       } catch (e) {
         set({ error: errorMessage(e) });
       }

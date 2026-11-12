@@ -9,8 +9,12 @@ use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use sv_models::{ModelKind, ModelStatus, ModelStore};
-use sv_stt::SttEngine;
+use sv_stt::assemblyai::{AssemblyAi, AssemblyAiConfig};
 use sv_stt::deepgram::{Deepgram, DeepgramConfig};
+use sv_stt::gladia::{Gladia, GladiaConfig};
+use sv_stt::speechmatics::{Speechmatics, SpeechmaticsConfig};
+use sv_stt::{Language, SttEngine};
+use sv_stt_chunked::{Azure, AzureConfig, ChunkedEngine, Google, GoogleConfig, Groq, GroqConfig};
 use sv_stt_local::{LocalEngine, LocalEngineConfig, LocalModel};
 use sv_vad::VadConfig;
 
@@ -31,6 +35,21 @@ pub enum EngineSpec {
         /// Parlanti di "Loro" da Deepgram (numero libero). Con un numero di
         /// parlanti fissato resta CAM++ con il raggruppamento a k fisso.
         diarize: bool,
+    },
+    /// AssemblyAI, Speechmatics, Gladia: streaming via WebSocket.
+    Streaming {
+        kind: SttEngineKind,
+        api_key: String,
+    },
+    /// Azure, Google, Groq: VAD locale + una richiesta HTTP per blocco.
+    Chunked {
+        kind: SttEngineKind,
+        api_key: String,
+        vad_model: PathBuf,
+        /// Solo Azure.
+        region: String,
+        /// Lingua di Azure con la call in modalità automatica.
+        fallback: Language,
     },
 }
 
@@ -64,7 +83,71 @@ impl EngineSpec {
                 endpoint: None,
                 diarize,
             })?),
+            Self::Streaming { kind, api_key } => match kind {
+                SttEngineKind::Assemblyai => Box::new(AssemblyAi::new(AssemblyAiConfig {
+                    api_key,
+                    endpoint: None,
+                })?),
+                SttEngineKind::Speechmatics => Box::new(Speechmatics::new(SpeechmaticsConfig {
+                    api_key,
+                    endpoint: None,
+                })?),
+                SttEngineKind::Gladia => Box::new(Gladia::new(GladiaConfig {
+                    api_key,
+                    init_url: None,
+                })?),
+                other => bail!("motore {} non in streaming", other.label()),
+            },
+            Self::Chunked {
+                kind,
+                api_key,
+                vad_model,
+                region,
+                fallback,
+            } => {
+                let vad = VadConfig::new(vad_model);
+                match kind {
+                    SttEngineKind::Azure => Box::new(ChunkedEngine::new(
+                        Azure::new(AzureConfig {
+                            api_key,
+                            region,
+                            fallback,
+                        })?,
+                        vad,
+                    )),
+                    SttEngineKind::Google => Box::new(ChunkedEngine::new(
+                        Google::new(GoogleConfig { api_key })?,
+                        vad,
+                    )),
+                    SttEngineKind::Groq => Box::new(ChunkedEngine::new(
+                        Groq::new(GroqConfig {
+                            api_key,
+                            model: sv_stt_chunked::GROQ_MODEL.into(),
+                        })?,
+                        vad,
+                    )),
+                    other => bail!("motore {} non a blocchi", other.label()),
+                }
+            }
         })
+    }
+
+    /// Modello registrato nello storico del meeting.
+    pub fn model_label(&self) -> String {
+        match self {
+            Self::Local { model_id, .. } => model_id.clone(),
+            Self::Deepgram { model, .. } => model.clone(),
+            Self::Streaming { kind, .. } | Self::Chunked { kind, .. } => match kind {
+                SttEngineKind::Assemblyai => sv_stt::assemblyai::MODEL,
+                SttEngineKind::Speechmatics => sv_stt::speechmatics::MODEL_FIXED,
+                SttEngineKind::Gladia => sv_stt::gladia::MODEL,
+                SttEngineKind::Azure => "azure-short-audio",
+                SttEngineKind::Google => "google-v1",
+                SttEngineKind::Groq => sv_stt_chunked::GROQ_MODEL,
+                SttEngineKind::Local | SttEngineKind::Deepgram => "",
+            }
+            .to_owned(),
+        }
     }
 }
 
@@ -83,22 +166,52 @@ pub fn engine_kind(settings: &Settings) -> SttEngineKind {
     }
 }
 
-/// Motore della sessione dai settings. `api_key` = chiave Deepgram letta dal
-/// Keychain (serve solo se il motore effettivo è Deepgram).
+/// Motore della sessione dai settings. `api_key` = chiave del motore cloud
+/// letta dal Keychain (account [`SttEngineKind::key_account`]); non serve per
+/// il motore locale.
 pub fn resolve(
     settings: &Settings,
     models: &ModelStore,
     api_key: Option<String>,
 ) -> Result<EngineSpec> {
-    match engine_kind(settings) {
-        SttEngineKind::Deepgram => {
-            let Some(api_key) = api_key.filter(|k| !k.trim().is_empty()) else {
-                bail!("API key Deepgram mancante: impostala nelle Impostazioni");
-            };
-            Ok(EngineSpec::Deepgram {
+    let kind = engine_kind(settings);
+    let key = || {
+        api_key
+            .clone()
+            .filter(|k| !k.trim().is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "API key {} mancante: impostala nelle Impostazioni",
+                    kind.label()
+                )
+            })
+    };
+    match kind {
+        SttEngineKind::Deepgram => Ok(EngineSpec::Deepgram {
+            api_key: key()?,
+            model: settings.stt_model.clone(),
+            diarize: settings.diarization && settings.their_speakers == 0,
+        }),
+        SttEngineKind::Assemblyai | SttEngineKind::Speechmatics | SttEngineKind::Gladia => {
+            Ok(EngineSpec::Streaming {
+                kind,
+                api_key: key()?,
+            })
+        }
+        SttEngineKind::Azure | SttEngineKind::Google | SttEngineKind::Groq => {
+            let api_key = key()?;
+            // Il VAD locale taglia le frasi da inviare.
+            let vad = sv_models::find(sv_models::SILERO_VAD).expect("Silero VAD nel catalogo");
+            let vad_model = ready_dir(models, vad)?.join("silero_vad.onnx");
+            Ok(EngineSpec::Chunked {
+                kind,
                 api_key,
-                model: settings.stt_model.clone(),
-                diarize: settings.diarization && settings.their_speakers == 0,
+                vad_model,
+                region: settings.azure_speech_region.trim().to_owned(),
+                fallback: match settings.my_language {
+                    Language::Multi => Language::It,
+                    l => l,
+                },
             })
         }
         SttEngineKind::Local => {
@@ -240,6 +353,46 @@ mod tests {
                 diarize: s.diarization && s.their_speakers == 0,
             }
         );
+    }
+
+    #[test]
+    fn cloud_engines_need_key_and_chunked_need_vad() {
+        let (models, _) = store("cloud");
+        for kind in [
+            SttEngineKind::Assemblyai,
+            SttEngineKind::Speechmatics,
+            SttEngineKind::Gladia,
+        ] {
+            let s = Settings {
+                stt_engine: kind,
+                ..Settings::default()
+            };
+            let err = resolve(&s, &models, None).unwrap_err();
+            assert!(err.to_string().contains(kind.label()), "{err}");
+            let spec = resolve(&s, &models, Some("k".into())).unwrap();
+            assert_eq!(
+                spec,
+                EngineSpec::Streaming {
+                    kind,
+                    api_key: "k".into()
+                }
+            );
+            assert!(!spec.model_label().is_empty());
+        }
+        for kind in [
+            SttEngineKind::Azure,
+            SttEngineKind::Google,
+            SttEngineKind::Groq,
+        ] {
+            let s = Settings {
+                stt_engine: kind,
+                ..Settings::default()
+            };
+            assert!(resolve(&s, &models, None).is_err());
+            // Senza il modello VAD scaricato: errore chiaro.
+            let err = resolve(&s, &models, Some("k".into())).unwrap_err();
+            assert!(err.to_string().contains("Modelli locali"), "{err}");
+        }
     }
 
     #[test]

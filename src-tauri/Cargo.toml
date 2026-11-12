@@ -26,6 +26,7 @@ sv-stt.workspace = true
 sv-llm.workspace = true
 sv-models.workspace = true
 sv-stt-local.workspace = true
+sv-stt-chunked.workspace = true
 sv-vad.workspace = true
 sv-diar.workspace = true
 sv-store.workspace = true

@@ -6,12 +6,17 @@
 //!
 //! [`AudioFrame`]: sv_audio::AudioFrame
 
+pub mod assemblyai;
 pub mod deepgram;
 mod engine;
 mod error;
 mod event;
 pub mod fake;
+pub mod gladia;
+pub mod speechmatics;
+mod ws;
 
 pub use engine::{AUDIO_QUEUE, EVENT_QUEUE, EventSender, Language, SttEngine, SttStream};
 pub use error::SttError;
 pub use event::{Segment, SpeakerUpdate, SttEvent, SttEventKind};
+pub use ws::{base_code, pcm16};

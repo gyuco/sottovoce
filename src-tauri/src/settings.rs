@@ -18,6 +18,48 @@ pub enum SttEngineKind {
     /// Deepgram Nova-3 in streaming (cloud, API key).
     #[default]
     Deepgram,
+    /// AssemblyAI Universal Streaming multilingue (cloud, API key).
+    Assemblyai,
+    /// Speechmatics real-time, endpoint EU (cloud, API key).
+    Speechmatics,
+    /// Gladia live (Solaria), regione EU (cloud, API key).
+    Gladia,
+    /// Azure AI Speech, REST short audio a blocchi (cloud, chiave + regione).
+    Azure,
+    /// Google Speech-to-Text v1 a blocchi (cloud, API key).
+    Google,
+    /// Groq Whisper a blocchi (cloud, API key).
+    Groq,
+}
+
+impl SttEngineKind {
+    /// Account Keychain della chiave del motore; `None` per il locale.
+    pub fn key_account(self) -> Option<&'static str> {
+        Some(match self {
+            Self::Local => return None,
+            Self::Deepgram => DEEPGRAM_KEY,
+            Self::Assemblyai => "assemblyai",
+            Self::Speechmatics => "speechmatics",
+            Self::Gladia => "gladia",
+            Self::Azure => "azure-speech",
+            Self::Google => "google-speech",
+            Self::Groq => "groq",
+        })
+    }
+
+    /// Nome mostrato negli errori.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Local => "locale",
+            Self::Deepgram => "Deepgram",
+            Self::Assemblyai => "AssemblyAI",
+            Self::Speechmatics => "Speechmatics",
+            Self::Gladia => "Gladia",
+            Self::Azure => "Azure",
+            Self::Google => "Google",
+            Self::Groq => "Groq",
+        }
+    }
 }
 
 /// Account Keychain della API key Deepgram (vedi `secrets::KNOWN_PROVIDERS`).
@@ -102,6 +144,8 @@ pub struct Settings {
     pub stt_model: String,
     /// Modello del catalogo `sv-models` per il motore locale.
     pub local_stt_model: String,
+    /// Regione della risorsa Azure Speech (es. `westeurope`).
+    pub azure_speech_region: String,
     /// Privacy: STT locale e LLM solo su questa macchina; l'avvio fallisce
     /// se la configurazione richiederebbe un host esterno.
     pub local_only: bool,
@@ -237,6 +281,7 @@ impl Default for Settings {
             stt_engine: SttEngineKind::Deepgram,
             stt_model: "nova-3".into(),
             local_stt_model: sv_models::PARAKEET_V3.into(),
+            azure_speech_region: "westeurope".into(),
             local_only: false,
             diarization: true,
             their_speakers: 0,
@@ -442,6 +487,17 @@ mod tests {
         assert_eq!(s.local_stt_model, sv_models::PARAKEET_V3);
         assert_eq!(SettingsStore::load(path.clone()).get(), s);
         assert!(store.update(json!({"sttEngine": "whisper"})).is_err());
+        for engine in [
+            "assemblyai",
+            "speechmatics",
+            "gladia",
+            "azure",
+            "google",
+            "groq",
+        ] {
+            let s = store.update(json!({ "sttEngine": engine })).unwrap();
+            assert!(s.stt_engine.key_account().is_some(), "{engine}");
+        }
         // La vecchia chiave non è più accettata nei patch.
         assert!(store.update(json!({"sttProvider": "deepgram"})).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());

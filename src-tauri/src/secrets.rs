@@ -17,11 +17,18 @@ use keyring::{Entry, Error};
 const SERVICE: &str = "sottovoce";
 
 /// Provider per cui si accetta una chiave (account nel Keychain).
+/// I motori di trascrizione: vedi `SttEngineKind::key_account`.
 /// `smtp` è la password del server di posta (invio del riepilogo);
 /// `google-client-secret`, `google-calendar` e `microsoft-calendar` (refresh
 /// token) servono alla sincronizzazione dei calendari.
 pub const KNOWN_PROVIDERS: &[&str] = &[
     "deepgram",
+    "assemblyai",
+    "speechmatics",
+    "gladia",
+    "azure-speech",
+    "google-speech",
+    "groq",
     "opencode",
     "openai",
     "anthropic",

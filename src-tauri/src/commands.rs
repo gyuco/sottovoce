@@ -27,7 +27,7 @@ use crate::search::{HistoryFilter, IndexStatus, Search, SearchResult};
 use crate::secrets;
 use crate::session::{LlmTasks, Outputs};
 use crate::session::{Session, SummaryJob};
-use crate::settings::{self, Settings, SettingsStore, SttEngineKind};
+use crate::settings::{self, Settings, SettingsStore};
 use crate::state::{AppState, Db, Voices};
 use crate::stt;
 use crate::summary::SummaryConfig;
@@ -230,13 +230,12 @@ pub async fn start_session(
     let my_spoken = language.unwrap_or(settings.my_language);
     // Prima di qualsiasi connessione: "solo locale" non ammette LLM esterni.
     stt::check_local_only(&settings).map_err(|e| format!("{e:#}"))?;
-    let api_key = match stt::engine_kind(&settings) {
-        SttEngineKind::Deepgram => {
-            blocking(|| secrets::get_api_key(settings::DEEPGRAM_KEY)).await?
-        }
-        SttEngineKind::Local => None,
+    let api_key = match stt::engine_kind(&settings).key_account() {
+        Some(account) => blocking(move || secrets::get_api_key(account)).await?,
+        None => None,
     };
     let spec = stt::resolve(&settings, models.store(), api_key).map_err(|e| format!("{e:#}"))?;
+    let stt_model = spec.model_label();
     let engine = spec.build().map_err(|e| format!("{e:#}"))?;
     let context = context.unwrap_or_default().normalized();
     let draft = MeetingDraft {
@@ -244,10 +243,7 @@ pub async fn start_session(
         goal: context.goal.clone(),
         notes: context.notes.clone(),
         stt_engine: engine.name().into(),
-        stt_model: match stt::engine_kind(&settings) {
-            SttEngineKind::Deepgram => settings.stt_model.clone(),
-            SttEngineKind::Local => settings.local_stt_model.clone(),
-        },
+        stt_model,
         my_language: my_spoken.code().into(),
         their_language: settings.their_language.code().into(),
         speakers: context.speakers.clone(),

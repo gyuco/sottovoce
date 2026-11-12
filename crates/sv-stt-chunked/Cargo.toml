@@ -1,0 +1,26 @@
+[package]
+name = "sv-stt-chunked"
+description = "Motori STT cloud a blocchi (VAD locale + richiesta HTTP per frase): Groq, Google, Azure"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+sv-audio.workspace = true
+sv-stt.workspace = true
+sv-stt-local.workspace = true
+sv-vad.workspace = true
+base64 = "0.22"
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "http2", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+
+[lints]
+workspace = true

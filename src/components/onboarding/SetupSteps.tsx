@@ -17,10 +17,12 @@ import { Switch } from "@/components/ui/switch";
 import {
   type LlmProvider,
   type ModelInfo,
+  STT_ENGINE_NAMES,
   type Settings,
   errorMessage,
   listLlmModels,
   llmKeyAccount,
+  sttKeyAccount,
   testLlm,
 } from "@/lib/ipc";
 import { effectiveEngine } from "@/lib/privacy";
@@ -38,9 +40,13 @@ export function EngineStep() {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
-  const hasKey = useSettingsStore((s) => s.hasKey);
+  const keys = useSettingsStore((s) => s.keys);
   if (!settings) return null;
   const engine = effectiveEngine(settings);
+  // Qui si propone Deepgram; un altro motore cloud scelto nelle Impostazioni resta.
+  const account = sttKeyAccount(engine) ?? "deepgram";
+  const hasKey = keys[account] ?? false;
+  const keyLabel = t("settings.stt.keyLabelFor", { name: STT_ENGINE_NAMES[engine === "local" ? "deepgram" : engine] });
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,8 +66,10 @@ export function EngineStep() {
           <span className="text-muted-foreground">{t("onboarding.engine.local.text")}</span>
         </Choice>
         <Choice
-          selected={engine === "deepgram"}
-          onSelect={() => void update({ sttEngine: "deepgram", localOnly: false })}
+          selected={engine !== "local"}
+          onSelect={() =>
+            void update({ sttEngine: engine === "local" ? "deepgram" : engine, localOnly: false })
+          }
           className="flex flex-col gap-2 p-4"
         >
           <span className="flex items-center gap-2 font-medium">
@@ -86,7 +94,7 @@ export function EngineStep() {
       ) : (
         <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-sm shadow-xs">
           <span className="flex items-center gap-2 font-medium">
-            {t("settings.stt.keyLabel")}
+            {keyLabel}
             {hasKey && (
               <Badge variant="secondary" className="ml-auto bg-emerald-500/12 font-normal text-emerald-700 dark:text-emerald-400">
                 {t("settings.key.saved")}
@@ -94,7 +102,7 @@ export function EngineStep() {
             )}
           </span>
           <p className="text-xs text-muted-foreground">{t("onboarding.engine.cloud.keyHint")}</p>
-          <KeyForm provider="deepgram" label={t("settings.stt.keyLabel")} />
+          <KeyForm provider={account} label={keyLabel} />
         </div>
       )}
     </div>

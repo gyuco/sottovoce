@@ -130,15 +130,42 @@
         "deepgram": {
           "name": "Cloud · Deepgram",
           "hint": "Low latency and strong on difficult audio; audio is sent to Deepgram's servers. The API key stays in the macOS Keychain: create one at console.deepgram.com."
+        },
+        "assemblyai": {
+          "name": "Cloud · AssemblyAI",
+          "hint": "Streaming with partial results, multilingual model (it, en, es, fr, de, pt) with language detection. Create the key at assemblyai.com/dashboard."
+        },
+        "speechmatics": {
+          "name": "Cloud · Speechmatics",
+          "hint": "Streaming with partial results, EU servers, very good in Italian. With automatic language it uses the multilingual model (melia-1). Create the key at portal.speechmatics.com."
+        },
+        "gladia": {
+          "name": "Cloud · Gladia",
+          "hint": "Streaming with partial results, EU servers, language can change from one sentence to the next. Create the key at app.gladia.io."
+        },
+        "azure": {
+          "name": "Cloud · Azure AI Speech",
+          "hint": "One request per sentence (no partial results). The free F0 tier includes 5 hours a month. One language per call: with automatic language it uses your language. You need a Speech resource at portal.azure.com: key and region."
+        },
+        "google": {
+          "name": "Cloud · Google Speech-to-Text",
+          "hint": "One request per sentence (no partial results), 60 free minutes a month. With automatic language it recognizes Italian, English, Spanish and French. You need an API key from a Google Cloud project with the Speech-to-Text API enabled."
+        },
+        "groq": {
+          "name": "Cloud · Groq Whisper",
+          "hint": "Whisper large-v3-turbo, very cheap. No streaming: sentences are sent in blocks of about 8 seconds, so text arrives with a delay. Create the key at console.groq.com."
         }
       },
       "lockedByLocalOnly": "With \"Local only\" on, the local engine is always used.",
       "requiredModels": "Required models",
-      "keyLabel": "Deepgram API key",
-      "needKey": "A Deepgram API key is required to transcribe with Deepgram.",
+      "needKey": "An API key is required to transcribe with {{name}}.",
       "openSettings": "Set key",
-      "needModels": "To transcribe locally, download the models in Settings.",
-      "openModels": "Download models"
+      "needModels": "To transcribe, download the required models in Settings.",
+      "openModels": "Download models",
+      "keyLabelFor": "{{name}} API key",
+      "chunkedHint": "Sentences are cut on your Mac by the VAD model (Silero) and sent one at a time: you need the model below.",
+      "azureRegion": "Azure region",
+      "azureRegionHint": "The region of the Speech resource, e.g. westeurope or italynorth (under “Keys and Endpoint” in the Azure portal)."
     },
     "language": {
       "mine": "Your language (Me)",
@@ -883,8 +910,7 @@
       },
       "stt": {
         "local": "On your Mac",
-        "deepgram": "Deepgram",
-        "needKey": "Deepgram key missing",
+        "needKey": "{{name}} key missing",
         "downloading": "Models downloading",
         "needModels": "Models missing"
       },

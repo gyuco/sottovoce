@@ -19,7 +19,29 @@ export type Language = "multi" | "it" | "en" | "es" | "fr" | "de";
 /** Lingue concrete (STT, traduzione, riepilogo). */
 export const CONCRETE_LANGUAGES = ["it", "en", "es", "fr", "de"] as const satisfies Language[];
 /** Motore di trascrizione. */
-export type SttEngine = "local" | "deepgram";
+export type SttEngine =
+  | "local"
+  | "deepgram"
+  | "assemblyai"
+  | "speechmatics"
+  | "gladia"
+  | "azure"
+  | "google"
+  | "groq";
+/** Motori cloud: streaming (con parziali) o a blocchi (VAD locale + una richiesta per frase). */
+export const STREAMING_ENGINES = ["deepgram", "assemblyai", "speechmatics", "gladia"] as const satisfies SttEngine[];
+export const CHUNKED_ENGINES = ["azure", "google", "groq"] as const satisfies SttEngine[];
+/** Nome del servizio (marchio, uguale in ogni lingua). */
+export const STT_ENGINE_NAMES: Record<SttEngine, string> = {
+  local: "Parakeet",
+  deepgram: "Deepgram",
+  assemblyai: "AssemblyAI",
+  speechmatics: "Speechmatics",
+  gladia: "Gladia",
+  azure: "Azure",
+  google: "Google",
+  groq: "Groq",
+};
 export type LlmProvider =
   | "ollama"
   | "opencode"
@@ -30,6 +52,12 @@ export type LlmProvider =
 /** Account delle API key nel Keychain. */
 export type KeyProvider =
   | "deepgram"
+  | "assemblyai"
+  | "speechmatics"
+  | "gladia"
+  | "azure-speech"
+  | "google-speech"
+  | "groq"
   | "opencode"
   | "openai"
   | "anthropic"
@@ -39,6 +67,20 @@ export type KeyProvider =
 
 /** Cifratura SMTP: STARTTLS (587) o TLS dall'inizio (465). */
 export type SmtpSecurity = "starttls" | "tls";
+
+/** Account della chiave del motore di trascrizione; `null` = locale. */
+export function sttKeyAccount(e: SttEngine): KeyProvider | null {
+  switch (e) {
+    case "local":
+      return null;
+    case "azure":
+      return "azure-speech";
+    case "google":
+      return "google-speech";
+    default:
+      return e;
+  }
+}
 
 /** Account della chiave del provider LLM; `null` = nessuna chiave. */
 export function llmKeyAccount(p: LlmProvider): KeyProvider | null {
@@ -53,6 +95,8 @@ export interface Settings {
   sttModel: string;
   /** Id del modello di trascrizione locale (catalogo modelli). */
   localSttModel: string;
+  /** Regione della risorsa Azure Speech (es. `westeurope`). */
+  azureSpeechRegion: string;
   /** Privacy: niente audio né testo verso host esterni durante la sessione. */
   localOnly: boolean;
   /** Riconoscimento dei parlanti su "Loro" (modello CAM++). */

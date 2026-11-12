@@ -31,11 +31,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
-import { type AppInfo, CONCRETE_LANGUAGES, type Language, type SttEngine, appInfo } from "@/lib/ipc";
-import { effectiveEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
+import {
+  type AppInfo,
+  CHUNKED_ENGINES,
+  CONCRETE_LANGUAGES,
+  type Language,
+  STREAMING_ENGINES,
+  STT_ENGINE_NAMES,
+  type SttEngine,
+  appInfo,
+  sttKeyAccount,
+} from "@/lib/ipc";
+import { effectiveEngine, isChunkedEngine, localOnlyViolation, requiredLocalModels } from "@/lib/privacy";
 import type { SettingsTab } from "@/lib/settingsTabs";
 import { cn } from "@/lib/utils";
 import { useAudioStore } from "@/stores/audio";
@@ -43,7 +54,7 @@ import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
 const LANGUAGES: Language[] = ["multi", ...CONCRETE_LANGUAGES];
-const ENGINES: SttEngine[] = ["local", "deepgram"];
+const ENGINES: SttEngine[] = ["local", ...STREAMING_ENGINES, ...CHUNKED_ENGINES];
 /** Altri partecipanti: 0 = automatico. */
 const SPEAKER_COUNTS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -58,12 +69,14 @@ const TABS: { id: SettingsTab; icon: LucideIcon }[] = [
 /** Impostazioni divise in sezioni (tab); la sezione aperta la tiene l'App. */
 export function SettingsPanel({ tab, onTabChange }: { tab: SettingsTab; onTabChange: (tab: SettingsTab) => void }) {
   const { t, i18n } = useTranslation();
-  const { settings, hasKey, error, update } = useSettingsStore();
+  const { settings, keys, error, update } = useSettingsStore();
   const systemSupported = useAudioStore((s) => s.systemSupported);
   const sessionActive = useAudioStore((s) => s.status !== "idle");
 
   if (!settings) return null;
   const engine = effectiveEngine(settings);
+  const sttAccount = sttKeyAccount(engine);
+  const sttHasKey = sttAccount ? (keys[sttAccount] ?? false) : false;
 
   const currentUiLanguage =
     UI_LANGUAGES.find((language) => language.code === i18n.resolvedLanguage)?.code ?? "it";
@@ -206,16 +219,27 @@ export function SettingsPanel({ tab, onTabChange }: { tab: SettingsTab; onTabCha
                 </Select>
               </label>
 
-              {engine === "deepgram" ? (
+              {sttAccount && (
                 <div className="flex flex-col gap-2">
-                  <Badge variant={hasKey ? "default" : "secondary"} className="self-end font-normal">
-                    {hasKey ? t("settings.key.saved") : t("settings.key.missing")}
+                  <Badge variant={sttHasKey ? "default" : "secondary"} className="self-end font-normal">
+                    {sttHasKey ? t("settings.key.saved") : t("settings.key.missing")}
                   </Badge>
-                  <KeyForm provider="deepgram" label={t("settings.stt.keyLabel")} />
+                  <KeyForm
+                    provider={sttAccount}
+                    label={t("settings.stt.keyLabelFor", { name: STT_ENGINE_NAMES[engine] })}
+                  />
                 </div>
-              ) : (
-                <RequiredModels ids={requiredLocalModels(settings)} />
               )}
+              {engine === "azure" && (
+                <AzureRegionField
+                  value={settings.azureSpeechRegion}
+                  onSave={(azureSpeechRegion) => void update({ azureSpeechRegion })}
+                />
+              )}
+              {isChunkedEngine(engine) && (
+                <p className="text-xs text-muted-foreground">{t("settings.stt.chunkedHint")}</p>
+              )}
+              {requiredLocalModels(settings).length > 0 && <RequiredModels ids={requiredLocalModels(settings)} />}
 
               <LanguageSelect
                 label={t("settings.language.mine")}
@@ -364,6 +388,29 @@ function AboutLine() {
 }
 
 /** Stato dei modelli che servono al motore locale (gestiti in "Modelli locali"). */
+/** Regione della risorsa Azure Speech: salvata quando si esce dal campo. */
+function AzureRegionField({ value, onSave }: { value: string; onSave: (region: string) => void }) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(value);
+  const valid = /^[a-z0-9]{1,40}$/i.test(draft.trim());
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span>{t("settings.stt.azureRegion")}</span>
+      <Input
+        value={draft}
+        placeholder="westeurope"
+        aria-invalid={!valid}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const next = draft.trim().toLowerCase();
+          if (/^[a-z0-9]{1,40}$/.test(next) && next !== value) onSave(next);
+        }}
+      />
+      <span className="text-xs text-muted-foreground">{t("settings.stt.azureRegionHint")}</span>
+    </label>
+  );
+}
+
 function RequiredModels({ ids }: { ids: string[] }) {
   const { t } = useTranslation();
   const models = useModelsStore((s) => s.models);

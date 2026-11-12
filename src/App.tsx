@@ -21,7 +21,8 @@ import { TalkRatio } from "@/components/TalkRatio";
 import { Transcript } from "@/components/Transcript";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/ui/button";
-import { onSummaryStatus } from "@/lib/ipc";
+import { STT_ENGINE_NAMES, onSummaryStatus } from "@/lib/ipc";
+import { effectiveEngine } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { type SettingsTab, saveSettingsTab, savedSettingsTab } from "@/lib/settingsTabs";
 import { syncTray } from "@/lib/tray";
@@ -45,6 +46,8 @@ export default function App() {
   const checkUpdate = useUpdateStore((s) => s.check);
   const loadContacts = useContactsStore((s) => s.load);
   const blocker = useSttBlocker();
+  const sttSettings = useSettingsStore((s) => s.settings);
+  const sttEngineName = sttSettings ? STT_ENGINE_NAMES[effectiveEngine(sttSettings)] : "";
   const needsSetup = useSettingsStore((s) => s.settings !== null && !s.settings.onboardingDone);
   const [view, setView] = useState<View>("live");
   const [settingsTab, setSettingsTab] = useState<SettingsTab>(savedSettingsTab);
@@ -161,7 +164,9 @@ export default function App() {
                     ) : (
                       <HardDriveDownload className="size-4 shrink-0 text-primary" aria-hidden />
                     )}
-                    <span className="flex-1">{t(`settings.stt.${blocker}`)}</span>
+                    <span className="flex-1">
+                      {t(`settings.stt.${blocker}`, { name: sttEngineName })}
+                    </span>
                     <Button
                       size="sm"
                       variant="outline"

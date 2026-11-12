@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { UI_LANGUAGES, type UiLanguage, setUiLanguage } from "@/i18n";
-import { CONCRETE_LANGUAGES, type Language } from "@/lib/ipc";
+import { CONCRETE_LANGUAGES, type Language, STT_ENGINE_NAMES } from "@/lib/ipc";
 import { effectiveEngine, llmUsed } from "@/lib/privacy";
 import { useSttBlocker } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
@@ -258,9 +258,9 @@ function DoneStep({ audio }: { audio: AudioResult }) {
   const engine = effectiveEngine(settings);
   const stt: [Status, string] =
     blocker === null
-      ? ["ok", t(`onboarding.done.stt.${engine}`)]
+      ? ["ok", engine === "local" ? t("onboarding.done.stt.local") : STT_ENGINE_NAMES[engine]]
       : blocker === "needKey"
-        ? ["warn", t("onboarding.done.stt.needKey")]
+        ? ["warn", t("onboarding.done.stt.needKey", { name: STT_ENGINE_NAMES[engine] })]
         : downloading
           ? ["pending", t("onboarding.done.stt.downloading")]
           : ["warn", t("onboarding.done.stt.needModels")];
