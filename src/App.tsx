@@ -22,6 +22,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { Button } from "@/components/ui/button";
 import { onSummaryStatus } from "@/lib/ipc";
 import { useSttBlocker } from "@/lib/readiness";
+import { type SettingsTab, saveSettingsTab, savedSettingsTab } from "@/lib/settingsTabs";
 import { syncTray } from "@/lib/tray";
 import { useWidgetSync } from "@/lib/widget";
 import { useAudioStore } from "@/stores/audio";
@@ -45,6 +46,16 @@ export default function App() {
   const blocker = useSttBlocker();
   const needsSetup = useSettingsStore((s) => s.settings !== null && !s.settings.onboardingDone);
   const [view, setView] = useState<View>("live");
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(savedSettingsTab);
+  const changeSettingsTab = (tab: SettingsTab) => {
+    setSettingsTab(tab);
+    saveSettingsTab(tab);
+  };
+  /** Apre le Impostazioni sulla sezione indicata. */
+  const openSettings = (tab: SettingsTab) => {
+    changeSettingsTab(tab);
+    setView("settings");
+  };
   /** Meeting da aprire nello Storico (dall'avviso del riepilogo). */
   const [historyFocus, setHistoryFocus] = useState<number | null>(null);
 
@@ -102,7 +113,7 @@ export default function App() {
           <main className="min-w-0 flex-1 overflow-y-auto">
             <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-5">
               <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
-              <SettingsPanel />
+              <SettingsPanel tab={settingsTab} onTabChange={changeSettingsTab} />
             </div>
           </main>
         ) : view === "scheduled" ? (
@@ -112,7 +123,7 @@ export default function App() {
                 setView("live");
                 void useScheduledStore.getState().start(m);
               }}
-              onOpenSettings={() => setView("settings")}
+              onOpenSettings={() => openSettings("integrations")}
             />
           </main>
         ) : view === "contacts" ? (
@@ -149,7 +160,11 @@ export default function App() {
                       <HardDriveDownload className="size-4 shrink-0 text-primary" aria-hidden />
                     )}
                     <span className="flex-1">{t(`settings.stt.${blocker}`)}</span>
-                    <Button size="sm" variant="outline" onClick={() => setView("settings")}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openSettings(blocker === "needKey" ? "audio" : "models")}
+                    >
                       {blocker === "needKey" ? t("settings.stt.openSettings") : t("settings.stt.openModels")}
                     </Button>
                   </div>

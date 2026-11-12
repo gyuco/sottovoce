@@ -102,6 +102,14 @@
   },
   "settings": {
     "title": "Impostazioni",
+    "tabs": {
+      "label": "Sezioni delle impostazioni",
+      "general": "Generale",
+      "audio": "Audio e trascrizione",
+      "ai": "Modelli AI",
+      "models": "Modelli locali",
+      "integrations": "Integrazioni"
+    },
     "back": "Indietro",
     "save": "Salva",
     "applyHint": "Le modifiche valgono dalla prossima sessione.",

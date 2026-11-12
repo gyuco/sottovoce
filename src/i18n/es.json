@@ -102,6 +102,14 @@
   },
   "settings": {
     "title": "Ajustes",
+    "tabs": {
+      "label": "Secciones de ajustes",
+      "general": "General",
+      "audio": "Audio y transcripción",
+      "ai": "Modelos de IA",
+      "models": "Modelos locales",
+      "integrations": "Integraciones"
+    },
     "back": "Atrás",
     "save": "Guardar",
     "applyHint": "Los cambios se aplican desde la próxima sesión.",

@@ -102,6 +102,14 @@
   },
   "settings": {
     "title": "Settings",
+    "tabs": {
+      "label": "Settings sections",
+      "general": "General",
+      "audio": "Audio & transcription",
+      "ai": "AI models",
+      "models": "Local models",
+      "integrations": "Integrations"
+    },
     "back": "Back",
     "save": "Save",
     "applyHint": "Changes apply from the next session.",
