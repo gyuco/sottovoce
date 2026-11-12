@@ -1,9 +1,11 @@
 //! OAuth 2.0 per app desktop (RFC 8252): browser di sistema, redirect su
-//! `http://127.0.0.1:<porta>` e PKCE (S256).
+//! loopback (`http://127.0.0.1:<porta>` o `http://localhost:<porta>`) e PKCE
+//! (S256).
 //!
 //! L'app apre un listener locale su una porta libera, manda l'utente alla
-//! pagina di consenso di Google e aspetta il redirect con il codice, che poi
-//! scambia con access token e refresh token. Nessun server intermedio.
+//! pagina di consenso del provider (Google, Microsoft) e aspetta il redirect
+//! con il codice, che poi scambia con access token e refresh token. Nessun
+//! server intermedio.
 
 use std::future::Future;
 use std::time::{Duration, Instant};
@@ -17,21 +19,88 @@ use tokio::net::{TcpListener, TcpStream};
 
 use crate::error::CalendarError;
 
-const AUTH_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const REVOKE_URL: &str = "https://oauth2.googleapis.com/revoke";
+/// Endpoint e permessi di un provider OAuth.
+#[derive(Debug, Clone)]
+pub struct Provider {
+    pub auth_url: String,
+    pub token_url: String,
+    /// Permessi richiesti, separati da spazi.
+    pub scopes: &'static str,
+    /// Permesso sul calendario che deve risultare concesso (confronto sul
+    /// suffisso: Microsoft lo restituisce con o senza il prefisso Graph).
+    pub calendar_scope: &'static str,
+    /// Host del redirect: Google vuole l'IP di loopback, Entra ID accetta
+    /// `http://localhost` con qualsiasi porta.
+    pub redirect_host: &'static str,
+    /// Parametri aggiuntivi della richiesta di consenso.
+    pub extra_params: &'static [(&'static str, &'static str)],
+    /// Il refresh ripete i permessi (Microsoft; Google li deduce dal token).
+    pub refresh_with_scope: bool,
+    /// Nome del provider nei messaggi.
+    pub name: &'static str,
+}
 
-/// Sola lettura degli eventi, più l'email dell'account (mostrata in UI).
-pub const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events.readonly";
-const SCOPES: &str = "openid email https://www.googleapis.com/auth/calendar.events.readonly";
+/// Google Calendar: sola lettura degli eventi, più l'email dell'account.
+pub fn google() -> Provider {
+    Provider {
+        auth_url: "https://accounts.google.com/o/oauth2/v2/auth".into(),
+        token_url: "https://oauth2.googleapis.com/token".into(),
+        scopes: "openid email https://www.googleapis.com/auth/calendar.events.readonly",
+        calendar_scope: "https://www.googleapis.com/auth/calendar.events.readonly",
+        redirect_host: "127.0.0.1",
+        // Refresh token anche se l'utente aveva già dato il consenso.
+        extra_params: &[("access_type", "offline"), ("prompt", "consent")],
+        refresh_with_scope: false,
+        name: "Google",
+    }
+}
 
-/// Client OAuth di tipo "App desktop" creato dall'utente su Google Cloud.
-/// Per Google il secret di un client desktop non è confidenziale, ma resta
-/// comunque nel Keychain.
+/// Microsoft 365 / Outlook (Microsoft Graph). `tenant`: `common` (account
+/// aziendali e personali), `organizations`, `consumers`, ID o dominio della
+/// directory per un'app registrata su un solo tenant.
+pub fn microsoft(tenant: &str) -> Result<Provider, CalendarError> {
+    let tenant = tenant.trim();
+    let tenant = if tenant.is_empty() { "common" } else { tenant };
+    if tenant.len() > 100
+        || !tenant
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+    {
+        return Err(CalendarError::Invalid(format!(
+            "tenant non valido: {tenant}"
+        )));
+    }
+    let base = format!("https://login.microsoftonline.com/{tenant}/oauth2/v2.0");
+    Ok(Provider {
+        auth_url: format!("{base}/authorize"),
+        token_url: format!("{base}/token"),
+        scopes: "openid email profile offline_access https://graph.microsoft.com/Calendars.Read",
+        calendar_scope: "Calendars.Read",
+        redirect_host: "localhost",
+        extra_params: &[("prompt", "select_account")],
+        refresh_with_scope: true,
+        name: "Microsoft",
+    })
+}
+
+/// Client OAuth creato dall'utente presso il provider. Google (client "App
+/// desktop") vuole anche il secret, che per un'app desktop non è
+/// confidenziale ma resta comunque nel Keychain; Microsoft (client pubblico)
+/// no.
 #[derive(Debug, Clone)]
 pub struct OAuthClient {
     pub client_id: String,
-    pub client_secret: String,
+    pub client_secret: Option<String>,
+}
+
+impl OAuthClient {
+    fn params<'a>(&'a self, mut params: Vec<(&'a str, &'a str)>) -> Vec<(&'a str, &'a str)> {
+        params.push(("client_id", self.client_id.as_str()));
+        if let Some(secret) = &self.client_secret {
+            params.push(("client_secret", secret.as_str()));
+        }
+        params
+    }
 }
 
 /// Testi della pagina che il browser mostra dopo il consenso.
@@ -64,6 +133,14 @@ pub struct Authorized {
     pub email: Option<String>,
 }
 
+/// Esito di un refresh. Microsoft ruota il refresh token a ogni uso: quello
+/// nuovo, se c'è, va salvato al posto del vecchio.
+#[derive(Debug, Clone)]
+pub struct Refreshed {
+    pub access: AccessToken,
+    pub refresh_token: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -93,66 +170,91 @@ fn challenge(verifier: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
+/// Listener del redirect: IPv4 sempre, IPv6 se disponibile sulla stessa
+/// porta (un browser può risolvere `localhost` in `::1`).
+struct Listeners {
+    v4: TcpListener,
+    v6: Option<TcpListener>,
+}
+
+impl Listeners {
+    async fn bind() -> std::io::Result<(Self, u16)> {
+        let v4 = TcpListener::bind(("127.0.0.1", 0)).await?;
+        let port = v4.local_addr()?.port();
+        let v6 = TcpListener::bind(("::1", port)).await.ok();
+        Ok((Self { v4, v6 }, port))
+    }
+
+    async fn accept(&self) -> std::io::Result<TcpStream> {
+        match &self.v6 {
+            Some(v6) => tokio::select! {
+                r = self.v4.accept() => r.map(|(s, _)| s),
+                r = v6.accept() => r.map(|(s, _)| s),
+            },
+            None => self.v4.accept().await.map(|(s, _)| s),
+        }
+    }
+}
+
 /// Flusso completo: apre il browser, aspetta il redirect (fino a `timeout` o
 /// a `cancel`) e scambia il codice. `open_browser` riceve l'URL di consenso.
 pub async fn authorize(
     http: &reqwest::Client,
+    provider: &Provider,
     client: &OAuthClient,
     page: &CallbackPage,
     open_browser: impl FnOnce(&str) -> std::io::Result<()>,
     cancel: impl Future<Output = ()>,
     timeout: Duration,
 ) -> Result<Authorized, CalendarError> {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
-    let redirect_uri = format!("http://127.0.0.1:{}", listener.local_addr()?.port());
+    let (listeners, port) = Listeners::bind().await?;
+    let redirect_uri = format!("http://{}:{port}", provider.redirect_host);
     let verifier = random_b64(48)?;
     let state = random_b64(16)?;
-    let url = url::Url::parse_with_params(
-        AUTH_URL,
-        &[
-            ("client_id", client.client_id.as_str()),
-            ("redirect_uri", redirect_uri.as_str()),
-            ("response_type", "code"),
-            ("scope", SCOPES),
-            ("code_challenge", challenge(&verifier).as_str()),
-            ("code_challenge_method", "S256"),
-            ("state", state.as_str()),
-            // Refresh token anche se l'utente aveva già dato il consenso.
-            ("access_type", "offline"),
-            ("prompt", "consent"),
-        ],
-    )
-    .map_err(|e| CalendarError::Invalid(e.to_string()))?;
+    let code_challenge = challenge(&verifier);
+    let mut params = vec![
+        ("client_id", client.client_id.as_str()),
+        ("redirect_uri", redirect_uri.as_str()),
+        ("response_type", "code"),
+        ("scope", provider.scopes),
+        ("code_challenge", code_challenge.as_str()),
+        ("code_challenge_method", "S256"),
+        ("state", state.as_str()),
+    ];
+    params.extend_from_slice(provider.extra_params);
+    let url = url::Url::parse_with_params(&provider.auth_url, &params)
+        .map_err(|e| CalendarError::Invalid(e.to_string()))?;
     open_browser(url.as_str())?;
 
     let code = tokio::time::timeout(timeout, async {
         tokio::select! {
             () = cancel => Err(CalendarError::Cancelled),
-            code = wait_for_code(&listener, &state, page) => code,
+            code = wait_for_code(&listeners, &state, page) => code,
         }
     })
     .await
     .map_err(|_| CalendarError::Timeout)??;
 
     let response = http
-        .post(TOKEN_URL)
-        .form(&[
+        .post(&provider.token_url)
+        .form(&client.params(vec![
             ("code", code.as_str()),
-            ("client_id", client.client_id.as_str()),
-            ("client_secret", client.client_secret.as_str()),
             ("redirect_uri", redirect_uri.as_str()),
             ("grant_type", "authorization_code"),
             ("code_verifier", verifier.as_str()),
-        ])
+        ]))
         .send()
         .await?;
     let tokens: TokenResponse = token_response(response).await?;
     // Con il consenso granulare l'utente può togliere la spunta al calendario.
-    if !tokens.scope.split_whitespace().any(|s| s == CALENDAR_SCOPE) {
+    if !has_scope(&tokens.scope, provider.calendar_scope) {
         return Err(CalendarError::MissingScope);
     }
     let refresh_token = tokens.refresh_token.ok_or_else(|| {
-        CalendarError::Invalid("Google non ha restituito il refresh token".into())
+        CalendarError::Invalid(format!(
+            "{} non ha restituito il refresh token",
+            provider.name
+        ))
     })?;
     Ok(Authorized {
         refresh_token,
@@ -164,33 +266,51 @@ pub async fn authorize(
     })
 }
 
+/// Il permesso sul calendario è tra quelli concessi (anche con prefisso,
+/// es. `https://graph.microsoft.com/Calendars.Read`).
+fn has_scope(granted: &str, wanted: &str) -> bool {
+    granted.split_whitespace().any(|s| {
+        s == wanted
+            || s.strip_suffix(wanted)
+                .is_some_and(|prefix| prefix.ends_with('/'))
+    })
+}
+
 /// Nuovo access token dal refresh token. [`CalendarError::Revoked`] se
 /// l'utente ha tolto l'accesso (o il token è scaduto): va ricollegato.
 pub async fn refresh(
     http: &reqwest::Client,
+    provider: &Provider,
     client: &OAuthClient,
     refresh_token: &str,
-) -> Result<AccessToken, CalendarError> {
+) -> Result<Refreshed, CalendarError> {
+    let mut params = vec![
+        ("refresh_token", refresh_token),
+        ("grant_type", "refresh_token"),
+    ];
+    if provider.refresh_with_scope {
+        params.push(("scope", provider.scopes));
+    }
     let response = http
-        .post(TOKEN_URL)
-        .form(&[
-            ("client_id", client.client_id.as_str()),
-            ("client_secret", client.client_secret.as_str()),
-            ("refresh_token", refresh_token),
-            ("grant_type", "refresh_token"),
-        ])
+        .post(&provider.token_url)
+        .form(&client.params(params))
         .send()
         .await?;
     let tokens: TokenResponse = token_response(response).await?;
-    Ok(AccessToken {
-        token: tokens.access_token,
-        expires_at: Instant::now() + Duration::from_secs(tokens.expires_in),
+    Ok(Refreshed {
+        access: AccessToken {
+            token: tokens.access_token,
+            expires_at: Instant::now() + Duration::from_secs(tokens.expires_in),
+        },
+        refresh_token: tokens.refresh_token,
     })
 }
 
 /// Revoca il token presso Google (scollegamento). Errori ignorabili.
-pub async fn revoke(http: &reqwest::Client, token: &str) -> Result<(), CalendarError> {
-    http.post(REVOKE_URL)
+/// Microsoft non ha un endpoint di revoca per i client pubblici: l'accesso si
+/// toglie da account.microsoft.com / myapps.microsoft.com.
+pub async fn revoke_google(http: &reqwest::Client, token: &str) -> Result<(), CalendarError> {
+    http.post("https://oauth2.googleapis.com/revoke")
         .form(&[("token", token)])
         .send()
         .await?
@@ -206,13 +326,16 @@ async fn token_response(response: reqwest::Response) -> Result<TokenResponse, Ca
     }
     let err: Option<TokenError> = serde_json::from_str(&body).ok();
     Err(match err {
-        Some(e) if e.error == "invalid_grant" => CalendarError::Revoked,
+        // Microsoft: `invalid_grant` anche per consenso mancante/da rinnovare.
+        Some(e) if e.error == "invalid_grant" || e.error == "interaction_required" => {
+            CalendarError::Revoked
+        }
         Some(e) if e.error == "invalid_client" || e.error == "unauthorized_client" => {
-            CalendarError::InvalidClient
+            CalendarError::InvalidClient(first_line(&e.error_description))
         }
         Some(e) => CalendarError::Api {
             status: status.as_u16(),
-            message: format!("{}: {}", e.error, e.error_description),
+            message: format!("{}: {}", e.error, first_line(&e.error_description)),
         },
         None => CalendarError::Api {
             status: status.as_u16(),
@@ -221,24 +344,33 @@ async fn token_response(response: reqwest::Response) -> Result<TokenResponse, Ca
     })
 }
 
+/// Prima riga (Entra ID aggiunge trace id e timestamp nelle successive).
+fn first_line(text: &str) -> String {
+    text.lines().next().unwrap_or("").trim().to_owned()
+}
+
 /// Email dal payload dell'`id_token` (solo per mostrarla: nessuna verifica
-/// della firma, il token arriva direttamente da Google su TLS).
+/// della firma, il token arriva direttamente dal provider su TLS). Microsoft
+/// può non avere `email`: allora `preferred_username`.
 fn id_token_email(id_token: &str) -> Option<String> {
     let payload = id_token.split('.').nth(1)?;
     let bytes = URL_SAFE_NO_PAD.decode(payload.trim_end_matches('=')).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    value.get("email")?.as_str().map(str::to_owned)
+    ["email", "preferred_username"]
+        .iter()
+        .find_map(|k| value.get(k)?.as_str().filter(|s| !s.is_empty()))
+        .map(str::to_owned)
 }
 
 /// Accetta connessioni finché arriva il redirect con il nostro `state`.
 /// Richieste estranee (favicon, `state` diverso) ricevono 404 e si ignorano.
 async fn wait_for_code(
-    listener: &TcpListener,
+    listeners: &Listeners,
     state: &str,
     page: &CallbackPage,
 ) -> Result<String, CalendarError> {
     loop {
-        let (mut stream, _) = listener.accept().await?;
+        let mut stream = listeners.accept().await?;
         let Ok(Ok(target)) =
             tokio::time::timeout(Duration::from_secs(5), read_target(&mut stream)).await
         else {
@@ -343,7 +475,41 @@ mod tests {
     }
 
     #[test]
+    fn checks_granted_scope() {
+        let ms = "openid email https://graph.microsoft.com/Calendars.Read profile";
+        assert!(has_scope(ms, "Calendars.Read"));
+        assert!(has_scope("Calendars.Read", "Calendars.Read"));
+        assert!(!has_scope(
+            "https://graph.microsoft.com/Calendars.ReadBasic",
+            "Calendars.Read"
+        ));
+        assert!(!has_scope(
+            "https://graph.microsoft.com/xCalendars.Read",
+            "Calendars.Read"
+        ));
+        let google = google();
+        assert!(has_scope(
+            &format!("openid {}", google.calendar_scope),
+            google.calendar_scope
+        ));
+        assert!(!has_scope("openid email", google.calendar_scope));
+    }
+
+    #[test]
+    fn microsoft_tenant_is_validated() {
+        assert!(microsoft("").unwrap().auth_url.contains("/common/"));
+        assert!(microsoft("contoso.onmicrosoft.com").is_ok());
+        assert!(microsoft("1b2c3d4e-0000-1111-2222-333344445555").is_ok());
+        assert!(microsoft("evil.com/x?").is_err());
+    }
+
+    #[test]
     fn reads_email_from_id_token() {
+        let ms = URL_SAFE_NO_PAD.encode(br#"{"preferred_username":"marco@contoso.com"}"#);
+        assert_eq!(
+            id_token_email(&format!("h.{ms}.s")).as_deref(),
+            Some("marco@contoso.com")
+        );
         let payload = URL_SAFE_NO_PAD.encode(br#"{"email":"anna@example.com","sub":"1"}"#);
         assert_eq!(
             id_token_email(&format!("h.{payload}.s")).as_deref(),
@@ -373,8 +539,7 @@ mod tests {
 
     #[tokio::test]
     async fn loopback_ignores_strangers_and_returns_code() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let (listeners, port) = Listeners::bind().await.unwrap();
         let page = page();
         let client = async {
             assert!(get(port, "/favicon.ico").await.starts_with("HTTP/1.1 404"));
@@ -386,20 +551,19 @@ mod tests {
             let ok = get(port, "/?code=4%2Fabc&state=S").await;
             assert!(ok.starts_with("HTTP/1.1 200") && ok.contains("chiudi"));
         };
-        let (code, ()) = tokio::join!(wait_for_code(&listener, "S", &page), client);
+        let (code, ()) = tokio::join!(wait_for_code(&listeners, "S", &page), client);
         assert_eq!(code.unwrap(), "4/abc");
     }
 
     #[tokio::test]
     async fn loopback_reports_denied_consent() {
-        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let (listeners, port) = Listeners::bind().await.unwrap();
         let page = page();
         let client = async {
             let body = get(port, "/?error=access_denied&state=S").await;
             assert!(body.contains("&lt;rifiutato&gt;"));
         };
-        let (result, ()) = tokio::join!(wait_for_code(&listener, "S", &page), client);
+        let (result, ()) = tokio::join!(wait_for_code(&listeners, "S", &page), client);
         assert!(matches!(result, Err(CalendarError::Denied(e)) if e == "access_denied"));
     }
 }

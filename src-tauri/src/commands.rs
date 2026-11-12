@@ -12,7 +12,7 @@ use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
-use crate::calendar::{Calendar, CalendarStatus};
+use crate::calendar::{Calendar, CalendarProvider, CalendarStatus};
 use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
@@ -990,84 +990,101 @@ pub async fn delete_scheduled_meeting(db: State<'_, Db>, id: i64) -> CmdResult<(
     blocking(move || Ok(sv_store::Store::open(path)?.delete_scheduled_meeting(id)?)).await
 }
 
-// --- Google Calendar ------------------------------------------------------------
+// --- Calendari (Google, Microsoft) ----------------------------------------------
 
 #[tauri::command]
-pub fn google_calendar_status(
+pub fn calendar_status(
     calendar: State<'_, Calendar>,
     settings: State<'_, SettingsStore>,
+    provider: CalendarProvider,
 ) -> CalendarStatus {
-    calendar.status(&settings)
+    calendar.status(provider, &settings)
 }
 
-/// Apre il consenso di Google nel browser e aspetta il ritorno (max 5 min);
-/// `uiLanguage` sceglie la lingua della pagina mostrata alla fine.
+/// Apre il consenso del provider nel browser e aspetta il ritorno (max 5
+/// min); `uiLanguage` sceglie la lingua della pagina mostrata alla fine.
 #[tauri::command]
-pub async fn connect_google_calendar(
+pub async fn connect_calendar(
     app: AppHandle,
     calendar: State<'_, Calendar>,
     settings: State<'_, SettingsStore>,
+    provider: CalendarProvider,
     ui_language: String,
 ) -> CmdResult<CalendarStatus> {
     calendar
-        .connect(&app, &ui_language)
+        .connect(provider, &app, &ui_language)
         .await
         .map_err(|e| format!("{e:#}"))?;
-    Ok(calendar.status(&settings))
+    Ok(calendar.status(provider, &settings))
 }
 
 #[tauri::command]
-pub fn cancel_google_calendar_connect(calendar: State<'_, Calendar>) {
-    calendar.cancel_connect();
+pub fn cancel_calendar_connect(calendar: State<'_, Calendar>, provider: CalendarProvider) {
+    calendar.cancel_connect(provider);
 }
 
 #[tauri::command]
-pub async fn disconnect_google_calendar(
+pub async fn disconnect_calendar(
     app: AppHandle,
     calendar: State<'_, Calendar>,
     settings: State<'_, SettingsStore>,
+    provider: CalendarProvider,
 ) -> CmdResult<CalendarStatus> {
     calendar
-        .disconnect(&app)
+        .disconnect(provider, &app)
         .await
         .map_err(|e| format!("{e:#}"))?;
-    Ok(calendar.status(&settings))
+    Ok(calendar.status(provider, &settings))
 }
 
 #[tauri::command]
-pub async fn sync_google_calendar(
+pub async fn sync_calendar(
     app: AppHandle,
     calendar: State<'_, Calendar>,
     settings: State<'_, SettingsStore>,
+    provider: CalendarProvider,
 ) -> CmdResult<CalendarStatus> {
-    calendar.sync(&app).await.map_err(|e| format!("{e:#}"))?;
-    Ok(calendar.status(&settings))
+    calendar
+        .sync(provider, &app)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(calendar.status(provider, &settings))
 }
 
-/// Pagine di Google Cloud citate nella guida di configurazione.
+/// Pagine delle console dei provider citate nelle guide di configurazione.
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum GoogleConsolePage {
-    Project,
-    CalendarApi,
-    Branding,
-    Audience,
-    DataAccess,
-    Clients,
+pub enum ConsolePage {
+    GoogleProject,
+    GoogleCalendarApi,
+    GoogleBranding,
+    GoogleAudience,
+    GoogleDataAccess,
+    GoogleClients,
+    MicrosoftAppRegistrations,
+    MicrosoftNewRegistration,
+    MicrosoftMyApps,
 }
 
-/// Apre nel browser una pagina della Google Cloud Console (solo URL fissi).
+/// Apre nel browser una pagina della console di un provider (solo URL fissi).
 #[tauri::command]
-pub fn open_google_console(page: GoogleConsolePage) -> CmdResult<()> {
+pub fn open_provider_console(page: ConsolePage) -> CmdResult<()> {
     let url = match page {
-        GoogleConsolePage::Project => "https://console.cloud.google.com/projectcreate",
-        GoogleConsolePage::CalendarApi => {
+        ConsolePage::GoogleProject => "https://console.cloud.google.com/projectcreate",
+        ConsolePage::GoogleCalendarApi => {
             "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
         }
-        GoogleConsolePage::Branding => "https://console.cloud.google.com/auth/branding",
-        GoogleConsolePage::Audience => "https://console.cloud.google.com/auth/audience",
-        GoogleConsolePage::DataAccess => "https://console.cloud.google.com/auth/scopes",
-        GoogleConsolePage::Clients => "https://console.cloud.google.com/auth/clients",
+        ConsolePage::GoogleBranding => "https://console.cloud.google.com/auth/branding",
+        ConsolePage::GoogleAudience => "https://console.cloud.google.com/auth/audience",
+        ConsolePage::GoogleDataAccess => "https://console.cloud.google.com/auth/scopes",
+        ConsolePage::GoogleClients => "https://console.cloud.google.com/auth/clients",
+        ConsolePage::MicrosoftAppRegistrations => {
+            "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+        }
+        ConsolePage::MicrosoftNewRegistration => {
+            "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/CreateApplicationBlade/quickStartType~/null/isMSAApp~/false"
+        }
+        ConsolePage::MicrosoftMyApps => "https://myapps.microsoft.com/",
     };
     crate::calendar::open_in_browser(url).map_err(to_msg)
 }
@@ -1140,7 +1157,7 @@ async fn blocking<T: Send + 'static>(
 #[tauri::command]
 pub async fn set_api_key(provider: String, key: String) -> CmdResult<()> {
     // Il refresh token lo scrive solo il collegamento OAuth.
-    if provider == crate::calendar::TOKEN_KEY {
+    if crate::calendar::is_token_key(&provider) {
         return Err(format!("chiave non modificabile: {provider}"));
     }
     blocking(move || secrets::set_api_key(&provider, &key)).await

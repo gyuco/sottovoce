@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  CALENDAR_PROVIDERS,
   CONCRETE_LANGUAGES,
   type Language,
   type Participant,
@@ -99,10 +100,12 @@ export function Scheduled(props: { onStart: (m: ScheduledMeeting) => void; onOpe
   const { onStart } = props;
   const { t } = useTranslation();
   const { meetings, loaded, error, now, load, remove } = useScheduledStore();
-  const calendar = useCalendarStore((s) => s.status);
+  const calendars = useCalendarStore((s) => s.status);
   const calendarBusy = useCalendarStore((s) => s.busy);
-  const syncCalendar = useCalendarStore((s) => s.sync);
-  const syncing = calendarBusy || (calendar?.syncing ?? false);
+  const syncAll = useCalendarStore((s) => s.syncAll);
+  const anyConnected = CALENDAR_PROVIDERS.some((p) => calendars[p]?.connected);
+  const syncing = CALENDAR_PROVIDERS.some((p) => calendarBusy[p] || calendars[p]?.syncing);
+  const reconnect = CALENDAR_PROVIDERS.filter((p) => calendars[p]?.needsReconnect);
   const canStart = useCanStart();
   const fmt = useFormatters();
   // `null` = chiuso; "new" = nuova riunione.
@@ -151,9 +154,9 @@ export function Scheduled(props: { onStart: (m: ScheduledMeeting) => void; onOpe
             <Badge variant="secondary" className="font-normal">
               {t(`settings.language.${m.language}`)}
             </Badge>
-            {m.source === "google" && (
-              <Badge variant="outline" className="font-normal" title={t("scheduled.fromGoogle")}>
-                Google Calendar
+            {m.source && (
+              <Badge variant="outline" className="font-normal" title={t(`scheduled.from.${m.source}`)}>
+                {t(`scheduled.source.${m.source}`)}
               </Badge>
             )}
           </p>
@@ -208,13 +211,13 @@ export function Scheduled(props: { onStart: (m: ScheduledMeeting) => void; onOpe
           <p className="mt-1 text-sm text-muted-foreground">{t("scheduled.hint")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {calendar?.connected ? (
-            <Button variant="outline" disabled={syncing} onClick={() => void syncCalendar()}>
+          {anyConnected ? (
+            <Button variant="outline" disabled={syncing} onClick={() => void syncAll()}>
               <RefreshCw className={cn(syncing && "animate-spin")} /> {t("scheduled.sync")}
             </Button>
           ) : (
             <Button variant="outline" onClick={props.onOpenSettings}>
-              <CalendarClock /> {t("scheduled.connectGoogle")}
+              <CalendarClock /> {t("scheduled.connectCalendar")}
             </Button>
           )}
           <Button onClick={() => setEditing("new")}>
@@ -223,14 +226,14 @@ export function Scheduled(props: { onStart: (m: ScheduledMeeting) => void; onOpe
         </div>
       </header>
 
-      {calendar?.needsReconnect && (
-        <p role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
-          {t("settings.calendar.needsReconnect")}
+      {reconnect.map((p) => (
+        <p key={p} role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+          {t(`settings.calendar.${p}.needsReconnect`)}
           <Button size="xs" variant="outline" onClick={props.onOpenSettings}>
-            {t("settings.calendar.reconnect")}
+            {t("settings.calendar.common.reconnect")}
           </Button>
         </p>
-      )}
+      ))}
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -302,7 +305,7 @@ function ScheduledDialog(props: { meeting: ScheduledMeeting | null; onClose: () 
   const defaultLanguage = useSettingsStore((s) => s.settings?.theirLanguage ?? "multi");
   const { meeting } = props;
   // Titolo e orario arrivano dal calendario: la sincronizzazione li riscrive.
-  const fromCalendar = meeting?.source === "google";
+  const fromCalendar = !!meeting?.source;
   const [start] = useState(() => meeting?.startsAtMs ?? nextSlot(Date.now()));
   const [date, setDate] = useState(dateValue(start));
   const [time, setTime] = useState(timeValue(start));
@@ -356,7 +359,9 @@ function ScheduledDialog(props: { meeting: ScheduledMeeting | null; onClose: () 
           <DialogHeader>
             <DialogTitle>{meeting ? t("scheduled.edit", { name: meeting.name }) : t("scheduled.add")}</DialogTitle>
             <DialogDescription>
-              {fromCalendar ? t("scheduled.formHintGoogle") : t("scheduled.formHint")}
+              {meeting?.source
+                ? t("scheduled.formHintCalendar", { calendar: t(`scheduled.source.${meeting.source}`) })
+                : t("scheduled.formHint")}
             </DialogDescription>
           </DialogHeader>
 

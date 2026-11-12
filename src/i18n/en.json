@@ -285,61 +285,109 @@
       "busy": "Available when no call is running"
     },
     "calendar": {
-      "title": "Google Calendar",
-      "hint": "Meetings in your calendar with a Meet, Teams or Zoom link show up in the Schedule by themselves, ready to start.",
-      "clientId": "Client ID",
-      "clientSecret": "Client secret",
-      "connect": "Connect Google Calendar",
-      "needClient": "Enter the client ID and client secret (see the guide below).",
-      "waitingBrowser": "Finish signing in in the browser that just opened…",
-      "connected": "Connected",
-      "connectedAs": "Connected as {{email}}",
-      "syncing": "Syncing…",
-      "lastSync": "Last sync {{time}} · new {{added}}, updated {{updated}}, removed {{removed}}",
-      "neverSynced": "Not synced yet.",
-      "syncNow": "Sync now",
-      "reconnect": "Reconnect",
-      "needsReconnect": "Access to Google Calendar expired or was revoked: reconnect the calendar.",
-      "disconnect": "Disconnect",
-      "disconnectTitle": "Disconnect Google Calendar?",
-      "disconnectConfirm": "Access is revoked and imported meetings leave the Schedule, except the ones you edited.",
-      "guide": {
-        "title": "How to set up Google Cloud (one time only)",
-        "intro": "Sottovoce connects with an OAuth client you create yourself: data goes from your calendar straight to the app, with no server in between. It takes about 10 minutes.",
-        "open": "Open in the console",
-        "project": {
-          "title": "Create a project",
-          "body": "Sign in to Google Cloud Console with your Google account and create a project, for example \"Sottovoce\". You don't need to enable billing."
-        },
-        "api": {
-          "title": "Enable the Google Calendar API",
-          "body": "With the project selected open APIs & Services → Library, search for \"Google Calendar API\" and click Enable."
-        },
-        "branding": {
-          "title": "Set up the consent screen",
-          "body": "Open Google Auth Platform → Branding (click Get started the first time): app name \"Sottovoce\", your email as support email and developer contact."
-        },
-        "audience": {
-          "title": "Choose the audience",
-          "body": "In Audience choose \"Internal\" if you have Google Workspace and will use Sottovoce only within your organization: no verification and no warning.\nOtherwise choose \"External\", then click Publish app to move to \"In production\": in Testing mode access expires every 7 days."
-        },
-        "scopes": {
-          "title": "Add the calendar permission",
-          "body": "In Data access click Add or remove scopes, search and check \".../auth/calendar.events.readonly\" (read-only events), then Update and Save."
-        },
-        "client": {
-          "title": "Create the OAuth client",
-          "body": "In Clients click Create client, application type \"Desktop app\", name \"Sottovoce\", then Create. Copy the client ID and client secret from the dialog that appears (you can reopen it from the client)."
-        },
-        "paste": {
-          "title": "Connect Sottovoce",
-          "body": "Paste the client ID and client secret in the fields above and click \"Connect Google Calendar\": the browser opens, pick the account and allow calendar access (keep the calendar box checked)."
-        },
-        "warning": {
-          "title": "If you see \"Google hasn't verified this app\"",
-          "body": "With an \"External\" audience and no verification this is expected: it's the client you just created. Click Advanced → Go to Sottovoce. Without verification the client works for up to 100 users."
-        },
-        "privacy": "Sottovoce only reads events from your primary calendar (read-only), from yesterday to the next 30 days, and imports only those with a Meet, Teams or Zoom link that you haven't declined. The client secret and access stay in the Keychain."
+      "common": {
+        "clientId": "Client ID",
+        "connected": "Connected",
+        "connectedAs": "Connected as {{email}}",
+        "syncing": "Syncing…",
+        "lastSync": "Last sync {{time}} · new {{added}}, updated {{updated}}, removed {{removed}}",
+        "neverSynced": "Not synced yet.",
+        "syncNow": "Sync now",
+        "reconnect": "Reconnect",
+        "disconnect": "Disconnect",
+        "waitingBrowser": "Finish signing in in the browser that just opened…",
+        "openConsole": "Open in the console"
+      },
+      "google": {
+        "title": "Google Calendar",
+        "hint": "Meetings in your calendar with a Meet, Teams or Zoom link show up in the Schedule by themselves, ready to start.",
+        "clientSecret": "Client secret",
+        "connect": "Connect Google Calendar",
+        "needClient": "Enter the client ID and client secret (see the guide below).",
+        "needsReconnect": "Access to Google Calendar expired or was revoked: reconnect the calendar.",
+        "disconnectTitle": "Disconnect Google Calendar?",
+        "disconnectConfirm": "Access is revoked and imported meetings leave the Schedule, except the ones you edited.",
+        "guide": {
+          "title": "How to set up Google Cloud (one time only)",
+          "intro": "Sottovoce connects with an OAuth client you create yourself: data goes from your calendar straight to the app, with no server in between. It takes about 10 minutes.",
+          "project": {
+            "title": "Create a project",
+            "body": "Sign in to Google Cloud Console with your Google account and create a project, for example \"Sottovoce\". You don't need to enable billing."
+          },
+          "api": {
+            "title": "Enable the Google Calendar API",
+            "body": "With the project selected open APIs & Services → Library, search for \"Google Calendar API\" and click Enable."
+          },
+          "branding": {
+            "title": "Set up the consent screen",
+            "body": "Open Google Auth Platform → Branding (click Get started the first time): app name \"Sottovoce\", your email as support email and developer contact."
+          },
+          "audience": {
+            "title": "Choose the audience",
+            "body": "In Audience choose \"Internal\" if you have Google Workspace and will use Sottovoce only within your organization: no verification and no warning.\nOtherwise choose \"External\", then click Publish app to move to \"In production\": in Testing mode access expires every 7 days."
+          },
+          "scopes": {
+            "title": "Add the calendar permission",
+            "body": "In Data access click Add or remove scopes, search and check \".../auth/calendar.events.readonly\" (read-only events), then Update and Save."
+          },
+          "client": {
+            "title": "Create the OAuth client",
+            "body": "In Clients click Create client, application type \"Desktop app\", name \"Sottovoce\", then Create. Copy the client ID and client secret from the dialog that appears (you can reopen it from the client)."
+          },
+          "paste": {
+            "title": "Connect Sottovoce",
+            "body": "Paste the client ID and client secret in the fields above and click \"Connect Google Calendar\": the browser opens, pick the account and allow calendar access (keep the calendar box checked)."
+          },
+          "warning": {
+            "title": "If you see \"Google hasn't verified this app\"",
+            "body": "With an \"External\" audience and no verification this is expected: it's the client you just created. Click Advanced → Go to Sottovoce. Without verification the client works for up to 100 users."
+          },
+          "privacy": "Sottovoce only reads events from your primary calendar (read-only), from yesterday to the next 30 days, and imports only those with a Meet, Teams or Zoom link that you haven't declined. The client secret and access stay in the Keychain."
+        }
+      },
+      "microsoft": {
+        "title": "Outlook / Microsoft 365",
+        "hint": "Meetings in your Outlook calendar with a Teams, Zoom or Meet link show up in the Schedule by themselves, ready to start.",
+        "tenantId": "Directory (tenant) ID",
+        "tenantHint": "Leave empty if the app accepts accounts in any organization and personal accounts; otherwise the directory ID or domain (e.g. contoso.onmicrosoft.com).",
+        "connect": "Connect Outlook",
+        "needClient": "Enter the client ID (see the guide below).",
+        "needsReconnect": "Access to Outlook expired or was revoked: reconnect the calendar.",
+        "disconnectTitle": "Disconnect Outlook?",
+        "disconnectConfirm": "Sottovoce forgets the access and imported meetings leave the Schedule, except the ones you edited. To remove the permission on Microsoft's side too, open myapps.microsoft.com (or account.microsoft.com → Privacy → Apps and services).",
+        "guide": {
+          "title": "How to register the app on Microsoft Entra (one time only)",
+          "intro": "Sottovoce connects with an app you register yourself (public client, no secret): data goes from your calendar straight to the app, with no server in between. It takes about 10 minutes.",
+          "signin": {
+            "title": "Sign in to Microsoft Entra",
+            "body": "Open the Microsoft Entra admin center with your work or school account. With a personal Microsoft account you need a directory: create a free Azure account, or ask IT to register the app for you."
+          },
+          "register": {
+            "title": "Register the app",
+            "body": "Applications → App registrations → New registration. Name \"Sottovoce\".\nSupported account types: \"Accounts in any organizational directory and personal Microsoft accounts\" (or your organization only).\nRedirect URI: platform \"Public client/native (mobile & desktop)\", value http://localhost. Click Register."
+          },
+          "ids": {
+            "title": "Copy the IDs",
+            "body": "From the app Overview copy \"Application (client) ID\". If the app is for your organization only, also copy \"Directory (tenant) ID\"."
+          },
+          "publicClient": {
+            "title": "Allow public client flows",
+            "body": "Authentication → Advanced settings → \"Allow public client flows\": Yes → Save. Sottovoce doesn't use a client secret."
+          },
+          "permissions": {
+            "title": "Add the calendar permission",
+            "body": "API permissions → Add a permission → Microsoft Graph → Delegated permissions → check Calendars.Read and offline_access → Add permissions.\nIf you are an admin click \"Grant admin consent\": in many companies users can't connect without it."
+          },
+          "paste": {
+            "title": "Connect Sottovoce",
+            "body": "Paste the client ID (and the directory ID if needed) in the fields above and click \"Connect Outlook\": pick the account in the browser and accept the permissions."
+          },
+          "warning": {
+            "title": "If you see \"Need admin approval\"",
+            "body": "Your organization doesn't let users authorize external apps: ask IT to grant admin consent to the registered app (API permissions) or to register it for you."
+          },
+          "privacy": "Sottovoce only reads events from your default calendar (read-only), from yesterday to the next 30 days, and imports only those with a Teams, Zoom or Meet link that you haven't declined. The access stays in the Keychain."
+        }
       }
     }
   },
@@ -622,10 +670,17 @@
     "participants": "participants: {{count}}",
     "dismiss": "Hide",
     "sync": "Sync",
-    "connectGoogle": "Connect Google Calendar",
-    "fromGoogle": "Imported from Google Calendar",
-    "formHintGoogle": "Title and time come from Google Calendar; context, language and code folder are up to you and are kept.",
-    "join": "Join"
+    "join": "Join",
+    "connectCalendar": "Connect a calendar",
+    "formHintCalendar": "Title and time come from {{calendar}}; context, language and code folder are up to you and are kept.",
+    "from": {
+      "google": "Imported from Google Calendar",
+      "microsoft": "Imported from Outlook"
+    },
+    "source": {
+      "google": "Google Calendar",
+      "microsoft": "Outlook"
+    }
   },
   "email": {
     "subject": "Summary: {{name}}",

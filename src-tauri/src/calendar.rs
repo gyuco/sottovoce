@@ -1,37 +1,34 @@
-//! Sincronizzazione con Google Calendar: le riunioni con un link di call
-//! (Meet, Teams, Zoom) diventano riunioni programmate nell'Agenda.
+//! Sincronizzazione con i calendari (Google Calendar, Outlook / Microsoft
+//! 365): le riunioni con un link di call (Meet, Teams, Zoom) diventano
+//! riunioni programmate nell'Agenda.
 //!
 //! - Collegamento: OAuth desktop (browser di sistema + redirect su loopback +
-//!   PKCE, vedi `sv_calendar::oauth`). Il client OAuth lo crea l'utente su
-//!   Google Cloud: ID client nei settings (`googleClientId`), client secret e
-//!   refresh token nel Keychain. Nessun server intermedio.
+//!   PKCE, vedi `sv_calendar::oauth`). Il client OAuth lo crea l'utente presso
+//!   il provider (Google Cloud, Microsoft Entra): ID client nei settings,
+//!   client secret (solo Google) e refresh token nel Keychain. Nessun server
+//!   intermedio.
 //! - Sincronizzazione: all'avvio, ogni 10 minuti, dopo il collegamento e a
 //!   richiesta. Finestra da 1 giorno fa a 30 giorni avanti; esclusi eventi
 //!   senza link di call e inviti rifiutati. Evento `scheduled:changed` alla UI.
-//! - Scollegamento: revoca del token presso Google, token cancellato, riunioni
-//!   importate rimosse (tranne quelle modificate dall'utente).
+//! - Scollegamento: token cancellato (e revocato presso Google; Microsoft non
+//!   ha revoca per i client pubblici), riunioni importate rimosse tranne
+//!   quelle modificate dall'utente.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sv_calendar::{AccessToken, CalendarError, CallbackPage, OAuthClient};
 use sv_store::{ExternalMeeting, ScheduledParticipant, Store, SyncReport};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Notify;
 
 use crate::secrets;
-use crate::settings::SettingsStore;
+use crate::settings::{Settings, SettingsStore};
 use crate::state::Db;
 
-/// Valore di `scheduled_meetings.source`.
-pub const SOURCE: &str = "google";
-/// Account Keychain del client secret OAuth (vedi `secrets::KNOWN_PROVIDERS`).
-pub const CLIENT_SECRET_KEY: &str = "google-client-secret";
-/// Account Keychain del refresh token.
-pub const TOKEN_KEY: &str = "google-calendar";
 /// Evento alla UI: l'Agenda va ricaricata.
 pub const CHANGED_EVENT: &str = "scheduled:changed";
 
@@ -41,10 +38,86 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 const SYNC_EVERY: Duration = Duration::from_secs(10 * 60);
 const FIRST_SYNC_AFTER: Duration = Duration::from_secs(5);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CalendarProvider {
+    Google,
+    Microsoft,
+}
+
+impl CalendarProvider {
+    pub const ALL: [Self; 2] = [Self::Google, Self::Microsoft];
+
+    /// Valore di `scheduled_meetings.source`.
+    pub fn source(self) -> &'static str {
+        match self {
+            Self::Google => "google",
+            Self::Microsoft => "microsoft",
+        }
+    }
+
+    /// Account Keychain del refresh token (vedi `secrets::KNOWN_PROVIDERS`).
+    pub fn token_key(self) -> &'static str {
+        match self {
+            Self::Google => "google-calendar",
+            Self::Microsoft => "microsoft-calendar",
+        }
+    }
+
+    /// Account Keychain del client secret; Microsoft usa un client pubblico.
+    fn secret_key(self) -> Option<&'static str> {
+        match self {
+            Self::Google => Some("google-client-secret"),
+            Self::Microsoft => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Google => "Google Calendar",
+            Self::Microsoft => "Outlook",
+        }
+    }
+
+    fn client_id(self, settings: &Settings) -> String {
+        match self {
+            Self::Google => settings.google_client_id.trim().to_owned(),
+            Self::Microsoft => settings.microsoft_client_id.trim().to_owned(),
+        }
+    }
+
+    fn email(self, settings: &Settings) -> String {
+        match self {
+            Self::Google => settings.google_calendar_email.clone(),
+            Self::Microsoft => settings.microsoft_calendar_email.clone(),
+        }
+    }
+
+    /// Chiave dei settings con l'email dell'account collegato.
+    fn email_setting(self) -> &'static str {
+        match self {
+            Self::Google => "googleCalendarEmail",
+            Self::Microsoft => "microsoftCalendarEmail",
+        }
+    }
+
+    fn oauth(self, settings: &Settings) -> Result<sv_calendar::Provider> {
+        Ok(match self {
+            Self::Google => sv_calendar::oauth::google(),
+            Self::Microsoft => sv_calendar::oauth::microsoft(&settings.microsoft_tenant_id)?,
+        })
+    }
+}
+
+/// Il refresh token di un calendario: lo scrive solo il collegamento OAuth.
+pub fn is_token_key(key: &str) -> bool {
+    CalendarProvider::ALL.iter().any(|p| p.token_key() == key)
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarStatus {
-    /// ID client e client secret presenti.
+    /// ID client (e, per Google, client secret) presenti.
     pub configured: bool,
     /// Refresh token presente.
     pub connected: bool,
@@ -73,9 +146,9 @@ struct Runtime {
 
 pub struct Calendar {
     http: reqwest::Client,
-    runtime: Mutex<Runtime>,
-    /// Una sincronizzazione alla volta.
-    sync_lock: tokio::sync::Mutex<()>,
+    runtime: Mutex<HashMap<CalendarProvider, Runtime>>,
+    /// Una sincronizzazione alla volta per provider.
+    sync_locks: HashMap<CalendarProvider, tokio::sync::Mutex<()>>,
 }
 
 impl Calendar {
@@ -89,40 +162,54 @@ impl Calendar {
         Ok(Self {
             http,
             runtime: Mutex::default(),
-            sync_lock: tokio::sync::Mutex::new(()),
+            sync_locks: CalendarProvider::ALL
+                .iter()
+                .map(|p| (*p, tokio::sync::Mutex::new(())))
+                .collect(),
         })
     }
 
-    fn runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
-        self.runtime.lock().unwrap_or_else(|e| e.into_inner())
+    fn with_runtime<T>(&self, provider: CalendarProvider, f: impl FnOnce(&mut Runtime) -> T) -> T {
+        let mut map = self.runtime.lock().unwrap_or_else(|e| e.into_inner());
+        f(map.entry(provider).or_default())
     }
 
-    pub fn status(&self, settings: &SettingsStore) -> CalendarStatus {
+    fn sync_lock(&self, provider: CalendarProvider) -> &tokio::sync::Mutex<()> {
+        &self.sync_locks[&provider]
+    }
+
+    pub fn status(&self, provider: CalendarProvider, settings: &SettingsStore) -> CalendarStatus {
         let settings = settings.get();
-        let configured = !settings.google_client_id.trim().is_empty()
-            && secrets::has_api_key(CLIENT_SECRET_KEY).unwrap_or(false);
-        let connected = secrets::has_api_key(TOKEN_KEY).unwrap_or(false);
-        let rt = self.runtime();
-        CalendarStatus {
+        let configured = !provider.client_id(&settings).is_empty()
+            && provider
+                .secret_key()
+                .is_none_or(|key| secrets::has_api_key(key).unwrap_or(false));
+        let connected = secrets::has_api_key(provider.token_key()).unwrap_or(false);
+        self.with_runtime(provider, |rt| CalendarStatus {
             configured,
             connected,
-            email: settings.google_calendar_email,
+            email: provider.email(&settings),
             connecting: rt.connecting.is_some(),
             syncing: rt.syncing,
             last_sync_ms: rt.last_sync_ms,
             last_report: rt.last_report,
             last_error: rt.last_error.clone(),
             needs_reconnect: rt.needs_reconnect,
-        }
+        })
     }
 
-    fn client(settings: &SettingsStore) -> Result<OAuthClient> {
-        let client_id = settings.get().google_client_id.trim().to_owned();
+    fn client(provider: CalendarProvider, settings: &Settings) -> Result<OAuthClient> {
+        let client_id = provider.client_id(settings);
         if client_id.is_empty() {
-            bail!("ID client di Google mancante");
+            bail!("ID client di {} mancante", provider.label());
         }
-        let client_secret = secrets::get_api_key(CLIENT_SECRET_KEY)?
-            .ok_or_else(|| anyhow!("client secret di Google mancante"))?;
+        let client_secret = match provider.secret_key() {
+            Some(key) => Some(
+                secrets::get_api_key(key)?
+                    .ok_or_else(|| anyhow!("client secret di {} mancante", provider.label()))?,
+            ),
+            None => None,
+        };
         Ok(OAuthClient {
             client_id,
             client_secret,
@@ -131,68 +218,78 @@ impl Calendar {
 
     /// Apre il consenso nel browser e aspetta il ritorno (max 5 minuti o
     /// [`Calendar::cancel_connect`]); poi sincronizza.
-    pub async fn connect(&self, app: &AppHandle, ui_language: &str) -> Result<()> {
-        let settings = app.state::<SettingsStore>();
-        let client = Self::client(&settings)?;
+    pub async fn connect(
+        &self,
+        provider: CalendarProvider,
+        app: &AppHandle,
+        ui_language: &str,
+    ) -> Result<()> {
+        let settings_store = app.state::<SettingsStore>();
+        let settings = settings_store.get();
+        let client = Self::client(provider, &settings)?;
+        let oauth = provider.oauth(&settings)?;
         let cancel = Arc::new(Notify::new());
-        {
-            let mut rt = self.runtime();
+        self.with_runtime(provider, |rt| {
             if rt.connecting.is_some() {
                 bail!("collegamento già in corso");
             }
             rt.connecting = Some(cancel.clone());
-        }
+            Ok(())
+        })?;
         let result = sv_calendar::oauth::authorize(
             &self.http,
+            &oauth,
             &client,
-            &callback_page(ui_language),
+            &callback_page(provider.label(), ui_language),
             open_in_browser,
             cancel.notified(),
             CONNECT_TIMEOUT,
         )
         .await;
-        self.runtime().connecting = None;
+        self.with_runtime(provider, |rt| rt.connecting = None);
         let authorized = match result {
             Ok(a) => a,
             Err(CalendarError::Cancelled) => return Ok(()),
             Err(e) => return Err(e.into()),
         };
-        secrets::set_api_key(TOKEN_KEY, &authorized.refresh_token)?;
-        settings.update(serde_json::json!({
-            "googleCalendarEmail": authorized.email.unwrap_or_default()
+        secrets::set_api_key(provider.token_key(), &authorized.refresh_token)?;
+        settings_store.update(serde_json::json!({
+            provider.email_setting(): authorized.email.unwrap_or_default()
         }))?;
-        {
-            let mut rt = self.runtime();
+        self.with_runtime(provider, |rt| {
             rt.access = Some(authorized.access);
             rt.needs_reconnect = false;
             rt.last_error = None;
-        }
-        self.sync(app).await?;
+        });
+        self.sync(provider, app).await?;
         Ok(())
     }
 
-    pub fn cancel_connect(&self) {
-        if let Some(cancel) = &self.runtime().connecting {
-            cancel.notify_one();
-        }
+    pub fn cancel_connect(&self, provider: CalendarProvider) {
+        self.with_runtime(provider, |rt| {
+            if let Some(cancel) = &rt.connecting {
+                cancel.notify_one();
+            }
+        });
     }
 
-    /// Revoca l'accesso (se possibile), cancella il token e le riunioni
-    /// importate non modificate.
-    pub async fn disconnect(&self, app: &AppHandle) -> Result<()> {
-        let _guard = self.sync_lock.lock().await;
-        if let Ok(Some(token)) = secrets::get_api_key(TOKEN_KEY)
-            && let Err(e) = sv_calendar::oauth::revoke(&self.http, &token).await
+    /// Cancella il token (revocandolo presso Google) e le riunioni importate
+    /// non modificate.
+    pub async fn disconnect(&self, provider: CalendarProvider, app: &AppHandle) -> Result<()> {
+        let _guard = self.sync_lock(provider).lock().await;
+        if provider == CalendarProvider::Google
+            && let Ok(Some(token)) = secrets::get_api_key(provider.token_key())
+            && let Err(e) = sv_calendar::oauth::revoke_google(&self.http, &token).await
         {
             tracing::warn!("revoca del token Google non riuscita: {e}");
         }
-        secrets::delete_api_key(TOKEN_KEY)?;
+        secrets::delete_api_key(provider.token_key())?;
         app.state::<SettingsStore>()
-            .update(serde_json::json!({ "googleCalendarEmail": "" }))?;
-        *self.runtime() = Runtime::default();
+            .update(serde_json::json!({ provider.email_setting(): "" }))?;
+        self.with_runtime(provider, |rt| *rt = Runtime::default());
         let path = app.state::<Db>().path.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            Store::open(path)?.forget_external_meetings(SOURCE)
+            Store::open(path)?.forget_external_meetings(provider.source())
         })
         .await
         .map_err(|e| anyhow!(e))??;
@@ -201,44 +298,57 @@ impl Calendar {
     }
 
     /// Scarica gli eventi e aggiorna l'Agenda. Senza collegamento non fa nulla.
-    pub async fn sync(&self, app: &AppHandle) -> Result<Option<SyncReport>> {
-        let _guard = self.sync_lock.lock().await;
-        if !secrets::has_api_key(TOKEN_KEY).unwrap_or(false) {
+    pub async fn sync(
+        &self,
+        provider: CalendarProvider,
+        app: &AppHandle,
+    ) -> Result<Option<SyncReport>> {
+        let _guard = self.sync_lock(provider).lock().await;
+        if !secrets::has_api_key(provider.token_key()).unwrap_or(false) {
             return Ok(None);
         }
-        self.runtime().syncing = true;
-        let result = self.sync_inner(app).await;
-        let mut rt = self.runtime();
-        rt.syncing = false;
-        match &result {
-            Ok(report) => {
-                rt.last_sync_ms = Some(now_ms());
-                rt.last_report = Some(*report);
-                rt.last_error = None;
-            }
-            Err(e) => {
-                if matches!(
-                    e.downcast_ref::<CalendarError>(),
-                    Some(CalendarError::Revoked)
-                ) {
-                    rt.needs_reconnect = true;
-                    rt.access = None;
+        self.with_runtime(provider, |rt| rt.syncing = true);
+        let result = self.sync_inner(provider, app).await;
+        self.with_runtime(provider, |rt| {
+            rt.syncing = false;
+            match &result {
+                Ok(report) => {
+                    rt.last_sync_ms = Some(now_ms());
+                    rt.last_report = Some(*report);
+                    rt.last_error = None;
                 }
-                rt.last_error = Some(format!("{e:#}"));
+                Err(e) => {
+                    if matches!(
+                        e.downcast_ref::<CalendarError>(),
+                        Some(CalendarError::Revoked)
+                    ) {
+                        rt.needs_reconnect = true;
+                        rt.access = None;
+                    }
+                    rt.last_error = Some(format!("{e:#}"));
+                }
             }
-        }
-        drop(rt);
+        });
         let _ = app.emit(CHANGED_EVENT, ());
         result.map(Some)
     }
 
-    async fn sync_inner(&self, app: &AppHandle) -> Result<SyncReport> {
-        let settings = app.state::<SettingsStore>();
-        let access = self.access_token(&settings).await?;
+    async fn sync_inner(&self, provider: CalendarProvider, app: &AppHandle) -> Result<SyncReport> {
+        let settings = app.state::<SettingsStore>().get();
+        let access = self.access_token(provider, &settings).await?;
         let now = now_ms();
         let (from, to) = (now - PAST_MS, now + FUTURE_MS);
-        let events = sv_calendar::list_events(&self.http, &access, from, to).await?;
-        let language = settings.get().their_language.code().to_owned();
+        let events = match provider {
+            CalendarProvider::Google => {
+                sv_calendar::list_events(&self.http, &access, from, to).await?
+            }
+            CalendarProvider::Microsoft => {
+                let email = provider.email(&settings);
+                let me = (!email.is_empty()).then_some(email.as_str());
+                sv_calendar::microsoft::list_events(&self.http, &access, from, to, me).await?
+            }
+        };
+        let language = settings.their_language.code().to_owned();
         let path = app.state::<Db>().path.clone();
         let report = tauri::async_runtime::spawn_blocking(move || -> Result<SyncReport> {
             let store = Store::open(path)?;
@@ -248,41 +358,63 @@ impl Calendar {
                 .filter(|e| !e.declined)
                 .filter_map(|e| to_external(e, &contacts))
                 .collect();
-            Ok(store.sync_external_meetings(SOURCE, from, to, &meetings, &language)?)
+            Ok(store.sync_external_meetings(provider.source(), from, to, &meetings, &language)?)
         })
         .await
         .map_err(|e| anyhow!(e))??;
         tracing::info!(
+            provider = provider.source(),
             added = report.added,
             updated = report.updated,
             removed = report.removed,
-            "Google Calendar sincronizzato"
+            "calendario sincronizzato"
         );
         Ok(report)
     }
 
-    async fn access_token(&self, settings: &SettingsStore) -> Result<String> {
-        if let Some(access) = self.runtime().access.as_ref().filter(|a| a.is_fresh()) {
-            return Ok(access.token.clone());
+    async fn access_token(
+        &self,
+        provider: CalendarProvider,
+        settings: &Settings,
+    ) -> Result<String> {
+        let cached = self.with_runtime(provider, |rt| {
+            rt.access
+                .as_ref()
+                .filter(|a| a.is_fresh())
+                .map(|a| a.token.clone())
+        });
+        if let Some(token) = cached {
+            return Ok(token);
         }
-        let client = Self::client(settings)?;
-        let refresh_token =
-            secrets::get_api_key(TOKEN_KEY)?.ok_or_else(|| anyhow!("calendario non collegato"))?;
-        let access = sv_calendar::oauth::refresh(&self.http, &client, &refresh_token).await?;
-        let token = access.token.clone();
-        self.runtime().access = Some(access);
+        let client = Self::client(provider, settings)?;
+        let oauth = provider.oauth(settings)?;
+        let refresh_token = secrets::get_api_key(provider.token_key())?
+            .ok_or_else(|| anyhow!("calendario non collegato"))?;
+        let refreshed =
+            sv_calendar::oauth::refresh(&self.http, &oauth, &client, &refresh_token).await?;
+        // Microsoft ruota il refresh token: il vecchio smette di valere.
+        if let Some(next) = refreshed.refresh_token.filter(|t| *t != refresh_token) {
+            secrets::set_api_key(provider.token_key(), &next)?;
+        }
+        let token = refreshed.access.token.clone();
+        self.with_runtime(provider, |rt| rt.access = Some(refreshed.access));
         Ok(token)
     }
 }
 
-/// Sincronizzazione periodica in background (solo se collegato).
+/// Sincronizzazione periodica in background (solo dei calendari collegati).
 pub fn spawn_periodic_sync(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_SYNC_AFTER).await;
         loop {
             let calendar = app.state::<Calendar>();
-            if let Err(e) = calendar.sync(&app).await {
-                tracing::warn!("sincronizzazione di Google Calendar non riuscita: {e:#}");
+            for provider in CalendarProvider::ALL {
+                if let Err(e) = calendar.sync(provider, &app).await {
+                    tracing::warn!(
+                        provider = provider.source(),
+                        "sincronizzazione del calendario non riuscita: {e:#}"
+                    );
+                }
             }
             tokio::time::sleep(SYNC_EVERY).await;
         }
@@ -367,29 +499,29 @@ pub fn open_in_browser(url: &str) -> std::io::Result<()> {
 }
 
 /// Testi della pagina mostrata nel browser dopo il consenso.
-fn callback_page(language: &str) -> CallbackPage {
+fn callback_page(label: &str, language: &str) -> CallbackPage {
     let (ok_title, ok_body, err_title, err_body) = match language {
         "en" => (
-            "Google Calendar connected",
+            format!("{label} connected"),
             "You can close this page and go back to Sottovoce.",
             "Connection not completed",
             "Access was not granted. Go back to Sottovoce to try again.",
         ),
         "es" => (
-            "Google Calendar conectado",
+            format!("{label} conectado"),
             "Puedes cerrar esta página y volver a Sottovoce.",
             "Conexión no completada",
             "No se concedió el acceso. Vuelve a Sottovoce para intentarlo de nuevo.",
         ),
         _ => (
-            "Google Calendar collegato",
+            format!("{label} collegato"),
             "Puoi chiudere questa pagina e tornare a Sottovoce.",
             "Collegamento non completato",
             "L'accesso non è stato concesso. Torna a Sottovoce per riprovare.",
         ),
     };
     CallbackPage {
-        success_title: ok_title.into(),
+        success_title: ok_title,
         success_body: ok_body.into(),
         error_title: err_title.into(),
         error_body: err_body.into(),
@@ -456,6 +588,19 @@ mod tests {
             .map(|p| (p.name.as_str(), p.role.as_str()))
             .collect();
         assert_eq!(names, [("Anna Bianchi", "CTO"), ("marco@example.com", "")]);
+    }
+
+    #[test]
+    fn token_keys_are_known_and_protected() {
+        for provider in CalendarProvider::ALL {
+            assert!(is_token_key(provider.token_key()));
+            assert!(secrets::KNOWN_PROVIDERS.contains(&provider.token_key()));
+            if let Some(key) = provider.secret_key() {
+                assert!(secrets::KNOWN_PROVIDERS.contains(&key));
+                assert!(!is_token_key(key));
+            }
+        }
+        assert!(!is_token_key("smtp"));
     }
 
     #[test]

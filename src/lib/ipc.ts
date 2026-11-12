@@ -102,6 +102,12 @@ export interface Settings {
   googleClientId: string;
   /** Account Google collegato (vuoto = non collegato). */
   googleCalendarEmail: string;
+  /** ID applicazione (client) registrata su Microsoft Entra ID (client pubblico). */
+  microsoftClientId: string;
+  /** Tenant di Entra ID; vuoto = `common` (account aziendali e personali). */
+  microsoftTenantId: string;
+  /** Account Microsoft collegato (vuoto = non collegato). */
+  microsoftCalendarEmail: string;
   /** Setup guidato del primo avvio completato (o saltato). */
   onboardingDone: boolean;
 }
@@ -571,8 +577,8 @@ export interface ScheduledMeeting {
   language: Language;
   startsAtMs: number;
   durationMin: number;
-  /** Calendario di provenienza (`google`); vuoto = creata a mano. */
-  source: string;
+  /** Calendario di provenienza; vuoto = creata a mano. */
+  source: "" | CalendarProvider;
   /** Link della call (Meet, Teams, Zoom), se noto. */
   joinUrl: string;
   createdAtMs: number;
@@ -605,9 +611,14 @@ export interface CalendarSyncReport {
   removed: number;
 }
 
-/** Stato della sincronizzazione con Google Calendar. */
+/** Calendari che si possono collegare. */
+export type CalendarProvider = "google" | "microsoft";
+
+export const CALENDAR_PROVIDERS: CalendarProvider[] = ["google", "microsoft"];
+
+/** Stato della sincronizzazione con un calendario. */
 export interface CalendarStatus {
-  /** ID client e client secret presenti. */
+  /** ID client (e per Google client secret) presenti. */
   configured: boolean;
   connected: boolean;
   email: string;
@@ -620,22 +631,34 @@ export interface CalendarStatus {
   needsReconnect: boolean;
 }
 
-export const googleCalendarStatus = () => invoke<CalendarStatus>("google_calendar_status");
+export const calendarStatus = (provider: CalendarProvider) =>
+  invoke<CalendarStatus>("calendar_status", { provider });
 
 /** Apre il consenso nel browser; si risolve al ritorno (o dopo 5 minuti). */
-export const connectGoogleCalendar = (uiLanguage: string) =>
-  invoke<CalendarStatus>("connect_google_calendar", { uiLanguage });
+export const connectCalendar = (provider: CalendarProvider, uiLanguage: string) =>
+  invoke<CalendarStatus>("connect_calendar", { provider, uiLanguage });
 
-export const cancelGoogleCalendarConnect = () => invoke<void>("cancel_google_calendar_connect");
+export const cancelCalendarConnect = (provider: CalendarProvider) =>
+  invoke<void>("cancel_calendar_connect", { provider });
 
-export const disconnectGoogleCalendar = () => invoke<CalendarStatus>("disconnect_google_calendar");
+export const disconnectCalendar = (provider: CalendarProvider) =>
+  invoke<CalendarStatus>("disconnect_calendar", { provider });
 
-export const syncGoogleCalendar = () => invoke<CalendarStatus>("sync_google_calendar");
+export const syncCalendar = (provider: CalendarProvider) => invoke<CalendarStatus>("sync_calendar", { provider });
 
-export type GoogleConsolePage = "project" | "calendarApi" | "branding" | "audience" | "dataAccess" | "clients";
+export type ConsolePage =
+  | "googleProject"
+  | "googleCalendarApi"
+  | "googleBranding"
+  | "googleAudience"
+  | "googleDataAccess"
+  | "googleClients"
+  | "microsoftAppRegistrations"
+  | "microsoftNewRegistration"
+  | "microsoftMyApps";
 
-/** Apre una pagina della Google Cloud Console (guida di configurazione). */
-export const openGoogleConsole = (page: GoogleConsolePage) => invoke<void>("open_google_console", { page });
+/** Apre una pagina della console del provider (guide di configurazione). */
+export const openProviderConsole = (page: ConsolePage) => invoke<void>("open_provider_console", { page });
 
 /** Apre il link della call (Meet, Teams, Zoom) nel browser. */
 export const openMeetingLink = (url: string) => invoke<void>("open_meeting_link", { url });

@@ -285,61 +285,109 @@
       "busy": "Disponibile a call ferma"
     },
     "calendar": {
-      "title": "Google Calendar",
-      "hint": "Le riunioni del tuo calendario con un link Meet, Teams o Zoom compaiono da sole nell'Agenda, pronte da avviare.",
-      "clientId": "ID client",
-      "clientSecret": "Client secret",
-      "connect": "Collega Google Calendar",
-      "needClient": "Inserisci ID client e client secret (vedi la guida qui sotto).",
-      "waitingBrowser": "Completa l'accesso nel browser che si è aperto…",
-      "connected": "Collegato",
-      "connectedAs": "Collegato come {{email}}",
-      "syncing": "Sincronizzazione in corso…",
-      "lastSync": "Ultima sincronizzazione {{time}} · nuove {{added}}, aggiornate {{updated}}, rimosse {{removed}}",
-      "neverSynced": "Non ancora sincronizzato.",
-      "syncNow": "Sincronizza ora",
-      "reconnect": "Ricollega",
-      "needsReconnect": "L'accesso a Google Calendar è scaduto o è stato revocato: ricollega il calendario.",
-      "disconnect": "Scollega",
-      "disconnectTitle": "Scollegare Google Calendar?",
-      "disconnectConfirm": "L'accesso viene revocato e le riunioni importate escono dall'Agenda, tranne quelle che hai modificato.",
-      "guide": {
-        "title": "Come configurare Google Cloud (una volta sola)",
-        "intro": "Sottovoce si collega con un client OAuth creato da te: i dati vanno dal tuo calendario direttamente all'app, senza server intermedi. Servono circa 10 minuti.",
-        "open": "Apri nella console",
-        "project": {
-          "title": "Crea un progetto",
-          "body": "Accedi a Google Cloud Console con il tuo account Google e crea un progetto, per esempio \"Sottovoce\". Non serve attivare la fatturazione."
-        },
-        "api": {
-          "title": "Abilita la Google Calendar API",
-          "body": "Con il progetto selezionato apri API e servizi → Libreria, cerca \"Google Calendar API\" e premi Abilita."
-        },
-        "branding": {
-          "title": "Configura la schermata di consenso",
-          "body": "Apri Google Auth Platform → Branding (se è la prima volta premi Inizia): nome app \"Sottovoce\", la tua email come assistenza e come contatto dello sviluppatore."
-        },
-        "audience": {
-          "title": "Scegli il pubblico",
-          "body": "In Pubblico scegli \"Interno\" se hai Google Workspace e userai Sottovoce solo nella tua organizzazione: nessuna verifica né avviso.\nAltrimenti \"Esterno\", poi premi Pubblica app per passare a \"In produzione\": in modalità Test l'accesso scade ogni 7 giorni."
-        },
-        "scopes": {
-          "title": "Aggiungi il permesso sul calendario",
-          "body": "In Accesso ai dati premi Aggiungi o rimuovi ambiti, cerca e spunta \".../auth/calendar.events.readonly\" (sola lettura degli eventi), poi Aggiorna e Salva."
-        },
-        "client": {
-          "title": "Crea il client OAuth",
-          "body": "In Client premi Crea client, tipo di applicazione \"App desktop\", nome \"Sottovoce\", poi Crea. Copia ID client e client secret dalla finestra che compare (puoi riaprirla dal client)."
-        },
-        "paste": {
-          "title": "Collega Sottovoce",
-          "body": "Incolla ID client e client secret nei campi sopra e premi \"Collega Google Calendar\": si apre il browser, scegli l'account e consenti l'accesso al calendario (lascia la spunta sul calendario)."
-        },
-        "warning": {
-          "title": "Se compare \"Google non ha verificato questa app\"",
-          "body": "Con pubblico \"Esterno\" senza verifica è normale: è il client che hai appena creato tu. Premi Avanzate → Vai a Sottovoce. Senza verifica il client vale al massimo per 100 utenti."
-        },
-        "privacy": "Sottovoce legge solo gli eventi del calendario principale (sola lettura), da ieri ai prossimi 30 giorni, e importa solo quelli con un link Meet, Teams o Zoom che non hai rifiutato. Client secret e accesso restano nel Portachiavi."
+      "common": {
+        "clientId": "ID client",
+        "connected": "Collegato",
+        "connectedAs": "Collegato come {{email}}",
+        "syncing": "Sincronizzazione in corso…",
+        "lastSync": "Ultima sincronizzazione {{time}} · nuove {{added}}, aggiornate {{updated}}, rimosse {{removed}}",
+        "neverSynced": "Non ancora sincronizzato.",
+        "syncNow": "Sincronizza ora",
+        "reconnect": "Ricollega",
+        "disconnect": "Scollega",
+        "waitingBrowser": "Completa l'accesso nel browser che si è aperto…",
+        "openConsole": "Apri nella console"
+      },
+      "google": {
+        "title": "Google Calendar",
+        "hint": "Le riunioni del tuo calendario con un link Meet, Teams o Zoom compaiono da sole nell'Agenda, pronte da avviare.",
+        "clientSecret": "Client secret",
+        "connect": "Collega Google Calendar",
+        "needClient": "Inserisci ID client e client secret (vedi la guida qui sotto).",
+        "needsReconnect": "L'accesso a Google Calendar è scaduto o è stato revocato: ricollega il calendario.",
+        "disconnectTitle": "Scollegare Google Calendar?",
+        "disconnectConfirm": "L'accesso viene revocato e le riunioni importate escono dall'Agenda, tranne quelle che hai modificato.",
+        "guide": {
+          "title": "Come configurare Google Cloud (una volta sola)",
+          "intro": "Sottovoce si collega con un client OAuth creato da te: i dati vanno dal tuo calendario direttamente all'app, senza server intermedi. Servono circa 10 minuti.",
+          "project": {
+            "title": "Crea un progetto",
+            "body": "Accedi a Google Cloud Console con il tuo account Google e crea un progetto, per esempio \"Sottovoce\". Non serve attivare la fatturazione."
+          },
+          "api": {
+            "title": "Abilita la Google Calendar API",
+            "body": "Con il progetto selezionato apri API e servizi → Libreria, cerca \"Google Calendar API\" e premi Abilita."
+          },
+          "branding": {
+            "title": "Configura la schermata di consenso",
+            "body": "Apri Google Auth Platform → Branding (se è la prima volta premi Inizia): nome app \"Sottovoce\", la tua email come assistenza e come contatto dello sviluppatore."
+          },
+          "audience": {
+            "title": "Scegli il pubblico",
+            "body": "In Pubblico scegli \"Interno\" se hai Google Workspace e userai Sottovoce solo nella tua organizzazione: nessuna verifica né avviso.\nAltrimenti \"Esterno\", poi premi Pubblica app per passare a \"In produzione\": in modalità Test l'accesso scade ogni 7 giorni."
+          },
+          "scopes": {
+            "title": "Aggiungi il permesso sul calendario",
+            "body": "In Accesso ai dati premi Aggiungi o rimuovi ambiti, cerca e spunta \".../auth/calendar.events.readonly\" (sola lettura degli eventi), poi Aggiorna e Salva."
+          },
+          "client": {
+            "title": "Crea il client OAuth",
+            "body": "In Client premi Crea client, tipo di applicazione \"App desktop\", nome \"Sottovoce\", poi Crea. Copia ID client e client secret dalla finestra che compare (puoi riaprirla dal client)."
+          },
+          "paste": {
+            "title": "Collega Sottovoce",
+            "body": "Incolla ID client e client secret nei campi sopra e premi \"Collega Google Calendar\": si apre il browser, scegli l'account e consenti l'accesso al calendario (lascia la spunta sul calendario)."
+          },
+          "warning": {
+            "title": "Se compare \"Google non ha verificato questa app\"",
+            "body": "Con pubblico \"Esterno\" senza verifica è normale: è il client che hai appena creato tu. Premi Avanzate → Vai a Sottovoce. Senza verifica il client vale al massimo per 100 utenti."
+          },
+          "privacy": "Sottovoce legge solo gli eventi del calendario principale (sola lettura), da ieri ai prossimi 30 giorni, e importa solo quelli con un link Meet, Teams o Zoom che non hai rifiutato. Client secret e accesso restano nel Portachiavi."
+        }
+      },
+      "microsoft": {
+        "title": "Outlook / Microsoft 365",
+        "hint": "Le riunioni del tuo calendario Outlook con un link Teams, Zoom o Meet compaiono da sole nell'Agenda, pronte da avviare.",
+        "tenantId": "ID directory (tenant)",
+        "tenantHint": "Lascia vuoto se l'app accetta account di qualsiasi organizzazione e personali; altrimenti l'ID directory o il dominio (es. contoso.onmicrosoft.com).",
+        "connect": "Collega Outlook",
+        "needClient": "Inserisci l'ID client (vedi la guida qui sotto).",
+        "needsReconnect": "L'accesso a Outlook è scaduto o è stato revocato: ricollega il calendario.",
+        "disconnectTitle": "Scollegare Outlook?",
+        "disconnectConfirm": "Sottovoce dimentica l'accesso e le riunioni importate escono dall'Agenda, tranne quelle che hai modificato. Per togliere il permesso anche lato Microsoft apri myapps.microsoft.com (o account.microsoft.com → Privacy → App e servizi).",
+        "guide": {
+          "title": "Come registrare l'app su Microsoft Entra (una volta sola)",
+          "intro": "Sottovoce si collega con un'app registrata da te (client pubblico, senza secret): i dati vanno dal tuo calendario direttamente all'app, senza server intermedi. Servono circa 10 minuti.",
+          "signin": {
+            "title": "Accedi a Microsoft Entra",
+            "body": "Apri il centro di amministrazione di Microsoft Entra con il tuo account di lavoro o della scuola. Con un account Microsoft personale serve una directory: crea un account Azure gratuito, oppure chiedi all'IT di registrare l'app per te."
+          },
+          "register": {
+            "title": "Registra l'app",
+            "body": "Applicazioni → Registrazioni app → Nuova registrazione. Nome \"Sottovoce\".\nTipi di account supportati: \"Account in qualsiasi directory organizzativa e account Microsoft personali\" (oppure solo la tua organizzazione).\nURI di reindirizzamento: piattaforma \"Client pubblico/nativo (per dispositivi mobili e desktop)\", valore http://localhost. Premi Registra."
+          },
+          "ids": {
+            "title": "Copia gli ID",
+            "body": "Dalla Panoramica dell'app copia \"ID applicazione (client)\". Se l'app vale solo per la tua organizzazione copia anche \"ID directory (tenant)\"."
+          },
+          "publicClient": {
+            "title": "Consenti i flussi client pubblici",
+            "body": "Autenticazione → Impostazioni avanzate → \"Consenti flussi client pubblici\": Sì → Salva. Sottovoce non usa un client secret."
+          },
+          "permissions": {
+            "title": "Aggiungi il permesso sul calendario",
+            "body": "Autorizzazioni API → Aggiungi un'autorizzazione → Microsoft Graph → Autorizzazioni delegate → spunta Calendars.Read e offline_access → Aggiungi autorizzazioni.\nSe sei amministratore premi \"Concedi il consenso amministratore\": in molte aziende senza questo l'utente non può collegarsi."
+          },
+          "paste": {
+            "title": "Collega Sottovoce",
+            "body": "Incolla l'ID client (e l'ID directory se serve) nei campi sopra e premi \"Collega Outlook\": nel browser scegli l'account e accetta i permessi."
+          },
+          "warning": {
+            "title": "Se compare \"Approvazione amministratore necessaria\"",
+            "body": "La tua organizzazione non permette agli utenti di autorizzare app esterne: chiedi all'IT di concedere il consenso amministratore all'app registrata (Autorizzazioni API) o di registrarla al posto tuo."
+          },
+          "privacy": "Sottovoce legge solo gli eventi del calendario predefinito (sola lettura), da ieri ai prossimi 30 giorni, e importa solo quelli con un link Teams, Zoom o Meet che non hai rifiutato. L'accesso resta nel Portachiavi."
+        }
       }
     }
   },
@@ -622,10 +670,17 @@
     "participants": "partecipanti: {{count}}",
     "dismiss": "Nascondi",
     "sync": "Sincronizza",
-    "connectGoogle": "Collega Google Calendar",
-    "fromGoogle": "Importata da Google Calendar",
-    "formHintGoogle": "Titolo e orario arrivano da Google Calendar; contesto, lingua e cartella del codice li decidi tu e restano.",
-    "join": "Partecipa"
+    "join": "Partecipa",
+    "connectCalendar": "Collega un calendario",
+    "formHintCalendar": "Titolo e orario arrivano da {{calendar}}; contesto, lingua e cartella del codice li decidi tu e restano.",
+    "from": {
+      "google": "Importata da Google Calendar",
+      "microsoft": "Importata da Outlook"
+    },
+    "source": {
+      "google": "Google Calendar",
+      "microsoft": "Outlook"
+    }
   },
   "email": {
     "subject": "Riepilogo: {{name}}",

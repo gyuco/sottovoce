@@ -169,6 +169,15 @@ pub struct Settings {
     pub google_client_id: String,
     /// Account Google collegato (solo per mostrarlo); vuoto = non collegato.
     pub google_calendar_email: String,
+    /// ID applicazione (client) registrata dall'utente su Microsoft Entra ID
+    /// (sincronizzazione di Outlook / Microsoft 365); client pubblico, senza
+    /// secret.
+    pub microsoft_client_id: String,
+    /// Tenant di Entra ID: vuoto = `common` (account aziendali e personali);
+    /// ID o dominio della directory per un'app registrata su un solo tenant.
+    pub microsoft_tenant_id: String,
+    /// Account Microsoft collegato (solo per mostrarlo).
+    pub microsoft_calendar_email: String,
     /// Setup guidato del primo avvio completato (o saltato). I file salvati
     /// prima del setup guidato non hanno la chiave: valgono come completati.
     pub onboarding_done: bool,
@@ -258,6 +267,9 @@ impl Default for Settings {
             smtp_user: String::new(),
             google_client_id: String::new(),
             google_calendar_email: String::new(),
+            microsoft_client_id: String::new(),
+            microsoft_tenant_id: String::new(),
+            microsoft_calendar_email: String::new(),
             onboarding_done: false,
         }
     }

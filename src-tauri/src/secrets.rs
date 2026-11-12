@@ -18,8 +18,8 @@ const SERVICE: &str = "sottovoce";
 
 /// Provider per cui si accetta una chiave (account nel Keychain).
 /// `smtp` è la password del server di posta (invio del riepilogo);
-/// `google-client-secret` e `google-calendar` (refresh token) servono alla
-/// sincronizzazione di Google Calendar.
+/// `google-client-secret`, `google-calendar` e `microsoft-calendar` (refresh
+/// token) servono alla sincronizzazione dei calendari.
 pub const KNOWN_PROVIDERS: &[&str] = &[
     "deepgram",
     "opencode",
@@ -29,6 +29,7 @@ pub const KNOWN_PROVIDERS: &[&str] = &[
     "smtp",
     "google-client-secret",
     "google-calendar",
+    "microsoft-calendar",
 ];
 
 static CACHE: LazyLock<Mutex<HashMap<&'static str, String>>> = LazyLock::new(Default::default);

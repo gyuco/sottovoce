@@ -1,4 +1,5 @@
-//! Eventi di Google Calendar (calendario principale, sola lettura).
+//! Eventi di Google Calendar (calendario principale, sola lettura) e tipi
+//! comuni a tutti i provider ([`CalendarEvent`], [`Attendee`]).
 //!
 //! `singleEvents=true`: Google espande le ricorrenze e ogni occorrenza ha il
 //! suo `id` stabile, quindi non serve interpretare le RRULE.

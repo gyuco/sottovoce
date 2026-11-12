@@ -285,61 +285,109 @@
       "busy": "Disponible sin llamada en curso"
     },
     "calendar": {
-      "title": "Google Calendar",
-      "hint": "Las reuniones de tu calendario con un enlace de Meet, Teams o Zoom aparecen solas en la Agenda, listas para iniciar.",
-      "clientId": "ID de cliente",
-      "clientSecret": "Secreto del cliente",
-      "connect": "Conectar Google Calendar",
-      "needClient": "Introduce el ID de cliente y el secreto del cliente (consulta la guía de abajo).",
-      "waitingBrowser": "Completa el acceso en el navegador que se ha abierto…",
-      "connected": "Conectado",
-      "connectedAs": "Conectado como {{email}}",
-      "syncing": "Sincronizando…",
-      "lastSync": "Última sincronización {{time}} · nuevas {{added}}, actualizadas {{updated}}, eliminadas {{removed}}",
-      "neverSynced": "Aún no sincronizado.",
-      "syncNow": "Sincronizar ahora",
-      "reconnect": "Volver a conectar",
-      "needsReconnect": "El acceso a Google Calendar ha caducado o se ha revocado: vuelve a conectar el calendario.",
-      "disconnect": "Desconectar",
-      "disconnectTitle": "¿Desconectar Google Calendar?",
-      "disconnectConfirm": "Se revoca el acceso y las reuniones importadas salen de la Agenda, excepto las que has modificado.",
-      "guide": {
-        "title": "Cómo configurar Google Cloud (solo una vez)",
-        "intro": "Sottovoce se conecta con un cliente OAuth que creas tú: los datos van de tu calendario directamente a la app, sin servidores intermedios. Lleva unos 10 minutos.",
-        "open": "Abrir en la consola",
-        "project": {
-          "title": "Crea un proyecto",
-          "body": "Accede a Google Cloud Console con tu cuenta de Google y crea un proyecto, por ejemplo \"Sottovoce\". No hace falta activar la facturación."
-        },
-        "api": {
-          "title": "Habilita la Google Calendar API",
-          "body": "Con el proyecto seleccionado abre APIs y servicios → Biblioteca, busca \"Google Calendar API\" y pulsa Habilitar."
-        },
-        "branding": {
-          "title": "Configura la pantalla de consentimiento",
-          "body": "Abre Google Auth Platform → Branding (la primera vez pulsa Comenzar): nombre de la app \"Sottovoce\", tu correo como asistencia y como contacto del desarrollador."
-        },
-        "audience": {
-          "title": "Elige el público",
-          "body": "En Público elige \"Interno\" si tienes Google Workspace y usarás Sottovoce solo en tu organización: sin verificación ni avisos.\nSi no, \"Externo\" y luego pulsa Publicar app para pasar a \"En producción\": en modo Prueba el acceso caduca cada 7 días."
-        },
-        "scopes": {
-          "title": "Añade el permiso del calendario",
-          "body": "En Acceso a datos pulsa Añadir o quitar permisos, busca y marca \".../auth/calendar.events.readonly\" (solo lectura de eventos), luego Actualizar y Guardar."
-        },
-        "client": {
-          "title": "Crea el cliente OAuth",
-          "body": "En Clientes pulsa Crear cliente, tipo de aplicación \"App de escritorio\", nombre \"Sottovoce\" y luego Crear. Copia el ID de cliente y el secreto del cliente de la ventana que aparece (puedes volver a abrirla desde el cliente)."
-        },
-        "paste": {
-          "title": "Conecta Sottovoce",
-          "body": "Pega el ID de cliente y el secreto en los campos de arriba y pulsa \"Conectar Google Calendar\": se abre el navegador, elige la cuenta y permite el acceso al calendario (deja marcada la casilla del calendario)."
-        },
-        "warning": {
-          "title": "Si aparece \"Google no ha verificado esta aplicación\"",
-          "body": "Con público \"Externo\" sin verificación es normal: es el cliente que acabas de crear. Pulsa Configuración avanzada → Ir a Sottovoce. Sin verificación el cliente sirve para un máximo de 100 usuarios."
-        },
-        "privacy": "Sottovoce solo lee los eventos de tu calendario principal (solo lectura), desde ayer hasta los próximos 30 días, e importa solo los que tienen un enlace de Meet, Teams o Zoom y no has rechazado. El secreto del cliente y el acceso se quedan en el Llavero."
+      "common": {
+        "clientId": "ID de cliente",
+        "connected": "Conectado",
+        "connectedAs": "Conectado como {{email}}",
+        "syncing": "Sincronizando…",
+        "lastSync": "Última sincronización {{time}} · nuevas {{added}}, actualizadas {{updated}}, eliminadas {{removed}}",
+        "neverSynced": "Aún no sincronizado.",
+        "syncNow": "Sincronizar ahora",
+        "reconnect": "Volver a conectar",
+        "disconnect": "Desconectar",
+        "waitingBrowser": "Completa el acceso en el navegador que se ha abierto…",
+        "openConsole": "Abrir en la consola"
+      },
+      "google": {
+        "title": "Google Calendar",
+        "hint": "Las reuniones de tu calendario con un enlace de Meet, Teams o Zoom aparecen solas en la Agenda, listas para iniciar.",
+        "clientSecret": "Secreto del cliente",
+        "connect": "Conectar Google Calendar",
+        "needClient": "Introduce el ID de cliente y el secreto del cliente (consulta la guía de abajo).",
+        "needsReconnect": "El acceso a Google Calendar ha caducado o se ha revocado: vuelve a conectar el calendario.",
+        "disconnectTitle": "¿Desconectar Google Calendar?",
+        "disconnectConfirm": "Se revoca el acceso y las reuniones importadas salen de la Agenda, excepto las que has modificado.",
+        "guide": {
+          "title": "Cómo configurar Google Cloud (solo una vez)",
+          "intro": "Sottovoce se conecta con un cliente OAuth que creas tú: los datos van de tu calendario directamente a la app, sin servidores intermedios. Lleva unos 10 minutos.",
+          "project": {
+            "title": "Crea un proyecto",
+            "body": "Accede a Google Cloud Console con tu cuenta de Google y crea un proyecto, por ejemplo \"Sottovoce\". No hace falta activar la facturación."
+          },
+          "api": {
+            "title": "Habilita la Google Calendar API",
+            "body": "Con el proyecto seleccionado abre APIs y servicios → Biblioteca, busca \"Google Calendar API\" y pulsa Habilitar."
+          },
+          "branding": {
+            "title": "Configura la pantalla de consentimiento",
+            "body": "Abre Google Auth Platform → Branding (la primera vez pulsa Comenzar): nombre de la app \"Sottovoce\", tu correo como asistencia y como contacto del desarrollador."
+          },
+          "audience": {
+            "title": "Elige el público",
+            "body": "En Público elige \"Interno\" si tienes Google Workspace y usarás Sottovoce solo en tu organización: sin verificación ni avisos.\nSi no, \"Externo\" y luego pulsa Publicar app para pasar a \"En producción\": en modo Prueba el acceso caduca cada 7 días."
+          },
+          "scopes": {
+            "title": "Añade el permiso del calendario",
+            "body": "En Acceso a datos pulsa Añadir o quitar permisos, busca y marca \".../auth/calendar.events.readonly\" (solo lectura de eventos), luego Actualizar y Guardar."
+          },
+          "client": {
+            "title": "Crea el cliente OAuth",
+            "body": "En Clientes pulsa Crear cliente, tipo de aplicación \"App de escritorio\", nombre \"Sottovoce\" y luego Crear. Copia el ID de cliente y el secreto del cliente de la ventana que aparece (puedes volver a abrirla desde el cliente)."
+          },
+          "paste": {
+            "title": "Conecta Sottovoce",
+            "body": "Pega el ID de cliente y el secreto en los campos de arriba y pulsa \"Conectar Google Calendar\": se abre el navegador, elige la cuenta y permite el acceso al calendario (deja marcada la casilla del calendario)."
+          },
+          "warning": {
+            "title": "Si aparece \"Google no ha verificado esta aplicación\"",
+            "body": "Con público \"Externo\" sin verificación es normal: es el cliente que acabas de crear. Pulsa Configuración avanzada → Ir a Sottovoce. Sin verificación el cliente sirve para un máximo de 100 usuarios."
+          },
+          "privacy": "Sottovoce solo lee los eventos de tu calendario principal (solo lectura), desde ayer hasta los próximos 30 días, e importa solo los que tienen un enlace de Meet, Teams o Zoom y no has rechazado. El secreto del cliente y el acceso se quedan en el Llavero."
+        }
+      },
+      "microsoft": {
+        "title": "Outlook / Microsoft 365",
+        "hint": "Las reuniones de tu calendario de Outlook con un enlace de Teams, Zoom o Meet aparecen solas en la Agenda, listas para iniciar.",
+        "tenantId": "ID de directorio (inquilino)",
+        "tenantHint": "Déjalo vacío si la app acepta cuentas de cualquier organización y personales; si no, el ID de directorio o el dominio (p. ej. contoso.onmicrosoft.com).",
+        "connect": "Conectar Outlook",
+        "needClient": "Introduce el ID de cliente (consulta la guía de abajo).",
+        "needsReconnect": "El acceso a Outlook ha caducado o se ha revocado: vuelve a conectar el calendario.",
+        "disconnectTitle": "¿Desconectar Outlook?",
+        "disconnectConfirm": "Sottovoce olvida el acceso y las reuniones importadas salen de la Agenda, excepto las que has modificado. Para quitar el permiso también en Microsoft, abre myapps.microsoft.com (o account.microsoft.com → Privacidad → Aplicaciones y servicios).",
+        "guide": {
+          "title": "Cómo registrar la app en Microsoft Entra (solo una vez)",
+          "intro": "Sottovoce se conecta con una app que registras tú (cliente público, sin secreto): los datos van de tu calendario directamente a la app, sin servidores intermedios. Lleva unos 10 minutos.",
+          "signin": {
+            "title": "Accede a Microsoft Entra",
+            "body": "Abre el centro de administración de Microsoft Entra con tu cuenta profesional o educativa. Con una cuenta personal de Microsoft necesitas un directorio: crea una cuenta gratuita de Azure o pide a TI que registre la app por ti."
+          },
+          "register": {
+            "title": "Registra la app",
+            "body": "Aplicaciones → Registros de aplicaciones → Nuevo registro. Nombre \"Sottovoce\".\nTipos de cuenta compatibles: \"Cuentas en cualquier directorio organizativo y cuentas personales de Microsoft\" (o solo tu organización).\nURI de redirección: plataforma \"Cliente público/nativo (móvil y escritorio)\", valor http://localhost. Pulsa Registrar."
+          },
+          "ids": {
+            "title": "Copia los ID",
+            "body": "En la Información general de la app copia \"Id. de aplicación (cliente)\". Si la app es solo para tu organización, copia también \"Id. de directorio (inquilino)\"."
+          },
+          "publicClient": {
+            "title": "Permite los flujos de cliente público",
+            "body": "Autenticación → Configuración avanzada → \"Permitir flujos de cliente público\": Sí → Guardar. Sottovoce no usa un secreto de cliente."
+          },
+          "permissions": {
+            "title": "Añade el permiso del calendario",
+            "body": "Permisos de API → Agregar un permiso → Microsoft Graph → Permisos delegados → marca Calendars.Read y offline_access → Agregar permisos.\nSi eres administrador pulsa \"Conceder consentimiento de administrador\": en muchas empresas sin esto el usuario no puede conectarse."
+          },
+          "paste": {
+            "title": "Conecta Sottovoce",
+            "body": "Pega el ID de cliente (y el ID de directorio si hace falta) en los campos de arriba y pulsa \"Conectar Outlook\": en el navegador elige la cuenta y acepta los permisos."
+          },
+          "warning": {
+            "title": "Si aparece \"Se necesita la aprobación del administrador\"",
+            "body": "Tu organización no permite a los usuarios autorizar apps externas: pide a TI que conceda el consentimiento de administrador a la app registrada (Permisos de API) o que la registre por ti."
+          },
+          "privacy": "Sottovoce solo lee los eventos de tu calendario predeterminado (solo lectura), desde ayer hasta los próximos 30 días, e importa solo los que tienen un enlace de Teams, Zoom o Meet y no has rechazado. El acceso se queda en el Llavero."
+        }
       }
     }
   },
@@ -622,10 +670,17 @@
     "participants": "participantes: {{count}}",
     "dismiss": "Ocultar",
     "sync": "Sincronizar",
-    "connectGoogle": "Conectar Google Calendar",
-    "fromGoogle": "Importada de Google Calendar",
-    "formHintGoogle": "El título y la hora vienen de Google Calendar; el contexto, el idioma y la carpeta del código los decides tú y se mantienen.",
-    "join": "Unirse"
+    "join": "Unirse",
+    "connectCalendar": "Conectar un calendario",
+    "formHintCalendar": "El título y la hora vienen de {{calendar}}; el contexto, el idioma y la carpeta del código los decides tú y se mantienen.",
+    "from": {
+      "google": "Importada de Google Calendar",
+      "microsoft": "Importada de Outlook"
+    },
+    "source": {
+      "google": "Google Calendar",
+      "microsoft": "Outlook"
+    }
   },
   "email": {
     "subject": "Resumen: {{name}}",

@@ -16,8 +16,8 @@ pub enum CalendarError {
     Cancelled,
     #[error("accesso revocato o scaduto: ricollega il calendario")]
     Revoked,
-    #[error("ID client o client secret non validi")]
-    InvalidClient,
+    #[error("client OAuth non valido o configurato male: {0}")]
+    InvalidClient(String),
     #[error("risposta del calendario non valida: {0}")]
     Invalid(String),
     #[error("errore del calendario ({status}): {message}")]

@@ -269,7 +269,9 @@ export function SettingsPanel() {
 
       <EmailSettings />
 
-      <CalendarSettings />
+      <CalendarSettings provider="google" />
+
+      <CalendarSettings provider="microsoft" />
 
       <LocalModels />
 

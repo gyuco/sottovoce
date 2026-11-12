@@ -1,66 +1,87 @@
 import { create } from "zustand";
 
 import {
+  CALENDAR_PROVIDERS,
+  type CalendarProvider,
   type CalendarStatus,
-  cancelGoogleCalendarConnect,
-  connectGoogleCalendar,
-  disconnectGoogleCalendar,
+  calendarStatus,
+  cancelCalendarConnect,
+  connectCalendar,
+  disconnectCalendar,
   errorMessage,
-  googleCalendarStatus,
-  syncGoogleCalendar,
+  syncCalendar,
 } from "@/lib/ipc";
 import { useSettingsStore } from "@/stores/settings";
 
+type PerProvider<T> = Record<CalendarProvider, T>;
+
 interface CalendarState {
-  status: CalendarStatus | null;
+  status: PerProvider<CalendarStatus | null>;
   /** Errore dell'ultima azione dell'utente (collega, scollega, sincronizza). */
-  error: string | null;
-  busy: boolean;
-  load: () => Promise<void>;
-  connect: (uiLanguage: string) => Promise<void>;
-  cancel: () => Promise<void>;
-  disconnect: () => Promise<void>;
-  sync: () => Promise<void>;
+  error: PerProvider<string | null>;
+  busy: PerProvider<boolean>;
+  load: (provider?: CalendarProvider) => Promise<void>;
+  connect: (provider: CalendarProvider, uiLanguage: string) => Promise<void>;
+  cancel: (provider: CalendarProvider) => Promise<void>;
+  disconnect: (provider: CalendarProvider) => Promise<void>;
+  sync: (provider: CalendarProvider) => Promise<void>;
+  /** Sincronizza tutti i calendari collegati. */
+  syncAll: () => Promise<void>;
 }
 
-/** Sincronizzazione con Google Calendar (stato dal backend). */
+const each = <T,>(value: T): PerProvider<T> => ({ google: value, microsoft: value });
+
+/** Sincronizzazione con i calendari (stato dal backend). */
 export const useCalendarStore = create<CalendarState>((set, get) => {
-  const run = async (action: () => Promise<CalendarStatus>) => {
-    set({ busy: true, error: null });
+  const patch = <K extends "status" | "error" | "busy">(
+    key: K,
+    provider: CalendarProvider,
+    value: CalendarState[K][CalendarProvider],
+  ) => set((s) => ({ [key]: { ...s[key], [provider]: value } }) as Pick<CalendarState, K>);
+
+  const run = async (provider: CalendarProvider, action: () => Promise<CalendarStatus>) => {
+    patch("busy", provider, true);
+    patch("error", provider, null);
     try {
-      set({ status: await action() });
+      patch("status", provider, await action());
     } catch (e) {
-      set({ error: errorMessage(e) });
-      await get().load();
+      patch("error", provider, errorMessage(e));
+      await get().load(provider);
     } finally {
-      set({ busy: false });
+      patch("busy", provider, false);
       // Email dell'account collegato: sta nei settings.
       void useSettingsStore.getState().load();
     }
   };
 
   return {
-    status: null,
-    error: null,
-    busy: false,
+    status: each(null),
+    error: each(null),
+    busy: each(false),
 
-    load: async () => {
-      try {
-        set({ status: await googleCalendarStatus() });
-      } catch (e) {
-        set({ error: errorMessage(e) });
+    load: async (provider) => {
+      for (const p of provider ? [provider] : CALENDAR_PROVIDERS) {
+        try {
+          patch("status", p, await calendarStatus(p));
+        } catch (e) {
+          patch("error", p, errorMessage(e));
+        }
       }
     },
 
-    connect: (uiLanguage) => {
+    connect: (provider, uiLanguage) => {
       // Lo stato "collegamento in corso" arriva subito, il resto al ritorno.
-      setTimeout(() => void get().load(), 300);
-      return run(() => connectGoogleCalendar(uiLanguage));
+      setTimeout(() => void get().load(provider), 300);
+      return run(provider, () => connectCalendar(provider, uiLanguage));
     },
-    cancel: async () => {
-      await cancelGoogleCalendarConnect();
+    cancel: async (provider) => {
+      await cancelCalendarConnect(provider);
     },
-    disconnect: () => run(disconnectGoogleCalendar),
-    sync: () => run(syncGoogleCalendar),
+    disconnect: (provider) => run(provider, () => disconnectCalendar(provider)),
+    sync: (provider) => run(provider, () => syncCalendar(provider)),
+    syncAll: async () => {
+      const connected = CALENDAR_PROVIDERS.filter((p) => get().status[p]?.connected);
+      await Promise.all(connected.map((p) => get().sync(p)));
+    },
   };
 });
