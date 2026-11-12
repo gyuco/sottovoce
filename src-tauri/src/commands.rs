@@ -12,6 +12,7 @@ use sv_store::{MeetingDraft, Writer};
 use sv_stt::{Language, SttEvent};
 
 use crate::assist::{AssistConfig, AssistEvent};
+use crate::calendar::{Calendar, CalendarStatus};
 use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
@@ -989,6 +990,97 @@ pub async fn delete_scheduled_meeting(db: State<'_, Db>, id: i64) -> CmdResult<(
     blocking(move || Ok(sv_store::Store::open(path)?.delete_scheduled_meeting(id)?)).await
 }
 
+// --- Google Calendar ------------------------------------------------------------
+
+#[tauri::command]
+pub fn google_calendar_status(
+    calendar: State<'_, Calendar>,
+    settings: State<'_, SettingsStore>,
+) -> CalendarStatus {
+    calendar.status(&settings)
+}
+
+/// Apre il consenso di Google nel browser e aspetta il ritorno (max 5 min);
+/// `uiLanguage` sceglie la lingua della pagina mostrata alla fine.
+#[tauri::command]
+pub async fn connect_google_calendar(
+    app: AppHandle,
+    calendar: State<'_, Calendar>,
+    settings: State<'_, SettingsStore>,
+    ui_language: String,
+) -> CmdResult<CalendarStatus> {
+    calendar
+        .connect(&app, &ui_language)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(calendar.status(&settings))
+}
+
+#[tauri::command]
+pub fn cancel_google_calendar_connect(calendar: State<'_, Calendar>) {
+    calendar.cancel_connect();
+}
+
+#[tauri::command]
+pub async fn disconnect_google_calendar(
+    app: AppHandle,
+    calendar: State<'_, Calendar>,
+    settings: State<'_, SettingsStore>,
+) -> CmdResult<CalendarStatus> {
+    calendar
+        .disconnect(&app)
+        .await
+        .map_err(|e| format!("{e:#}"))?;
+    Ok(calendar.status(&settings))
+}
+
+#[tauri::command]
+pub async fn sync_google_calendar(
+    app: AppHandle,
+    calendar: State<'_, Calendar>,
+    settings: State<'_, SettingsStore>,
+) -> CmdResult<CalendarStatus> {
+    calendar.sync(&app).await.map_err(|e| format!("{e:#}"))?;
+    Ok(calendar.status(&settings))
+}
+
+/// Pagine di Google Cloud citate nella guida di configurazione.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GoogleConsolePage {
+    Project,
+    CalendarApi,
+    Branding,
+    Audience,
+    DataAccess,
+    Clients,
+}
+
+/// Apre nel browser una pagina della Google Cloud Console (solo URL fissi).
+#[tauri::command]
+pub fn open_google_console(page: GoogleConsolePage) -> CmdResult<()> {
+    let url = match page {
+        GoogleConsolePage::Project => "https://console.cloud.google.com/projectcreate",
+        GoogleConsolePage::CalendarApi => {
+            "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com"
+        }
+        GoogleConsolePage::Branding => "https://console.cloud.google.com/auth/branding",
+        GoogleConsolePage::Audience => "https://console.cloud.google.com/auth/audience",
+        GoogleConsolePage::DataAccess => "https://console.cloud.google.com/auth/scopes",
+        GoogleConsolePage::Clients => "https://console.cloud.google.com/auth/clients",
+    };
+    crate::calendar::open_in_browser(url).map_err(to_msg)
+}
+
+/// Apre nel browser il link di una call (solo Meet, Teams o Zoom).
+#[tauri::command]
+pub fn open_meeting_link(url: String) -> CmdResult<()> {
+    if sv_calendar::find_call_link(&url).as_deref() != Some(url.as_str()) {
+        return Err(format!("link non consentito: {url}"));
+    }
+    crate::calendar::open_in_browser(&url).map_err(to_msg)
+}
+
 // --- Email -------------------------------------------------------------------
 
 /// Invia il riepilogo con il server SMTP configurato; ritorna i destinatari.
@@ -1047,6 +1139,10 @@ async fn blocking<T: Send + 'static>(
 
 #[tauri::command]
 pub async fn set_api_key(provider: String, key: String) -> CmdResult<()> {
+    // Il refresh token lo scrive solo il collegamento OAuth.
+    if provider == crate::calendar::TOKEN_KEY {
+        return Err(format!("chiave non modificabile: {provider}"));
+    }
     blocking(move || secrets::set_api_key(&provider, &key)).await
 }
 

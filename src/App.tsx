@@ -112,6 +112,7 @@ export default function App() {
                 setView("live");
                 void useScheduledStore.getState().start(m);
               }}
+              onOpenSettings={() => setView("settings")}
             />
           </main>
         ) : view === "contacts" ? (

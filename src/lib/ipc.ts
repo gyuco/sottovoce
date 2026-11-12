@@ -28,7 +28,14 @@ export type LlmProvider =
   | "anthropic"
   | "custom";
 /** Account delle API key nel Keychain. */
-export type KeyProvider = "deepgram" | "opencode" | "openai" | "anthropic" | "custom" | "smtp";
+export type KeyProvider =
+  | "deepgram"
+  | "opencode"
+  | "openai"
+  | "anthropic"
+  | "custom"
+  | "smtp"
+  | "google-client-secret";
 
 /** Cifratura SMTP: STARTTLS (587) o TLS dall'inizio (465). */
 export type SmtpSecurity = "starttls" | "tls";
@@ -91,6 +98,10 @@ export interface Settings {
   smtpSecurity: SmtpSecurity;
   /** Vuoto = l'indirizzo del mittente. La password è nel Keychain (`smtp`). */
   smtpUser: string;
+  /** ID del client OAuth "App desktop" di Google Cloud; il secret è nel Keychain. */
+  googleClientId: string;
+  /** Account Google collegato (vuoto = non collegato). */
+  googleCalendarEmail: string;
   /** Setup guidato del primo avvio completato (o saltato). */
   onboardingDone: boolean;
 }
@@ -560,12 +571,19 @@ export interface ScheduledMeeting {
   language: Language;
   startsAtMs: number;
   durationMin: number;
+  /** Calendario di provenienza (`google`); vuoto = creata a mano. */
+  source: string;
+  /** Link della call (Meet, Teams, Zoom), se noto. */
+  joinUrl: string;
   createdAtMs: number;
   updatedAtMs: number;
 }
 
 /** Senza `id` si crea, con `id` si aggiorna. */
-export type ScheduledMeetingInput = Omit<ScheduledMeeting, "id" | "createdAtMs" | "updatedAtMs"> & {
+export type ScheduledMeetingInput = Omit<
+  ScheduledMeeting,
+  "id" | "createdAtMs" | "updatedAtMs" | "source" | "joinUrl"
+> & {
   id?: number | null;
 };
 
@@ -577,6 +595,50 @@ export const saveScheduledMeeting = (meeting: ScheduledMeetingInput) =>
   invoke<ScheduledMeeting>("save_scheduled_meeting", { meeting });
 
 export const deleteScheduledMeeting = (id: number) => invoke<void>("delete_scheduled_meeting", { id });
+
+/** L'Agenda è cambiata (sincronizzazione del calendario). */
+export const onScheduledChanged = (cb: () => void) => listen("scheduled:changed", () => cb());
+
+export interface CalendarSyncReport {
+  added: number;
+  updated: number;
+  removed: number;
+}
+
+/** Stato della sincronizzazione con Google Calendar. */
+export interface CalendarStatus {
+  /** ID client e client secret presenti. */
+  configured: boolean;
+  connected: boolean;
+  email: string;
+  connecting: boolean;
+  syncing: boolean;
+  lastSyncMs: number | null;
+  lastReport: CalendarSyncReport | null;
+  lastError: string | null;
+  /** Accesso revocato o scaduto: va ricollegato. */
+  needsReconnect: boolean;
+}
+
+export const googleCalendarStatus = () => invoke<CalendarStatus>("google_calendar_status");
+
+/** Apre il consenso nel browser; si risolve al ritorno (o dopo 5 minuti). */
+export const connectGoogleCalendar = (uiLanguage: string) =>
+  invoke<CalendarStatus>("connect_google_calendar", { uiLanguage });
+
+export const cancelGoogleCalendarConnect = () => invoke<void>("cancel_google_calendar_connect");
+
+export const disconnectGoogleCalendar = () => invoke<CalendarStatus>("disconnect_google_calendar");
+
+export const syncGoogleCalendar = () => invoke<CalendarStatus>("sync_google_calendar");
+
+export type GoogleConsolePage = "project" | "calendarApi" | "branding" | "audience" | "dataAccess" | "clients";
+
+/** Apre una pagina della Google Cloud Console (guida di configurazione). */
+export const openGoogleConsole = (page: GoogleConsolePage) => invoke<void>("open_google_console", { page });
+
+/** Apre il link della call (Meet, Teams, Zoom) nel browser. */
+export const openMeetingLink = (url: string) => invoke<void>("open_meeting_link", { url });
 
 /** Email composta dal frontend (`src/lib/email.ts`). */
 export interface OutgoingEmail {

@@ -2,6 +2,7 @@ import { AudioLines, BellRing, Languages, ShieldCheck, Sparkles, TriangleAlert }
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CalendarSettings } from "@/components/CalendarSettings";
 import { EmailSettings } from "@/components/EmailSettings";
 import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
@@ -267,6 +268,8 @@ export function SettingsPanel() {
       <SearchSettings />
 
       <EmailSettings />
+
+      <CalendarSettings />
 
       <LocalModels />
 

@@ -30,7 +30,9 @@ mod writer;
 
 pub use contacts::{Contact, ContactInput, is_valid_email, name_key};
 pub use error::StoreError;
-pub use scheduled::{ScheduledMeeting, ScheduledMeetingInput, ScheduledParticipant};
+pub use scheduled::{
+    ExternalMeeting, ScheduledMeeting, ScheduledMeetingInput, ScheduledParticipant, SyncReport,
+};
 pub use schema::SCHEMA_VERSION;
 pub use store::{Store, normalize};
 pub use types::{

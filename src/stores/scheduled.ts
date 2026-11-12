@@ -10,9 +10,11 @@ import {
   deleteScheduledMeeting,
   errorMessage,
   listScheduledMeetings,
+  onScheduledChanged,
   saveScheduledMeeting,
 } from "@/lib/ipc";
 import { useAudioStore } from "@/stores/audio";
+import { useCalendarStore } from "@/stores/calendar";
 import { findContact, useContactsStore } from "@/stores/contacts";
 import { useMeetingStore } from "@/stores/meeting";
 
@@ -141,6 +143,12 @@ export function useScheduledTicker() {
   useEffect(() => {
     const store = useScheduledStore.getState();
     void store.load();
+    void useCalendarStore.getState().load();
+    // Sincronizzazione del calendario in background.
+    const unlisten = onScheduledChanged(() => {
+      void useScheduledStore.getState().load();
+      void useCalendarStore.getState().load();
+    });
     const id = setInterval(() => {
       useScheduledStore.getState().tick();
       const { meetings, now } = useScheduledStore.getState();
@@ -153,6 +161,9 @@ export function useScheduledTicker() {
           .catch(() => undefined);
       }
     }, TICK_MS);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      void unlisten.then((stop) => stop());
+    };
   }, []);
 }

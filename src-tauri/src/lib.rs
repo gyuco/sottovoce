@@ -1,4 +1,5 @@
 mod assist;
+mod calendar;
 mod chat;
 mod codebase;
 mod commands;
@@ -96,6 +97,8 @@ pub fn run() {
                 db_path.clone(),
             ));
             app.manage(state::Db { path: db_path });
+            app.manage(calendar::Calendar::new()?);
+            calendar::spawn_periodic_sync(app.handle().clone());
             app.manage(state::Voices(sv_diar::VoiceStore::new(
                 app.path().app_data_dir()?.join("voices"),
             )));
@@ -132,6 +135,13 @@ pub fn run() {
             commands::list_scheduled_meetings,
             commands::save_scheduled_meeting,
             commands::delete_scheduled_meeting,
+            commands::google_calendar_status,
+            commands::connect_google_calendar,
+            commands::cancel_google_calendar_connect,
+            commands::disconnect_google_calendar,
+            commands::sync_google_calendar,
+            commands::open_meeting_link,
+            commands::open_google_console,
             commands::send_email,
             commands::open_email_draft,
             commands::test_smtp,

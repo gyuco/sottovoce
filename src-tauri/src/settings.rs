@@ -164,6 +164,11 @@ pub struct Settings {
     pub smtp_security: SmtpSecurity,
     /// Utente SMTP; vuoto = l'indirizzo del mittente.
     pub smtp_user: String,
+    /// ID del client OAuth "App desktop" creato dall'utente su Google Cloud
+    /// (sincronizzazione di Google Calendar); il client secret è nel Keychain.
+    pub google_client_id: String,
+    /// Account Google collegato (solo per mostrarlo); vuoto = non collegato.
+    pub google_calendar_email: String,
     /// Setup guidato del primo avvio completato (o saltato). I file salvati
     /// prima del setup guidato non hanno la chiave: valgono come completati.
     pub onboarding_done: bool,
@@ -251,6 +256,8 @@ impl Default for Settings {
             smtp_port: 587,
             smtp_security: SmtpSecurity::Starttls,
             smtp_user: String::new(),
+            google_client_id: String::new(),
+            google_calendar_email: String::new(),
             onboarding_done: false,
         }
     }

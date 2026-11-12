@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarPlus, Loader2, Pencil, Play, Trash2, Users, X } from "lucide-react";
+import { CalendarClock, CalendarPlus, Loader2, Pencil, Play, RefreshCw, Trash2, Users, Video, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -26,9 +26,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CONCRETE_LANGUAGES, type Language, type Participant, type ScheduledMeeting, errorMessage } from "@/lib/ipc";
+import {
+  CONCRETE_LANGUAGES,
+  type Language,
+  type Participant,
+  type ScheduledMeeting,
+  errorMessage,
+  openMeetingLink,
+} from "@/lib/ipc";
 import { useCanStart } from "@/lib/readiness";
 import { cn } from "@/lib/utils";
+import { useCalendarStore } from "@/stores/calendar";
 import { MEETING_LIMITS } from "@/stores/meeting";
 import { SCHEDULED_DURATIONS, endsAt, freshParticipants, isDue, useScheduledStore } from "@/stores/scheduled";
 import { useSettingsStore } from "@/stores/settings";
@@ -87,9 +95,14 @@ function useFormatters() {
 }
 
 /** Agenda: riunioni programmate con contesto pronto, da avviare con un clic. */
-export function Scheduled({ onStart }: { onStart: (m: ScheduledMeeting) => void }) {
+export function Scheduled(props: { onStart: (m: ScheduledMeeting) => void; onOpenSettings: () => void }) {
+  const { onStart } = props;
   const { t } = useTranslation();
   const { meetings, loaded, error, now, load, remove } = useScheduledStore();
+  const calendar = useCalendarStore((s) => s.status);
+  const calendarBusy = useCalendarStore((s) => s.busy);
+  const syncCalendar = useCalendarStore((s) => s.sync);
+  const syncing = calendarBusy || (calendar?.syncing ?? false);
   const canStart = useCanStart();
   const fmt = useFormatters();
   // `null` = chiuso; "new" = nuova riunione.
@@ -138,6 +151,11 @@ export function Scheduled({ onStart }: { onStart: (m: ScheduledMeeting) => void 
             <Badge variant="secondary" className="font-normal">
               {t(`settings.language.${m.language}`)}
             </Badge>
+            {m.source === "google" && (
+              <Badge variant="outline" className="font-normal" title={t("scheduled.fromGoogle")}>
+                Google Calendar
+              </Badge>
+            )}
           </p>
           {m.goal && <p className="line-clamp-2 text-xs text-muted-foreground">{m.goal}</p>}
           {m.participants.length > 0 && (
@@ -147,6 +165,7 @@ export function Scheduled({ onStart }: { onStart: (m: ScheduledMeeting) => void 
             </p>
           )}
         </div>
+        {!past && m.joinUrl && <JoinButton url={m.joinUrl} />}
         {!past && (
           <Button
             size="sm"
@@ -188,10 +207,30 @@ export function Scheduled({ onStart }: { onStart: (m: ScheduledMeeting) => void 
           <h1 className="text-2xl font-semibold tracking-tight">{t("scheduled.title")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("scheduled.hint")}</p>
         </div>
-        <Button onClick={() => setEditing("new")}>
-          <CalendarPlus /> {t("scheduled.add")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {calendar?.connected ? (
+            <Button variant="outline" disabled={syncing} onClick={() => void syncCalendar()}>
+              <RefreshCw className={cn(syncing && "animate-spin")} /> {t("scheduled.sync")}
+            </Button>
+          ) : (
+            <Button variant="outline" onClick={props.onOpenSettings}>
+              <CalendarClock /> {t("scheduled.connectGoogle")}
+            </Button>
+          )}
+          <Button onClick={() => setEditing("new")}>
+            <CalendarPlus /> {t("scheduled.add")}
+          </Button>
+        </div>
       </header>
+
+      {calendar?.needsReconnect && (
+        <p role="alert" className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+          {t("settings.calendar.needsReconnect")}
+          <Button size="xs" variant="outline" onClick={props.onOpenSettings}>
+            {t("settings.calendar.reconnect")}
+          </Button>
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -262,6 +301,8 @@ function ScheduledDialog(props: { meeting: ScheduledMeeting | null; onClose: () 
   const save = useScheduledStore((s) => s.save);
   const defaultLanguage = useSettingsStore((s) => s.settings?.theirLanguage ?? "multi");
   const { meeting } = props;
+  // Titolo e orario arrivano dal calendario: la sincronizzazione li riscrive.
+  const fromCalendar = meeting?.source === "google";
   const [start] = useState(() => meeting?.startsAtMs ?? nextSlot(Date.now()));
   const [date, setDate] = useState(dateValue(start));
   const [time, setTime] = useState(timeValue(start));
@@ -314,14 +355,17 @@ function ScheduledDialog(props: { meeting: ScheduledMeeting | null; onClose: () 
         <form onSubmit={(e) => void submit(e)} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{meeting ? t("scheduled.edit", { name: meeting.name }) : t("scheduled.add")}</DialogTitle>
-            <DialogDescription>{t("scheduled.formHint")}</DialogDescription>
+            <DialogDescription>
+              {fromCalendar ? t("scheduled.formHintGoogle") : t("scheduled.formHint")}
+            </DialogDescription>
           </DialogHeader>
 
           <label className="grid gap-1.5 text-sm">
             <span className="font-medium">{t("meeting.name")}</span>
             <Input
-              autoFocus
+              autoFocus={!fromCalendar}
               required
+              disabled={fromCalendar}
               value={name}
               maxLength={MEETING_LIMITS.name}
               placeholder={t("startDialog.namePlaceholder")}
@@ -332,15 +376,19 @@ function ScheduledDialog(props: { meeting: ScheduledMeeting | null; onClose: () 
           <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
             <label className="grid gap-1.5 text-sm">
               <span className="font-medium">{t("scheduled.date")}</span>
-              <Input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input type="date" required disabled={fromCalendar} value={date} onChange={(e) => setDate(e.target.value)} />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="font-medium">{t("scheduled.time")}</span>
-              <Input type="time" required value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input type="time" required disabled={fromCalendar} value={time} onChange={(e) => setTime(e.target.value)} />
             </label>
             <label className="grid gap-1.5 text-sm">
               <span className="font-medium">{t("scheduled.duration")}</span>
-              <Select value={String(duration)} onValueChange={(v) => setDuration(Number(v))}>
+              <Select
+                value={String(duration)}
+                disabled={fromCalendar}
+                onValueChange={(v) => setDuration(Number(v))}
+              >
                 <SelectTrigger className="w-full sm:w-32" aria-label={t("scheduled.duration")}>
                   <SelectValue />
                 </SelectTrigger>
@@ -454,6 +502,7 @@ export function ScheduledBanner({ meeting }: { meeting: ScheduledMeeting }) {
             ` · ${t("scheduled.participants", { count: meeting.participants.length })}`}
         </p>
       </div>
+      {meeting.joinUrl && <JoinButton url={meeting.joinUrl} />}
       <Button size="sm" disabled={!canStart} title={t("scheduled.startHint")} onClick={() => void start(meeting)}>
         <Play className="fill-current" /> {t("controls.start")}
       </Button>
@@ -467,5 +516,22 @@ export function ScheduledBanner({ meeting }: { meeting: ScheduledMeeting }) {
         <X />
       </Button>
     </div>
+  );
+}
+
+/** Apre il link della call (Meet, Teams, Zoom) nel browser. */
+function JoinButton({ url }: { url: string }) {
+  const { t } = useTranslation();
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      title={error ?? url}
+      aria-label={t("scheduled.join")}
+      onClick={() => openMeetingLink(url).then(() => setError(null), (e: unknown) => setError(errorMessage(e)))}
+    >
+      <Video /> {t("scheduled.join")}
+    </Button>
   );
 }

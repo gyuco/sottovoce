@@ -17,7 +17,7 @@ use crate::error::StoreError;
 use crate::transcript;
 
 /// Versione dello schema corrente.
-pub const SCHEMA_VERSION: i64 = 7;
+pub const SCHEMA_VERSION: i64 = 8;
 
 pub(crate) const MIGRATIONS: &[&str] = &[
     // 1 — meeting, frasi finali, traduzioni, nomi dei parlanti, assist.
@@ -175,6 +175,19 @@ CREATE TABLE scheduled_meetings (
     updated_at_ms INTEGER NOT NULL
 );
 CREATE INDEX scheduled_meetings_by_start ON scheduled_meetings(starts_at_ms);
+"#,
+    // 8 — riunioni importate da un calendario (Google): sorgente, id
+    // dell'evento, link della call; `edited` = toccata dall'utente (la sync
+    // non sovrascrive note e partecipanti), `hidden` = eliminata dall'utente
+    // (la sync non la reimporta).
+    r#"
+ALTER TABLE scheduled_meetings ADD COLUMN source TEXT NOT NULL DEFAULT '';
+ALTER TABLE scheduled_meetings ADD COLUMN external_id TEXT;
+ALTER TABLE scheduled_meetings ADD COLUMN join_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE scheduled_meetings ADD COLUMN edited INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE scheduled_meetings ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+CREATE UNIQUE INDEX scheduled_meetings_by_external
+    ON scheduled_meetings(source, external_id) WHERE external_id IS NOT NULL;
 "#,
 ];
 
