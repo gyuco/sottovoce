@@ -9,6 +9,7 @@ export const MEETING_LIMITS = {
   notes: 2000,
   codePath: 1024,
   speakerName: 60,
+  participants: 20,
 } as const;
 
 /** Attesa dopo l'ultima modifica prima di inviare il contesto alla sessione. */
@@ -45,7 +46,7 @@ function without<T>(map: Record<number, T>, key: number): Record<number, T> {
 }
 
 export const useMeetingStore = create<MeetingState>((set, get) => ({
-  context: { name: "", goal: "", notes: "", codePath: "", speakers: {} },
+  context: { name: "", goal: "", notes: "", codePath: "", speakers: {}, participants: [] },
   syncError: null,
   voiceSuggestions: {},
   voiceRecognized: {},

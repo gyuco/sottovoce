@@ -2,6 +2,7 @@ import { AudioLines, BellRing, Languages, ShieldCheck, TriangleAlert } from "luc
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { EmailSettings } from "@/components/EmailSettings";
 import { KeyForm } from "@/components/KeyForm";
 import { LlmSettings } from "@/components/LlmSettings";
 import { LocalModels } from "@/components/LocalModels";
@@ -262,6 +263,8 @@ export function SettingsPanel() {
       <LlmSettings />
 
       <SearchSettings />
+
+      <EmailSettings />
 
       <LocalModels />
 

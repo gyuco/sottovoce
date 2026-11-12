@@ -328,7 +328,12 @@ impl Session {
         let context = context.normalized();
         self.context.set(context.clone());
         if let Some(store) = self.store.as_ref().map(Writer::handle) {
-            store.context(&context.name, &context.goal, &context.notes);
+            store.context(
+                &context.name,
+                &context.goal,
+                &context.notes,
+                &context.participant_names(),
+            );
             store.speaker_names(&context.speakers);
         }
     }

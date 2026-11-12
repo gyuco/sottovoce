@@ -728,6 +728,7 @@ mod tests {
             stt_model: String::new(),
             my_language: String::new(),
             their_language: String::new(),
+            participants: Vec::new(),
         };
         assert!(HistoryFilter::default().keeps(&m(1, 0)));
         let range = HistoryFilter {

@@ -49,7 +49,7 @@
     "goal": "Obiettivo",
     "goalPlaceholder": "Obiettivo (es. chiudere il budget Q3)",
     "notes": "Note",
-    "notesPlaceholder": "Note: partecipanti, sigle, nomi di prodotto, cose da ottenere…",
+    "notesPlaceholder": "Note: sigle, nomi di prodotto, cose da ottenere…",
     "codePath": "Cartella del codice",
     "codePathPlaceholder": "Percorso del progetto (es. ~/progetti/app)",
     "codePathBrowse": "Scegli cartella",
@@ -261,6 +261,24 @@
     "about": {
       "line": "Sottovoce {{version}} · build {{commit}} · compilata il {{built}}",
       "debug": "debug"
+    },
+    "email": {
+      "title": "Email",
+      "hint": "Per inviare il riepilogo dei meeting. Senza server SMTP puoi comunque aprire il messaggio come bozza nel client di posta.",
+      "fromName": "Nome del mittente",
+      "fromNamePlaceholder": "Mario Rossi",
+      "from": "Indirizzo del mittente",
+      "host": "Server SMTP",
+      "port": "Porta",
+      "security": "Sicurezza",
+      "starttls": "STARTTLS (587)",
+      "tls": "TLS/SSL (465)",
+      "user": "Utente",
+      "userPlaceholder": "Uguale all'indirizzo del mittente",
+      "password": "Password SMTP",
+      "passwordHint": "Salvata nel Portachiavi di macOS. Per Gmail, iCloud e Outlook usa una password per app.",
+      "test": "Prova connessione",
+      "testOk": "Connessione e accesso riusciti."
     }
   },
   "permissions": {
@@ -274,13 +292,15 @@
   "common": {
     "copied": "Copiato",
     "save": "Salva",
-    "cancel": "Annulla"
+    "cancel": "Annulla",
+    "close": "Chiudi"
   },
   "nav": {
     "label": "Navigazione",
     "live": "Sessione live",
     "settings": "Impostazioni",
-    "history": "Storico"
+    "history": "Storico",
+    "contacts": "Rubrica"
   },
   "header": {
     "untitled": "Nuovo meeting",
@@ -330,7 +350,7 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rinomina {{name}}",
-    "renameHint": "Clic per dare un nome a questo parlante",
+    "renameHint": "Clic per aprire la scheda: nome, ruolo, email",
     "voice": {
       "region": "Parlanti riconosciuti dalla voce",
       "suggest": "sembra {{name}}?",
@@ -339,6 +359,16 @@
       "recognized": "riconosciuto come {{name}} dal profilo vocale",
       "notThem": "Non è {{name}}",
       "ok": "OK"
+    },
+    "card": {
+      "title": "Scheda di {{name}}",
+      "hint": "Il nome compare nella trascrizione e nei riepiloghi. Ruolo, email e descrizione restano nella rubrica.",
+      "inContacts": "In rubrica",
+      "saveToContacts": "Salva in rubrica",
+      "saveHint": "Crea una scheda riutilizzabile nei prossimi meeting.",
+      "updateHint": "Aggiorna la scheda già presente in rubrica.",
+      "clear": "Togli il nome",
+      "whoIs": "Chi è tra i partecipanti?"
     }
   },
   "history": {
@@ -420,7 +450,9 @@
     "ready": "Riepilogo finale pronto",
     "failed": "Riepilogo non generato: {{message}}. Puoi riprovare dallo Storico.",
     "open": "Apri riepilogo",
-    "dismiss": "Chiudi avviso"
+    "dismiss": "Chiudi avviso",
+    "email": "Email",
+    "sendEmail": "Invia il riepilogo via email"
   },
   "update": {
     "available": "Nuova versione disponibile",
@@ -467,6 +499,80 @@
   },
   "startDialog": {
     "title": "In che lingua si svolge la call?",
-    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua."
+    "description": "Una lingua fissa rende più precisa la trascrizione di entrambi i canali. Scegli “Automatica” se si parlano più lingue. Traduzioni e riepilogo restano nella tua lingua.",
+    "heading": "Nuova call",
+    "intro": "Prima di iniziare: la lingua della call e, se vuoi, chi parteciperà.",
+    "context": "Contesto della riunione",
+    "optional": "facoltativo",
+    "participants": "Chi parteciperà?",
+    "participantsHint": "Scegli dalla rubrica. Un nome nuovo apre la scheda da salvare in rubrica. Aiuta a dare un nome ai parlanti e migliora suggerimenti, riepilogo e invio email.",
+    "namePlaceholder": "es. Sprint review con Acme"
+  },
+  "contacts": {
+    "title": "Rubrica",
+    "hint": "Le persone incontrate nei meeting. Le schede si compilano anche dando un nome a un parlante.",
+    "search": "Cerca per nome, ruolo o email…",
+    "empty": "Nessun contatto. Aggiungine uno o dai un nome a un parlante durante una call.",
+    "noResults": "Nessun contatto trovato.",
+    "add": "Nuovo contatto",
+    "edit": "Modifica {{name}}",
+    "delete": "Elimina {{name}}",
+    "deleteTitle": "Eliminare il contatto?",
+    "deleteConfirm": "La scheda di {{name}} verrà eliminata dalla rubrica. I nomi già dati nei meeting restano.",
+    "deleteAction": "Elimina",
+    "formHint": "Il nome collega la scheda ai parlanti dei meeting.",
+    "invalidEmail": "Indirizzo email non valido.",
+    "fields": {
+      "name": "Nome",
+      "role": "Ruolo",
+      "rolePlaceholder": "es. CTO, Product manager",
+      "email": "Email",
+      "emailPlaceholder": "nome@azienda.it",
+      "description": "Descrizione",
+      "descriptionPlaceholder": "Chi è, di cosa si occupa, come vi siete conosciuti…"
+    }
+  },
+  "email": {
+    "subject": "Riepilogo: {{name}}",
+    "heading": "Riepilogo del meeting",
+    "duration": "durata {{duration}}",
+    "participants": "Partecipanti",
+    "goal": "Obiettivo",
+    "overview": "In sintesi",
+    "keyPoints": "Punti chiave",
+    "actions": "Azioni da fare",
+    "footer": "Riepilogo preparato con Sottovoce.",
+    "dialog": {
+      "title": "Invia il riepilogo",
+      "to": "Destinatari",
+      "noEmail": "nessuna email in rubrica",
+      "noParticipants": "Nessun parlante con un nome: aggiungi gli indirizzi qui sotto.",
+      "extra": "Altri destinatari",
+      "extraPlaceholder": "Altri indirizzi, separati da virgola",
+      "invalid": "Indirizzo non valido: {{address}}",
+      "subject": "Oggetto",
+      "note": "Messaggio (facoltativo)",
+      "notePlaceholder": "Ciao a tutti, ecco il riepilogo della riunione di oggi…",
+      "preview": "Mostra anteprima",
+      "hidePreview": "Nascondi anteprima",
+      "smtpMissing": "Per inviare direttamente configura il server in Impostazioni → Email. Intanto puoi aprire il messaggio come bozza nel client di posta.",
+      "sent": "Email inviata (destinatari: {{count}}).",
+      "draftOpened": "Bozza aperta nel client di posta.",
+      "draft": "Apri nel client di posta",
+      "send": "Invia"
+    }
+  },
+  "participants": {
+    "label": "Partecipanti",
+    "placeholder": "Aggiungi partecipanti…",
+    "more": "Aggiungi…",
+    "full": "Massimo {{max}} partecipanti",
+    "remove": "Togli {{name}}",
+    "count": "{{count}} partecipanti",
+    "edit": "Clic per modificare la scheda",
+    "notInContacts": "Non in rubrica: clic per completare la scheda e salvarla",
+    "newHint": "«{{name}}» non è in rubrica: premi Invio per creare la scheda.",
+    "newTitle": "Aggiungi {{name}} alla rubrica",
+    "newDescription": "I partecipanti vengono dalla rubrica: completa i dati mancanti (ruolo, email, descrizione) e salva."
   }
 }

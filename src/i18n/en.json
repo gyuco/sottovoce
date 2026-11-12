@@ -49,7 +49,7 @@
     "goal": "Goal",
     "goalPlaceholder": "Goal (e.g. close the Q3 budget)",
     "notes": "Notes",
-    "notesPlaceholder": "Notes: participants, acronyms, product names, what you want to get…",
+    "notesPlaceholder": "Notes: acronyms, product names, what you want to achieve…",
     "codePath": "Code folder",
     "codePathPlaceholder": "Project path (e.g. ~/projects/app)",
     "codePathBrowse": "Choose folder",
@@ -261,6 +261,24 @@
     "about": {
       "line": "Sottovoce {{version}} · build {{commit}} · built {{built}}",
       "debug": "debug"
+    },
+    "email": {
+      "title": "Email",
+      "hint": "To send meeting summaries. Without an SMTP server you can still open the message as a draft in your mail app.",
+      "fromName": "Sender name",
+      "fromNamePlaceholder": "Jane Smith",
+      "from": "Sender address",
+      "host": "SMTP server",
+      "port": "Port",
+      "security": "Security",
+      "starttls": "STARTTLS (587)",
+      "tls": "TLS/SSL (465)",
+      "user": "Username",
+      "userPlaceholder": "Same as the sender address",
+      "password": "SMTP password",
+      "passwordHint": "Stored in the macOS Keychain. For Gmail, iCloud and Outlook use an app password.",
+      "test": "Test connection",
+      "testOk": "Connection and login succeeded."
     }
   },
   "permissions": {
@@ -274,13 +292,15 @@
   "common": {
     "copied": "Copied",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "nav": {
     "label": "Navigation",
     "live": "Live session",
     "settings": "Settings",
-    "history": "History"
+    "history": "History",
+    "contacts": "Contacts"
   },
   "header": {
     "untitled": "New meeting",
@@ -330,7 +350,7 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Rename {{name}}",
-    "renameHint": "Click to name this speaker",
+    "renameHint": "Click to open the card: name, role, email",
     "voice": {
       "region": "Speakers recognized by voice",
       "suggest": "sounds like {{name}}?",
@@ -339,6 +359,16 @@
       "recognized": "recognized as {{name}} from the voice profile",
       "notThem": "Not {{name}}",
       "ok": "OK"
+    },
+    "card": {
+      "title": "{{name}}'s card",
+      "hint": "The name appears in the transcript and summaries. Role, email and description stay in your contacts.",
+      "inContacts": "In contacts",
+      "saveToContacts": "Save to contacts",
+      "saveHint": "Creates a card you can reuse in future meetings.",
+      "updateHint": "Updates the card already in your contacts.",
+      "clear": "Remove name",
+      "whoIs": "Which participant is it?"
     }
   },
   "history": {
@@ -420,7 +450,9 @@
     "ready": "Final summary ready",
     "failed": "Summary not generated: {{message}}. You can retry from History.",
     "open": "Open summary",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "email": "Email",
+    "sendEmail": "Send the summary by email"
   },
   "update": {
     "available": "New version available",
@@ -467,6 +499,80 @@
   },
   "startDialog": {
     "title": "What language is the call in?",
-    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language."
+    "description": "A fixed language makes transcription of both channels more accurate. Choose “Automatic” if several languages are spoken. Translations and summary stay in your language.",
+    "heading": "New call",
+    "intro": "Before you start: the call language and, if you like, who will attend.",
+    "context": "Meeting context",
+    "optional": "optional",
+    "participants": "Who will attend?",
+    "participantsHint": "Pick from your contacts. A new name opens a card to save to your contacts. It helps name speakers and improves suggestions, the summary and email.",
+    "namePlaceholder": "e.g. Sprint review with Acme"
+  },
+  "contacts": {
+    "title": "Contacts",
+    "hint": "People you met in meetings. Cards are also filled in when you name a speaker.",
+    "search": "Search by name, role or email…",
+    "empty": "No contacts yet. Add one or name a speaker during a call.",
+    "noResults": "No contacts found.",
+    "add": "New contact",
+    "edit": "Edit {{name}}",
+    "delete": "Delete {{name}}",
+    "deleteTitle": "Delete contact?",
+    "deleteConfirm": "{{name}}'s card will be removed from your contacts. Names already given in meetings stay.",
+    "deleteAction": "Delete",
+    "formHint": "The name links the card to meeting speakers.",
+    "invalidEmail": "Invalid email address.",
+    "fields": {
+      "name": "Name",
+      "role": "Role",
+      "rolePlaceholder": "e.g. CTO, Product manager",
+      "email": "Email",
+      "emailPlaceholder": "name@company.com",
+      "description": "Description",
+      "descriptionPlaceholder": "Who they are, what they work on, how you met…"
+    }
+  },
+  "email": {
+    "subject": "Summary: {{name}}",
+    "heading": "Meeting summary",
+    "duration": "duration {{duration}}",
+    "participants": "Participants",
+    "goal": "Goal",
+    "overview": "At a glance",
+    "keyPoints": "Key points",
+    "actions": "Action items",
+    "footer": "Summary prepared with Sottovoce.",
+    "dialog": {
+      "title": "Send the summary",
+      "to": "Recipients",
+      "noEmail": "no email in contacts",
+      "noParticipants": "No named speakers: add addresses below.",
+      "extra": "Other recipients",
+      "extraPlaceholder": "Other addresses, comma separated",
+      "invalid": "Invalid address: {{address}}",
+      "subject": "Subject",
+      "note": "Message (optional)",
+      "notePlaceholder": "Hi all, here is the summary of today's meeting…",
+      "preview": "Show preview",
+      "hidePreview": "Hide preview",
+      "smtpMissing": "To send directly, set up the server in Settings → Email. Meanwhile you can open the message as a draft in your mail app.",
+      "sent": "Email sent (recipients: {{count}}).",
+      "draftOpened": "Draft opened in your mail app.",
+      "draft": "Open in mail app",
+      "send": "Send"
+    }
+  },
+  "participants": {
+    "label": "Participants",
+    "placeholder": "Add participants…",
+    "more": "Add…",
+    "full": "Up to {{max}} participants",
+    "remove": "Remove {{name}}",
+    "count": "{{count}} participants",
+    "edit": "Click to edit the card",
+    "notInContacts": "Not in contacts: click to complete and save the card",
+    "newHint": "“{{name}}” is not in your contacts: press Enter to create the card.",
+    "newTitle": "Add {{name}} to contacts",
+    "newDescription": "Participants come from your contacts: fill in the missing details (role, email, description) and save."
   }
 }

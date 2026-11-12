@@ -18,6 +18,8 @@ pub struct MeetingDraft {
     pub their_language: String,
     /// Nomi dati dall'utente ai parlanti (0 = "Speaker 1").
     pub speakers: BTreeMap<u8, String>,
+    /// Partecipanti attesi, indicati all'avvio.
+    pub participants: Vec<String>,
 }
 
 /// Frase finale da salvare. `session_id` è l'id del `Final` nella sessione.
@@ -48,6 +50,8 @@ pub struct Meeting {
     pub stt_model: String,
     pub my_language: String,
     pub their_language: String,
+    /// Partecipanti attesi, indicati all'avvio (nomi).
+    pub participants: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

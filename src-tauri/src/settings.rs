@@ -77,6 +77,20 @@ impl LlmProvider {
     }
 }
 
+/// Cifratura della connessione SMTP.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SmtpSecurity {
+    /// Connessione in chiaro promossa a TLS (porta 587).
+    #[default]
+    Starttls,
+    /// TLS dall'inizio (porta 465).
+    Tls,
+}
+
+/// Account Keychain della password SMTP (vedi `secrets::KNOWN_PROVIDERS`).
+pub const SMTP_KEY: &str = "smtp";
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -140,6 +154,16 @@ pub struct Settings {
     /// Ricerca per significato nello storico (modello locale di embedding):
     /// indicizza i meeting in background. Senza il modello resta spenta.
     pub semantic_search: bool,
+    /// Nome del mittente delle email (riepilogo del meeting).
+    pub email_from_name: String,
+    /// Indirizzo del mittente; vuoto = invio SMTP non configurato.
+    pub email_from: String,
+    /// Server SMTP (es. `smtp.gmail.com`); la password è nel Keychain.
+    pub smtp_host: String,
+    pub smtp_port: u16,
+    pub smtp_security: SmtpSecurity,
+    /// Utente SMTP; vuoto = l'indirizzo del mittente.
+    pub smtp_user: String,
 }
 
 /// Modello di un compito LLM con il suo provider.
@@ -218,6 +242,12 @@ impl Default for Settings {
             live_assist: false,
             echo_cancellation: true,
             semantic_search: true,
+            email_from_name: String::new(),
+            email_from: String::new(),
+            smtp_host: String::new(),
+            smtp_port: 587,
+            smtp_security: SmtpSecurity::Starttls,
+            smtp_user: String::new(),
         }
     }
 }

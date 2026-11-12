@@ -51,7 +51,7 @@ export function meetingMarkdown(
       meeting.sttEngine === "local" ? t("header.mode.local") : t("header.mode.cloud")
     } · ${meeting.sttModel}`,
   );
-  const participants = [...new Set(details.segments.map(speakerOf))];
+  const participants = [...new Set([...meeting.participants, ...details.segments.map(speakerOf)])];
   if (participants.length > 0) {
     lines.push(`- **${t("export.participants")}:** ${participants.map(inline).join(", ")}`);
   }

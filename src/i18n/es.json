@@ -49,7 +49,7 @@
     "goal": "Objetivo",
     "goalPlaceholder": "Objetivo (p. ej. cerrar el presupuesto del Q3)",
     "notes": "Notas",
-    "notesPlaceholder": "Notas: participantes, siglas, nombres de productos, lo que quieres conseguir…",
+    "notesPlaceholder": "Notas: siglas, nombres de productos, lo que quieres conseguir…",
     "codePath": "Carpeta del código",
     "codePathPlaceholder": "Ruta del proyecto (p. ej. ~/proyectos/app)",
     "codePathBrowse": "Elegir carpeta",
@@ -261,6 +261,24 @@
     "about": {
       "line": "Sottovoce {{version}} · build {{commit}} · compilada el {{built}}",
       "debug": "debug"
+    },
+    "email": {
+      "title": "Email",
+      "hint": "Para enviar el resumen de las reuniones. Sin servidor SMTP puedes abrir el mensaje como borrador en tu cliente de correo.",
+      "fromName": "Nombre del remitente",
+      "fromNamePlaceholder": "María García",
+      "from": "Dirección del remitente",
+      "host": "Servidor SMTP",
+      "port": "Puerto",
+      "security": "Seguridad",
+      "starttls": "STARTTLS (587)",
+      "tls": "TLS/SSL (465)",
+      "user": "Usuario",
+      "userPlaceholder": "Igual que la dirección del remitente",
+      "password": "Contraseña SMTP",
+      "passwordHint": "Guardada en el Llavero de macOS. Para Gmail, iCloud y Outlook usa una contraseña de aplicación.",
+      "test": "Probar conexión",
+      "testOk": "Conexión e inicio de sesión correctos."
     }
   },
   "permissions": {
@@ -274,13 +292,15 @@
   "common": {
     "copied": "Copiado",
     "save": "Guardar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "close": "Cerrar"
   },
   "nav": {
     "label": "Navegación",
     "live": "Sesión en vivo",
     "settings": "Ajustes",
-    "history": "Historial"
+    "history": "Historial",
+    "contacts": "Contactos"
   },
   "header": {
     "untitled": "Nueva reunión",
@@ -330,7 +350,7 @@
   "speakers": {
     "label": "Speaker {{n}}",
     "rename": "Renombrar a {{name}}",
-    "renameHint": "Haz clic para poner nombre a este hablante",
+    "renameHint": "Haz clic para abrir la ficha: nombre, cargo, email",
     "voice": {
       "region": "Hablantes reconocidos por la voz",
       "suggest": "¿parece {{name}}?",
@@ -339,6 +359,16 @@
       "recognized": "reconocido como {{name}} por el perfil de voz",
       "notThem": "No es {{name}}",
       "ok": "OK"
+    },
+    "card": {
+      "title": "Ficha de {{name}}",
+      "hint": "El nombre aparece en la transcripción y en los resúmenes. Cargo, email y descripción se quedan en tus contactos.",
+      "inContacts": "En contactos",
+      "saveToContacts": "Guardar en contactos",
+      "saveHint": "Crea una ficha reutilizable en próximas reuniones.",
+      "updateHint": "Actualiza la ficha que ya está en tus contactos.",
+      "clear": "Quitar el nombre",
+      "whoIs": "¿Cuál de los participantes es?"
     }
   },
   "history": {
@@ -420,7 +450,9 @@
     "ready": "Resumen final listo",
     "failed": "Resumen no generado: {{message}}. Puedes reintentarlo desde el Historial.",
     "open": "Abrir resumen",
-    "dismiss": "Cerrar aviso"
+    "dismiss": "Cerrar aviso",
+    "email": "Email",
+    "sendEmail": "Enviar el resumen por email"
   },
   "update": {
     "available": "Nueva versión disponible",
@@ -467,6 +499,80 @@
   },
   "startDialog": {
     "title": "¿En qué idioma será la llamada?",
-    "description": "Un idioma fijo hace más precisa la transcripción de ambos canales. Elige “Automático” si se hablan varios idiomas. Las traducciones y el resumen siguen en tu idioma."
+    "description": "Un idioma fijo hace más precisa la transcripción de ambos canales. Elige “Automático” si se hablan varios idiomas. Las traducciones y el resumen siguen en tu idioma.",
+    "heading": "Nueva llamada",
+    "intro": "Antes de empezar: el idioma de la llamada y, si quieres, quién participará.",
+    "context": "Contexto de la reunión",
+    "optional": "opcional",
+    "participants": "¿Quién participará?",
+    "participantsHint": "Elige de tus contactos. Un nombre nuevo abre la ficha para guardarla en contactos. Ayuda a nombrar a los hablantes y mejora sugerencias, resumen y envío por email.",
+    "namePlaceholder": "p. ej. Sprint review con Acme"
+  },
+  "contacts": {
+    "title": "Contactos",
+    "hint": "Las personas que conociste en reuniones. Las fichas también se completan al dar nombre a un hablante.",
+    "search": "Buscar por nombre, cargo o email…",
+    "empty": "Ningún contacto. Añade uno o da nombre a un hablante durante una llamada.",
+    "noResults": "No se encontraron contactos.",
+    "add": "Nuevo contacto",
+    "edit": "Editar {{name}}",
+    "delete": "Eliminar {{name}}",
+    "deleteTitle": "¿Eliminar el contacto?",
+    "deleteConfirm": "La ficha de {{name}} se eliminará de tus contactos. Los nombres ya dados en las reuniones se mantienen.",
+    "deleteAction": "Eliminar",
+    "formHint": "El nombre vincula la ficha con los hablantes de las reuniones.",
+    "invalidEmail": "Dirección de email no válida.",
+    "fields": {
+      "name": "Nombre",
+      "role": "Cargo",
+      "rolePlaceholder": "p. ej. CTO, Product manager",
+      "email": "Email",
+      "emailPlaceholder": "nombre@empresa.com",
+      "description": "Descripción",
+      "descriptionPlaceholder": "Quién es, a qué se dedica, cómo os conocisteis…"
+    }
+  },
+  "email": {
+    "subject": "Resumen: {{name}}",
+    "heading": "Resumen de la reunión",
+    "duration": "duración {{duration}}",
+    "participants": "Participantes",
+    "goal": "Objetivo",
+    "overview": "En resumen",
+    "keyPoints": "Puntos clave",
+    "actions": "Tareas pendientes",
+    "footer": "Resumen preparado con Sottovoce.",
+    "dialog": {
+      "title": "Enviar el resumen",
+      "to": "Destinatarios",
+      "noEmail": "sin email en contactos",
+      "noParticipants": "Ningún hablante con nombre: añade las direcciones abajo.",
+      "extra": "Otros destinatarios",
+      "extraPlaceholder": "Otras direcciones, separadas por comas",
+      "invalid": "Dirección no válida: {{address}}",
+      "subject": "Asunto",
+      "note": "Mensaje (opcional)",
+      "notePlaceholder": "Hola a todos, aquí tenéis el resumen de la reunión de hoy…",
+      "preview": "Mostrar vista previa",
+      "hidePreview": "Ocultar vista previa",
+      "smtpMissing": "Para enviar directamente configura el servidor en Ajustes → Email. Mientras tanto puedes abrir el mensaje como borrador en tu cliente de correo.",
+      "sent": "Email enviado (destinatarios: {{count}}).",
+      "draftOpened": "Borrador abierto en tu cliente de correo.",
+      "draft": "Abrir en el cliente de correo",
+      "send": "Enviar"
+    }
+  },
+  "participants": {
+    "label": "Participantes",
+    "placeholder": "Añadir participantes…",
+    "more": "Añadir…",
+    "full": "Máximo {{max}} participantes",
+    "remove": "Quitar a {{name}}",
+    "count": "{{count}} participantes",
+    "edit": "Haz clic para editar la ficha",
+    "notInContacts": "No está en contactos: haz clic para completar y guardar la ficha",
+    "newHint": "«{{name}}» no está en tus contactos: pulsa Intro para crear la ficha.",
+    "newTitle": "Añadir a {{name}} a contactos",
+    "newDescription": "Los participantes vienen de tus contactos: completa los datos que faltan (cargo, email, descripción) y guarda."
   }
 }

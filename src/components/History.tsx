@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { HistoryChat } from "@/components/HistoryChat";
+import { SpeakerCard } from "@/components/SpeakerCard";
 import { SummaryPanel } from "@/components/SummaryPanel";
 import { ConversationMetrics } from "@/components/TalkRatio";
 import {
@@ -32,6 +33,7 @@ import {
   listMeetings,
   renameMeeting,
   searchMeetings,
+  setMeetingSpeaker,
 } from "@/lib/ipc";
 import { meetingMarkdown } from "@/lib/markdown";
 import { speakerColor } from "@/lib/speakers";
@@ -65,6 +67,8 @@ export function History(props: { focusId?: number | null }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [exported, setExported] = useState<{ id: number; path: string } | null>(null);
+  // Parlante di "Loro" di cui è aperta la scheda.
+  const [cardSpeaker, setCardSpeaker] = useState<number | null>(null);
   const lastReady = useInsightsStore((s) => s.lastReady);
   const pendingId = useInsightsStore((s) => s.pendingMeetingId);
   const indexStatus = useSearchIndexStore((s) => s.status);
@@ -214,6 +218,13 @@ export function History(props: { focusId?: number | null }) {
     } finally {
       setGeneratingSummary(false);
     }
+  };
+
+  const saveSpeaker = async (speaker: number, name: string) => {
+    if (!details) return;
+    const id = details.meeting.id;
+    const speakers = await setMeetingSpeaker(id, speaker, name);
+    setDetails((d) => (d && d.meeting.id === id ? { ...d, speakers } : d));
   };
 
   const exportMarkdown = async () => {
@@ -439,6 +450,11 @@ export function History(props: { focusId?: number | null }) {
                   {t("history.duration", { duration: formatDuration(durationOf(meeting)) })}
                 </span>
               </p>
+              {meeting.participants.length > 0 && (
+                <p className="truncate text-xs text-muted-foreground">
+                  {t("export.participants")}: {meeting.participants.join(", ")}
+                </p>
+              )}
               {(meeting.goal || meeting.notes) && (
                 <p className="line-clamp-2 text-xs text-muted-foreground">
                   {[meeting.goal, meeting.notes].filter(Boolean).join(" · ")}
@@ -510,19 +526,29 @@ export function History(props: { focusId?: number | null }) {
                         <span className="font-mono text-xs text-muted-foreground tabular-nums">
                           {formatDuration(segment.startMs)}
                         </span>
-                        <span
-                          className={cn(
-                            "max-w-full justify-self-start truncate rounded-md px-1.5 py-px text-xs font-medium",
-                            speakerColor(segment.channel, segment.speaker),
-                          )}
-                        >
-                          {segment.channel === "me"
-                            ? t("channel.me")
-                            : segment.speaker === null
-                              ? t("channel.them")
-                              : (speakerNames.get(segment.speaker) ??
-                                t("speakers.label", { n: segment.speaker + 1 }))}
-                        </span>
+                        {segment.channel === "them" && segment.speaker !== null ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "max-w-full cursor-pointer justify-self-start truncate rounded-md px-1.5 py-px text-xs font-medium hover:ring-1 hover:ring-current/40",
+                              speakerColor(segment.channel, segment.speaker),
+                            )}
+                            title={t("speakers.renameHint")}
+                            onClick={() => setCardSpeaker(segment.speaker)}
+                          >
+                            {speakerNames.get(segment.speaker) ??
+                              t("speakers.label", { n: segment.speaker + 1 })}
+                          </button>
+                        ) : (
+                          <span
+                            className={cn(
+                              "max-w-full justify-self-start truncate rounded-md px-1.5 py-px text-xs font-medium",
+                              speakerColor(segment.channel, segment.speaker),
+                            )}
+                          >
+                            {segment.channel === "me" ? t("channel.me") : t("channel.them")}
+                          </span>
+                        )}
                         <span className="leading-relaxed select-text">
                           {segment.text}
                           {translation && (
@@ -562,6 +588,18 @@ export function History(props: { focusId?: number | null }) {
         )}
       </section>
       </div>
+
+      {details && cardSpeaker !== null && (
+        <SpeakerCard
+          open
+          onOpenChange={(open) => !open && setCardSpeaker(null)}
+          name={speakerNames.get(cardSpeaker) ?? ""}
+          fallback={t("speakers.label", { n: cardSpeaker + 1 })}
+          onSave={(name) => saveSpeaker(cardSpeaker, name)}
+          participants={details.meeting.participants}
+          taken={details.speakers.filter((s) => s.speaker !== cardSpeaker).map((s) => s.name)}
+        />
+      )}
 
       <AlertDialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <AlertDialogContent>

@@ -16,6 +16,7 @@ use crate::chat::{self, ChatInput, ChatTurn};
 use crate::codebase::{self, CodePathInfo};
 use crate::compress::{CompressConfig, CompressionEvent};
 use crate::diarize::{VoiceEvent, VoiceProfiles};
+use crate::email::{self, OutgoingEmail};
 use crate::export;
 use crate::history_chat::{self, HistoryAnswer};
 use crate::llm;
@@ -156,6 +157,7 @@ pub async fn start_session(
         my_language: my_spoken.code().into(),
         their_language: settings.their_language.code().into(),
         speakers: context.speakers.clone(),
+        participants: context.participant_names(),
     };
     // Il DB può essere su disco lento: mai sul thread async.
     let db_path = db.path.clone();
@@ -710,6 +712,29 @@ pub async fn generate_summary(
         return Err("nessuna trascrizione per questo meeting".into());
     }
 
+    // Ruolo e descrizione dei partecipanti dalla rubrica attuale.
+    let names = details.meeting.participants.clone();
+    let path = db.path.clone();
+    let contacts = blocking(move || Ok(sv_store::Store::open(path)?.contacts()?))
+        .await
+        .unwrap_or_default();
+    let participants = names
+        .into_iter()
+        .map(|name| {
+            let key = sv_store::name_key(&name);
+            match contacts.iter().find(|c| sv_store::name_key(&c.name) == key) {
+                Some(c) => crate::meeting::Participant {
+                    name,
+                    role: c.role.clone(),
+                    description: c.description.clone(),
+                },
+                None => crate::meeting::Participant {
+                    name,
+                    ..Default::default()
+                },
+            }
+        })
+        .collect();
     let speakers = details
         .speakers
         .iter()
@@ -722,6 +747,7 @@ pub async fn generate_summary(
         // Il percorso del codice non è salvato nello storico.
         code_path: String::new(),
         speakers,
+        participants,
     };
     let blocks = details
         .blocks
@@ -783,6 +809,84 @@ pub async fn update_summary_checklist(
 ) -> CmdResult<sv_store::Summary> {
     let path = db.path.clone();
     blocking(move || Ok(sv_store::Store::open(path)?.set_action_items(id, &items)?)).await
+}
+
+/// Nome di un parlante di "Loro" in un meeting salvato (vuoto = "Speaker N").
+#[tauri::command]
+pub async fn set_meeting_speaker(
+    db: State<'_, Db>,
+    search: State<'_, Search>,
+    id: i64,
+    speaker: u8,
+    name: String,
+) -> CmdResult<Vec<sv_store::SpeakerName>> {
+    let path = db.path.clone();
+    let speakers = blocking(move || {
+        let store = sv_store::Store::open(path)?;
+        store.set_speaker_name(id, speaker, &name)?;
+        Ok(store.speakers(id)?)
+    })
+    .await?;
+    // I nomi dei parlanti finiscono nei passaggi indicizzati.
+    search.enqueue(id);
+    Ok(speakers)
+}
+
+// --- Rubrica -----------------------------------------------------------------
+
+#[tauri::command]
+pub async fn list_contacts(db: State<'_, Db>) -> CmdResult<Vec<sv_store::Contact>> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.contacts()?)).await
+}
+
+/// Crea o aggiorna una scheda; senza `id` si unisce al contatto con lo stesso nome.
+#[tauri::command]
+pub async fn save_contact(
+    db: State<'_, Db>,
+    contact: sv_store::ContactInput,
+) -> CmdResult<sv_store::Contact> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.save_contact(&contact)?)).await
+}
+
+#[tauri::command]
+pub async fn delete_contact(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    let path = db.path.clone();
+    blocking(move || Ok(sv_store::Store::open(path)?.delete_contact(id)?)).await
+}
+
+// --- Email -------------------------------------------------------------------
+
+/// Invia il riepilogo con il server SMTP configurato; ritorna i destinatari.
+#[tauri::command]
+pub async fn send_email(
+    settings: State<'_, SettingsStore>,
+    email: OutgoingEmail,
+) -> CmdResult<usize> {
+    email::send(&settings.get(), email)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
+/// Apre il riepilogo come bozza nel client di posta predefinito.
+#[tauri::command]
+pub async fn open_email_draft(
+    app: AppHandle,
+    settings: State<'_, SettingsStore>,
+    email: OutgoingEmail,
+) -> CmdResult<()> {
+    let dir = app.path().app_cache_dir().map_err(to_msg)?.join("drafts");
+    let settings = settings.get();
+    blocking(move || email::open_draft(&dir, &settings, email).map(|_| ())).await
+}
+
+/// Prova connessione e login SMTP senza inviare nulla.
+#[tauri::command]
+pub async fn test_smtp(settings: State<'_, SettingsStore>) -> CmdResult<()> {
+    email::test(&settings.get())
+        .await
+        .map_err(|e| format!("{e:#}"))
 }
 
 // --- API key (Keychain) ---------------------------------------------------

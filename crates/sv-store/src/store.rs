@@ -45,7 +45,7 @@ impl Store {
         schema::close_open_meetings(&mut conn)
     }
 
-    fn conn(&self) -> MutexGuard<'_, Connection> {
+    pub(crate) fn conn(&self) -> MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
@@ -65,7 +65,7 @@ impl Store {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, name, goal, notes, started_at_ms, ended_at_ms,
-                    stt_engine, stt_model, my_language, their_language
+                    stt_engine, stt_model, my_language, their_language, participants
              FROM meetings ORDER BY started_at_ms DESC, id DESC",
         )?;
         let rows = stmt.query_map([], meeting_from_row)?;
@@ -96,14 +96,14 @@ impl Store {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT m.id, m.name, m.goal, m.notes, m.started_at_ms, m.ended_at_ms,
-                    m.stt_engine, m.stt_model, m.my_language, m.their_language,
+                    m.stt_engine, m.stt_model, m.my_language, m.their_language, m.participants,
                     (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id),
                     m.transcript_file
              FROM meetings m
              ORDER BY m.started_at_ms DESC, m.id DESC",
         )?;
         let rows = stmt.query_map([], |row| {
-            Ok((meeting_summary_from_row(row)?, row.get::<_, String>(11)?))
+            Ok((meeting_summary_from_row(row)?, row.get::<_, String>(12)?))
         })?;
         let all = rows.collect::<Result<Vec<_>, _>>()?;
         drop(stmt);
@@ -132,7 +132,7 @@ impl Store {
         let total: i64 = conn.query_row("SELECT COUNT(*) FROM meetings", [], |row| row.get(0))?;
         let mut stmt = conn.prepare(
             "SELECT m.id, m.name, m.goal, m.notes, m.started_at_ms, m.ended_at_ms,
-                    m.stt_engine, m.stt_model, m.my_language, m.their_language,
+                    m.stt_engine, m.stt_model, m.my_language, m.their_language, m.participants,
                     (SELECT COUNT(*) FROM segments x WHERE x.meeting_id = m.id)
              FROM meetings m
              ORDER BY m.started_at_ms DESC, m.id DESC
@@ -201,7 +201,7 @@ impl Store {
         let conn = self.conn();
         conn.query_row(
             "SELECT id, name, goal, notes, started_at_ms, ended_at_ms,
-                    stt_engine, stt_model, my_language, their_language
+                    stt_engine, stt_model, my_language, their_language, participants
              FROM meetings WHERE id = ?1",
             params![id],
             meeting_from_row,
@@ -451,7 +451,7 @@ fn json_column<T: serde::de::DeserializeOwned + Default>(raw: String) -> T {
     })
 }
 
-fn now_ms() -> i64 {
+pub(crate) fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
@@ -470,13 +470,14 @@ fn meeting_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Meeting> {
         stt_model: row.get(7)?,
         my_language: row.get(8)?,
         their_language: row.get(9)?,
+        participants: json_column(row.get(10)?),
     })
 }
 
 fn meeting_summary_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MeetingSummary> {
     Ok(MeetingSummary {
         meeting: meeting_from_row(row)?,
-        segment_count: u32::try_from(row.get::<_, i64>(10)?).unwrap_or(u32::MAX),
+        segment_count: u32::try_from(row.get::<_, i64>(11)?).unwrap_or(u32::MAX),
     })
 }
 
@@ -589,12 +590,12 @@ mod tests {
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master
                  WHERE type = 'table' AND name IN
-                     ('meetings', 'segments', 'translations', 'speakers', 'assists')",
+                     ('meetings', 'segments', 'translations', 'speakers', 'assists', 'contacts')",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(count, 5);
+        assert_eq!(count, 6);
         // Il testo non è più una colonna delle tabelle.
         let text_columns: i64 = conn
             .query_row(

@@ -282,6 +282,7 @@ pub(crate) mod tests {
                 stt_model: String::new(),
                 my_language: "it".into(),
                 their_language: "multi".into(),
+                participants: Vec::new(),
             },
             segments,
             translations: Vec::new(),

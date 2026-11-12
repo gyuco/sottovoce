@@ -17,7 +17,7 @@ use crate::error::StoreError;
 use crate::transcript;
 
 /// Versione dello schema corrente.
-pub const SCHEMA_VERSION: i64 = 4;
+pub const SCHEMA_VERSION: i64 = 6;
 
 pub(crate) const MIGRATIONS: &[&str] = &[
     // 1 — meeting, frasi finali, traduzioni, nomi dei parlanti, assist.
@@ -140,6 +140,24 @@ DROP TABLE IF EXISTS segments_fts;
 ALTER TABLE meetings ADD COLUMN transcript_file TEXT NOT NULL DEFAULT '';
 ALTER TABLE segments ADD COLUMN text_line INTEGER;
 ALTER TABLE translations ADD COLUMN text_line INTEGER;
+"#,
+    // 5 — rubrica: schede delle persone incontrate nei meeting. Il legame
+    // con i parlanti è il nome (`name_key` = nome normalizzato, unico).
+    r#"
+CREATE TABLE contacts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    name_key      TEXT    NOT NULL UNIQUE,
+    role          TEXT    NOT NULL DEFAULT '',
+    description   TEXT    NOT NULL DEFAULT '',
+    email         TEXT    NOT NULL DEFAULT '',
+    created_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL
+);
+"#,
+    // 6 — partecipanti attesi indicati all'avvio (array JSON di nomi).
+    r#"
+ALTER TABLE meetings ADD COLUMN participants TEXT NOT NULL DEFAULT '[]';
 "#,
 ];
 
