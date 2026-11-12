@@ -1,9 +1,10 @@
-import { Check, CircleAlert, Loader2 } from "lucide-react";
+import { Check, CircleAlert, CircleMinus, Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-export type Status = "ok" | "pending" | "warn";
+/** `off` = disattivato per scelta: neutro, non un problema. */
+export type Status = "ok" | "pending" | "warn" | "off";
 
 /** Opzione a scelta singola, grande e cliccabile. */
 export function Choice(props: {
@@ -36,6 +37,7 @@ export function StatusIcon({ status }: { status: Status }) {
         <Check className="size-3.5" aria-hidden />
       </span>
     );
+  if (status === "off") return <CircleMinus className="size-5 shrink-0 text-muted-foreground" aria-hidden />;
   if (status === "pending") return <Loader2 className="size-5 shrink-0 animate-spin text-primary" aria-hidden />;
   return <CircleAlert className="size-5 shrink-0 text-amber-500" aria-hidden />;
 }

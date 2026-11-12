@@ -724,7 +724,8 @@
         "stt": "Trascrizione",
         "mic": "Microfono",
         "system": "Audio del Mac",
-        "ai": "Traduzione e riepiloghi"
+        "ai": "Traduzione e riepiloghi",
+        "search": "Ricerca nello storico"
       },
       "stt": {
         "local": "Sul tuo Mac",
@@ -736,7 +737,13 @@
       "heard": "Funziona",
       "notChecked": "Non verificato",
       "aiLater": "Da configurare",
-      "hint": "Puoi cambiare tutto in Impostazioni, e rifare questo setup quando vuoi. Per iniziare una call premi «Avvia»."
+      "hint": "Puoi cambiare tutto in Impostazioni, e rifare questo setup quando vuoi. Per iniziare una call premi «Avvia».",
+      "search": {
+        "ready": "Pronta",
+        "downloading": "Modello in download",
+        "missing": "Manca il modello",
+        "off": "Disattivata"
+      }
     }
   }
 }

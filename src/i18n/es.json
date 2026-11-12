@@ -724,7 +724,8 @@
         "stt": "Transcripción",
         "mic": "Micrófono",
         "system": "Audio del Mac",
-        "ai": "Traducción y resúmenes"
+        "ai": "Traducción y resúmenes",
+        "search": "Búsqueda en el historial"
       },
       "stt": {
         "local": "En tu Mac",
@@ -736,7 +737,13 @@
       "heard": "Funciona",
       "notChecked": "Sin comprobar",
       "aiLater": "Por configurar",
-      "hint": "Puedes cambiarlo todo en Ajustes y repetir esta configuración cuando quieras. Para empezar una llamada pulsa «Iniciar»."
+      "hint": "Puedes cambiarlo todo en Ajustes y repetir esta configuración cuando quieras. Para empezar una llamada pulsa «Iniciar».",
+      "search": {
+        "ready": "Lista",
+        "downloading": "Modelo descargándose",
+        "missing": "Falta el modelo",
+        "off": "Desactivada"
+      }
     }
   }
 }

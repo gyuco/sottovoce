@@ -724,7 +724,8 @@
         "stt": "Transcription",
         "mic": "Microphone",
         "system": "Mac audio",
-        "ai": "Translation and summaries"
+        "ai": "Translation and summaries",
+        "search": "History search"
       },
       "stt": {
         "local": "On your Mac",
@@ -736,7 +737,13 @@
       "heard": "Working",
       "notChecked": "Not checked",
       "aiLater": "To be set up",
-      "hint": "You can change everything in Settings and run this setup again anytime. To begin a call, press \"Start\"."
+      "hint": "You can change everything in Settings and run this setup again anytime. To begin a call, press \"Start\".",
+      "search": {
+        "ready": "Ready",
+        "downloading": "Model downloading",
+        "missing": "Model missing",
+        "off": "Turned off"
+      }
     }
   }
 }

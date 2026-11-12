@@ -32,6 +32,9 @@ import { cn } from "@/lib/utils";
 import { useModelsStore } from "@/stores/models";
 import { useSettingsStore } from "@/stores/settings";
 
+/** Modello della ricerca per significato (catalogo `sv-models`). */
+const EMBEDDING_MODEL = "embeddinggemma-2-q4";
+
 const STEPS = ["welcome", "languages", "engine", "models", "audio", "ai", "done"] as const;
 type Step = (typeof STEPS)[number];
 
@@ -262,6 +265,15 @@ function DoneStep({ audio }: { audio: AudioResult }) {
           ? ["pending", t("onboarding.done.stt.downloading")]
           : ["warn", t("onboarding.done.stt.needModels")];
 
+  const embedding = models.find((m) => m.id === EMBEDDING_MODEL);
+  const search: [Status, string] = !settings.semanticSearch
+    ? ["off", t("onboarding.done.search.off")]
+    : embedding?.status.state === "ready"
+      ? ["ok", t("onboarding.done.search.ready")]
+      : embedding?.downloading
+        ? ["pending", t("onboarding.done.search.downloading")]
+        : ["warn", t("onboarding.done.search.missing")];
+
   const rows: { label: string; status: Status; text: string }[] = [
     { label: t("onboarding.done.rows.stt"), status: stt[0], text: stt[1] },
     {
@@ -281,6 +293,7 @@ function DoneStep({ audio }: { audio: AudioResult }) {
         ? settings.translationModel || settings.assistModel
         : t("onboarding.done.aiLater"),
     },
+    { label: t("onboarding.done.rows.search"), status: search[0], text: search[1] },
   ];
 
   return (
